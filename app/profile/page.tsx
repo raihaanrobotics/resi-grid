@@ -66,22 +66,24 @@ export default function ProfilePage() {
     }
   }, []);
 
-  // Instant Accent Color Theme Handler
-  const handleSelectAccent = (accentId: string, hexColor: string) => {
+  // Staged Accent Selection Handler (Does not apply globally until save)
+  const handleSelectAccent = (accentId: string) => {
     setSelectedAccent(accentId);
-    localStorage.setItem("resigrid_accent_theme", accentId);
-
-    // 1. Directly inject onto root HTML element
-    document.documentElement.style.setProperty("--feature-accent", hexColor);
-    document.documentElement.style.setProperty("--accent", hexColor);
-
-    // 2. Dispatch custom event so Floating Dock & Header update instantly without refreshing
-    window.dispatchEvent(new CustomEvent("resigrid_theme_change", { detail: { hex: hexColor, id: accentId } }));
   };
 
-  // Save All Profile Settings
+  // Save All Profile Settings & Apply Accent Theme
   const handleSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
+    const matchedPalette = ACCENT_PALETTES.find((p) => p.id === selectedAccent);
+    if (matchedPalette) {
+      localStorage.setItem("resigrid_accent_theme", selectedAccent);
+      document.documentElement.style.setProperty("--feature-accent", matchedPalette.hex);
+      document.documentElement.style.setProperty("--accent", matchedPalette.hex);
+      window.dispatchEvent(
+        new CustomEvent("resigrid_theme_change", { detail: { hex: matchedPalette.hex, id: selectedAccent } })
+      );
+    }
 
     const profileData = {
       fullName,
@@ -184,8 +186,8 @@ export default function ProfilePage() {
 
         {/* SUCCESS NOTIFICATION TOAST */}
         {savedSuccess && (
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
-            <CheckCircle2 className="w-4 h-4 shrink-0" /> Profile parameters and system theme settings saved successfully.
+          <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-white" /> Saved
           </div>
         )}
 
@@ -212,8 +214,8 @@ export default function ProfilePage() {
                   <button
                     key={pal.id}
                     type="button"
-                    onClick={() => handleSelectAccent(pal.id, pal.hex)}
-                    onTouchEnd={() => handleSelectAccent(pal.id, pal.hex)}
+                    onClick={() => handleSelectAccent(pal.id)}
+                    onTouchEnd={() => handleSelectAccent(pal.id)}
                     className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer touch-manipulation relative z-30 ${
                       isSelected
                         ? "border-white/30 bg-white/10 scale-[1.02]"
@@ -224,8 +226,8 @@ export default function ProfilePage() {
                     <div className="relative flex items-center justify-center p-1">
                       {/* Subtle Ambient Liquid Underglow */}
                       <span 
-                        className={`absolute inset-0 rounded-full blur-[6px] transition-opacity duration-300 pointer-events-none ${
-                          isSelected ? "opacity-80 scale-125" : "opacity-25"
+                        className={`absolute inset-0 rounded-full blur-[3px] transition-opacity duration-300 pointer-events-none ${
+                          isSelected ? "opacity-40 scale-105" : "opacity-15"
                         }`}
                         style={{ backgroundColor: pal.hex }}
                       />
@@ -236,7 +238,7 @@ export default function ProfilePage() {
                         style={{
                           backgroundColor: pal.hex,
                           boxShadow: isSelected 
-                            ? `inset 0 1px 1px rgba(255,255,255,0.6), 0 0 14px ${pal.hex}` 
+                            ? `inset 0 1px 1px rgba(255,255,255,0.6), 0 0 6px ${pal.hex}` 
                             : `inset 0 1px 1px rgba(255,255,255,0.3)`
                         }}
                       >

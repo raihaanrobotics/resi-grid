@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import {
   Radar as RadarIcon,
   Zap,
@@ -15,6 +16,9 @@ import {
   Crosshair,
   ShieldAlert,
   Activity,
+  Navigation,
+  Compass,
+  CheckCircle2,
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { filterWithinRadius } from "@/lib/geoUtils";
@@ -29,6 +33,9 @@ interface IncidentMarker {
   latitude: number;
   longitude: number;
   coordinates: { x: number; y: number };
+  description: string;
+  status: string;
+  distanceKm?: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -40,11 +47,30 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
+// Haversine formula for real-world distance calculation in kilometers
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function RadarPage() {
-  const { location, refreshLocation } = useUserLocation();
+  const { location, loading: geoLoading, refreshLocation } = useUserLocation();
   const [selectedIncident, setSelectedIncident] = useState<IncidentMarker | null>(null);
   const [scanning] = useState(true);
   const [liveIncidents, setLiveIncidents] = useState<IncidentMarker[]>([]);
+
+  // Reverse Geocoded Street Address State
+  const [userStreetAddress, setUserStreetAddress] = useState<string>("Resolving live coordinates...");
+  const [isRefreshingAddress, setIsRefreshingAddress] = useState<boolean>(false);
 
   // Active Map Filter Layers
   const [layers, setLayers] = useState({
@@ -53,6 +79,10 @@ export default function RadarPage() {
     roads: true,
     other: true,
   });
+
+  // Active user lat/lng with Pietermaritzburg default fallback
+  const userLat = location?.latitude || -29.6006;
+  const userLng = location?.longitude || 30.3794;
 
   // Bulletproof Theme Persistence on Mount
   useEffect(() => {
@@ -87,7 +117,37 @@ export default function RadarPage() {
     };
   }, []);
 
-  // Load Real Reports from Local Storage & BroadcastChannel Sync stably without wiping
+  // Fetch Reverse Geocoded Street Address using OpenStreetMap Nominatim
+  const fetchAddress = useCallback(async (lat: number, lng: number) => {
+    setIsRefreshingAddress(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { "Accept-Language": "en" } }
+      );
+      const data = await res.json();
+      if (data.address) {
+        const road = data.address.road || data.address.pedestrian || data.address.suburb || "";
+        const city = data.address.city || data.address.town || data.address.municipality || "Pietermaritzburg";
+        const formatted = [road, city].filter(Boolean).join(", ");
+        setUserStreetAddress(formatted || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      } else {
+        setUserStreetAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      }
+    } catch {
+      setUserStreetAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+    } finally {
+      setIsRefreshingAddress(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (userLat && userLng) {
+      fetchAddress(userLat, userLng);
+    }
+  }, [userLat, userLng, fetchAddress]);
+
+  // Load Real Reports from Local Storage & BroadcastChannel Sync with real coordinate mapping
   const loadReports = useCallback(() => {
     try {
       const saved = localStorage.getItem("resigrid_active_reports");
@@ -95,11 +155,18 @@ export default function RadarPage() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const mapped: IncidentMarker[] = parsed.map((item: any, idx: number) => {
-            const lat = item.coords?.lat || -29.6006 + (idx * 0.005);
-            const lng = item.coords?.lng || 30.3794 + (idx * 0.005);
+            // Use real coordinates if present, otherwise fallback around user location
+            const lat = item.coords?.lat ?? (userLat + (idx * 0.003 - 0.001));
+            const lng = item.coords?.lng ?? (userLng + (idx * 0.003 - 0.001));
             
-            const x = Math.min(85, Math.max(15, 50 + (lng - 30.3794) * 1200));
-            const y = Math.min(85, Math.max(15, 50 - (lat - (-29.6006)) * 1200));
+            // Accurate geospatial mapping within 10km radar scope (10km radius maps to 38% offset from 50% center)
+            const distanceKm = calculateDistance(userLat, userLng, lat, lng);
+            const latDiffKm = (lat - userLat) * 111; // ~111km per degree latitude
+            const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
+
+            // 10km radius corresponds to 38% container width/height from center (50%)
+            const x = Math.min(88, Math.max(12, 50 + (lngDiffKm / 10) * 38));
+            const y = Math.min(88, Math.max(12, 50 - (latDiffKm / 10) * 38));
 
             return {
               id: item.id || `INC-${100 + idx}`,
@@ -111,8 +178,12 @@ export default function RadarPage() {
               latitude: lat,
               longitude: lng,
               coordinates: { x, y },
+              description: item.description || "No description provided.",
+              status: item.status || "Auto-Dispatched",
+              distanceKm,
             };
           });
+
           setLiveIncidents(mapped);
           setSelectedIncident((prev) => {
             if (!prev) return mapped[0];
@@ -124,15 +195,15 @@ export default function RadarPage() {
     } catch (e) {
       console.error("Error loading saved reports for radar:", e);
     }
-  }, []);
+  }, [userLat, userLng]);
 
   useEffect(() => {
     loadReports();
 
-    // Auto-refresh reports data every minute without updating location
+    // Auto-refresh reports data every 30 seconds
     const dataInterval = setInterval(() => {
       loadReports();
-    }, 60000);
+    }, 30000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -160,13 +231,21 @@ export default function RadarPage() {
     };
   }, [loadReports]);
 
-  // Filter incidents within 5km radius if user location is available, otherwise show all
-  const userLat = location?.latitude || -29.6006;
-  const userLng = location?.longitude || 30.3794;
+  // Manual GPS Re-sync Handler
+  const handleRefreshLocation = (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
+    refreshLocation();
+    if (userLat && userLng) {
+      fetchAddress(userLat, userLng);
+    }
+  };
 
-  const nearbyIncidents = filterWithinRadius(userLat, userLng, liveIncidents, 5.0);
+  // Filter incidents within 10km radius
+  const nearbyIncidents = useMemo(() => {
+    return filterWithinRadius(userLat, userLng, liveIncidents, 10.0);
+  }, [userLat, userLng, liveIncidents]);
+
   const displayIncidents = nearbyIncidents.length > 0 ? nearbyIncidents : liveIncidents;
-
   const filteredIncidents = displayIncidents.filter((inc) => layers[inc.type as keyof typeof layers]);
 
   const toggleLayer = (layerKey: keyof typeof layers) => {
@@ -216,7 +295,7 @@ export default function RadarPage() {
             <div className="flex items-center justify-between mb-4 z-20 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Crosshair className="w-4 h-4" style={{ color: "var(--accent)" }} />
-                <span className="text-xs font-mono text-white font-semibold">SECTOR GRID: PMB-5KM RADIUS</span>
+                <span className="text-xs font-mono text-white font-semibold">SECTOR GRID: 10KM PROXIMITY RADIUS</span>
               </div>
 
               {/* Quick Layer Filter Buttons */}
@@ -273,6 +352,12 @@ export default function RadarPage() {
               <div className="absolute w-full h-[1px] bg-emerald-500/10 pointer-events-none" />
               <div className="absolute h-full w-[1px] bg-emerald-500/10 pointer-events-none" />
 
+              {/* Center User Location Marker */}
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
+                <span className="absolute w-10 h-10 rounded-full animate-ping opacity-40 bg-teal-400" />
+                <div className="w-3.5 h-3.5 rounded-full bg-white ring-2 ring-teal-400 shadow-[0_0_12px_#14b8a6]" />
+              </div>
+
               {/* Rotating Radar Sweep Line */}
               {scanning && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -306,6 +391,7 @@ export default function RadarPage() {
                     onClick={() => setSelectedIncident(incident)}
                     style={{ top: `${incident.coordinates.y}%`, left: `${incident.coordinates.x}%` }}
                     className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 group z-30`}
+                    title={`${incident.title} (${incident.distanceKm ? incident.distanceKm.toFixed(1) + " km" : ""})`}
                   >
                     <div className="relative flex items-center justify-center">
                       {incident.severity === "high" && (
@@ -327,22 +413,25 @@ export default function RadarPage() {
               })}
             </div>
 
-            {/* Map Footer Telemetry with Separate Location Refresh Button */}
+            {/* Map Footer Telemetry with Live Address & Manual Refresh */}
             <div className="flex items-center justify-between text-xs text-muted mt-3 z-20 flex-wrap gap-2">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--accent)" }} />
-                Showing <strong className="text-white">{filteredIncidents.length}</strong> active hazards in radius
+                Showing <strong className="text-white">{filteredIncidents.length}</strong> active hazards in 10km radius
               </span>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[11px] text-muted">LAT: {userLat.toFixed(4)}, LON: {userLng.toFixed(4)}</span>
+                <Navigation className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} />
+                <span className="font-mono text-[11px] text-white">
+                  {geoLoading || isRefreshingAddress ? "Resolving address..." : userStreetAddress} ({userLat.toFixed(4)}, {userLng.toFixed(4)})
+                </span>
                 <button
                   type="button"
-                  onClick={refreshLocation}
+                  onClick={handleRefreshLocation}
                   title="Refresh GPS Location"
                   className="p-1 rounded-lg border border-white/10 hover:text-white transition-colors cursor-pointer touch-manipulation"
                   style={{ color: "var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw className={`h-3.5 w-3.5 ${geoLoading || isRefreshingAddress ? "animate-spin" : ""}`} />
                 </button>
               </div>
             </div>
@@ -381,15 +470,23 @@ export default function RadarPage() {
 
                     <div>
                       <h3 className="text-base font-bold text-white">{selectedIncident.title}</h3>
-                      <p className="text-xs text-muted flex items-center gap-1 mt-1">
+                      <p className="text-xs text-muted mt-1 leading-relaxed">{selectedIncident.description}</p>
+                      <p className="text-xs text-muted flex items-center gap-1 mt-2">
                         <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--accent)" }} /> {selectedIncident.location}
                       </p>
                     </div>
 
                     <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-muted">
                       <span>Logged: {selectedIncident.time}</span>
-                      <span className="font-medium" style={{ color: "var(--accent)" }}>Dispatched</span>
+                      <span className="font-medium" style={{ color: "var(--accent)" }}>{selectedIncident.status}</span>
                     </div>
+
+                    {selectedIncident.distanceKm !== undefined && (
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
+                        <span className="text-muted">Proximity:</span>
+                        <span className="text-white font-bold" style={{ color: "var(--accent)" }}>{selectedIncident.distanceKm.toFixed(2)} km away</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Layer Visibility Selectors */}
@@ -452,7 +549,7 @@ export default function RadarPage() {
               )}
             </div>
 
-            <a 
+            <Link 
               href="/civic" 
               className="w-full mt-6 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation hover:opacity-90"
               style={{
@@ -463,7 +560,7 @@ export default function RadarPage() {
               }}
             >
               Report New Hazard <ChevronRight className="w-4 h-4" />
-            </a>
+            </Link>
           </div>
 
         </div>
@@ -481,43 +578,51 @@ export default function RadarPage() {
           <div className="space-y-3 max-h-[350px] overflow-y-auto">
             {displayIncidents.length === 0 ? (
               <div className="text-center py-8 text-muted text-xs">
-                No active hazard reports found in your 5km radius.
+                No active hazard reports found in your 10km radius.
               </div>
             ) : (
-              displayIncidents.map((incident) => (
-                <div
-                  key={incident.id}
-                  onClick={() => setSelectedIncident(incident)}
-                  className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                    selectedIncident?.id === incident.id
-                      ? "bg-white/10 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
-                      : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`p-2 rounded-lg shrink-0 ${
-                      incident.type === "power" ? "bg-amber-500/20 text-amber-400" :
-                      incident.type === "water" ? "bg-cyan-500/20 text-cyan-400" :
-                      incident.type === "roads" ? "bg-purple-500/20 text-purple-400" :
-                      "bg-teal-500/20 text-teal-400"
-                    }`}>
-                      {incident.type === "power" && <Zap className="w-4 h-4" />}
-                      {incident.type === "water" && <Droplet className="w-4 h-4" />}
-                      {incident.type === "roads" && <AlertTriangle className="w-4 h-4" />}
-                      {incident.type === "other" && <FileText className="w-4 h-4" />}
+              displayIncidents.map((incident) => {
+                const isSelected = selectedIncident?.id === incident.id;
+                return (
+                  <div
+                    key={incident.id}
+                    onClick={() => setSelectedIncident(incident)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                      isSelected
+                        ? "bg-white/[0.02] shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_20%,transparent)]"
+                        : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04]"
+                    }`}
+                    style={isSelected ? { borderColor: "var(--accent)" } : undefined}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`p-2 rounded-lg shrink-0 ${
+                        incident.type === "power" ? "bg-amber-500/20 text-amber-400" :
+                        incident.type === "water" ? "bg-cyan-500/20 text-cyan-400" :
+                        incident.type === "roads" ? "bg-purple-500/20 text-purple-400" :
+                        "bg-teal-500/20 text-teal-400"
+                      }`}>
+                        {incident.type === "power" && <Zap className="w-4 h-4" />}
+                        {incident.type === "water" && <Droplet className="w-4 h-4" />}
+                        {incident.type === "roads" && <AlertTriangle className="w-4 h-4" />}
+                        {incident.type === "other" && <FileText className="w-4 h-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">{incident.title}</p>
+                        <p className="text-[11px] text-muted mt-0.5 truncate">{incident.location}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white truncate">{incident.title}</p>
-                      <p className="text-[11px] text-muted mt-0.5 truncate">{incident.location}</p>
-                    </div>
-                  </div>
 
-                  <div className="text-right shrink-0 pl-2">
-                    <span className="text-[10px] font-mono text-muted block">{incident.time}</span>
-                    <span className="text-[10px] font-semibold uppercase" style={{ color: "var(--accent)" }}>{incident.severity}</span>
+                    <div className="text-right shrink-0 pl-2 flex flex-col items-end">
+                      <span className="text-[10px] font-mono text-muted block">{incident.time}</span>
+                      {incident.distanceKm !== undefined && (
+                        <span className="text-[10px] font-mono font-semibold mt-0.5" style={{ color: "var(--accent)" }}>
+                          {incident.distanceKm.toFixed(1)} km away
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

@@ -1,42 +1,74 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
 import {
-  Radar as RadarIcon,
-  Zap,
+  AlertTriangle,
+  CheckCircle2,
   Droplet,
   FileText,
-  AlertTriangle,
   MapPin,
-  RefreshCw,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Crosshair,
-  ShieldAlert,
-  Activity,
   Navigation,
-  Compass,
-  CheckCircle2,
+  RefreshCw,
+  Send,
+  Zap,
+  Edit3,
+  User,
+  Phone,
+  Building,
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
-import { filterWithinRadius } from "@/lib/geoUtils";
 
-interface IncidentMarker {
+interface ReportItem {
   id: string;
-  type: "power" | "water" | "roads" | "other" | "mesh";
+  category: "water" | "power" | "roads" | "other";
   title: string;
-  location: string;
-  severity: "high" | "medium" | "low";
-  time: string;
-  latitude: number;
-  longitude: number;
-  coordinates: { x: number; y: number };
   description: string;
-  status: string;
-  distanceKm?: number;
+  locationAddress: string;
+  status: "Auto-Dispatched" | "Pending Review" | "Resolved";
+  time: string;
+  ward?: string;
+  priority?: "High" | "Medium" | "Low" | "Critical";
+  reporterName?: string;
+  reporterPhone?: string;
+  assignedDepotUnit?: string;
+  estimatedFixTime?: string;
+  coords?: { lat: number; lng: number };
 }
+
+const DEFAULT_REPORTS: ReportItem[] = [
+  {
+    id: "RPT-101",
+    category: "water",
+    title: "Burst Water Main",
+    description: "Severe leak flooding roadway and affecting water pressure.",
+    locationAddress: "142 Chief Albert Luthuli St, Pietermaritzburg",
+    ward: "Ward 26 (CBD / Central)",
+    priority: "Critical",
+    status: "Auto-Dispatched",
+    time: "Today, 10:14 SAST",
+    reporterName: "Raihaan Mahomed",
+    reporterPhone: "+27 82 123 4567",
+    assignedDepotUnit: "Water Rapid Response Crew #4",
+    estimatedFixTime: "4 Hours",
+    coords: { lat: -29.6006, lng: 30.3794 },
+  },
+  {
+    id: "RPT-102",
+    category: "power",
+    title: "Substation Transformer Trip",
+    description: "Total power blackout across Sector 3 grid block.",
+    locationAddress: "88 Dr Chota Motala Rd, Raisethorpe",
+    ward: "Ward 28 (Raisethorpe / Newholme)",
+    priority: "High",
+    status: "Pending Review",
+    time: "Today, 09:48 SAST",
+    reporterName: "Sipho Dlamini",
+    reporterPhone: "+27 83 987 6543",
+    assignedDepotUnit: "Electricity Depot - Unit B",
+    estimatedFixTime: "6 Hours",
+    coords: { lat: -29.5823, lng: 30.4021 },
+  },
+];
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -47,42 +79,27 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
-// Haversine formula for real-world distance calculation in kilometers
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-export default function RadarPage() {
+export default function CivicAIPage() {
   const { location, loading: geoLoading, refreshLocation } = useUserLocation();
-  const [selectedIncident, setSelectedIncident] = useState<IncidentMarker | null>(null);
-  const [scanning] = useState(true);
-  const [liveIncidents, setLiveIncidents] = useState<IncidentMarker[]>([]);
 
-  // Reverse Geocoded Street Address State
-  const [userStreetAddress, setUserStreetAddress] = useState<string>("Resolving live coordinates...");
-  const [isRefreshingAddress, setIsRefreshingAddress] = useState<boolean>(false);
+  // Location & Address States
+  const [streetAddress, setStreetAddress] = useState<string>("Locating street...");
+  const [useCustomAddress, setUseCustomAddress] = useState<boolean>(false);
+  const [customAddress, setCustomAddress] = useState<string>("");
+  const [isRefreshingGeo, setIsRefreshingGeo] = useState<boolean>(false);
 
-  // Active Map Filter Layers
-  const [layers, setLayers] = useState({
-    power: true,
-    water: true,
-    roads: true,
-    other: true,
-  });
+  // Full Municipal Fields Form State
+  const [reportTitle, setReportTitle] = useState("");
+  const [category, setCategory] = useState<"water" | "power" | "roads" | "other">("water");
+  const [description, setDescription] = useState("");
+  const [reporterName, setReporterName] = useState("");
+  const [reporterPhone, setReporterPhone] = useState("");
+  const [selectedWard, setSelectedWard] = useState("Ward 26 (CBD / Central)");
+  const [priority] = useState<"High" | "Medium" | "Low" | "Critical">("High");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Active user lat/lng with Pietermaritzburg default fallback
-  const userLat = location?.latitude || -29.6006;
-  const userLng = location?.longitude || 30.3794;
+  // Live Area Reports Feed State
+  const [reports, setReports] = useState<ReportItem[]>(DEFAULT_REPORTS);
 
   // Bulletproof Theme Persistence on Mount
   useEffect(() => {
@@ -117,517 +134,515 @@ export default function RadarPage() {
     };
   }, []);
 
-  // Fetch Reverse Geocoded Street Address using OpenStreetMap Nominatim
-  const fetchAddress = useCallback(async (lat: number, lng: number) => {
-    setIsRefreshingAddress(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-        { headers: { "Accept-Language": "en" } }
-      );
-      const data = await res.json();
-      if (data.address) {
-        const road = data.address.road || data.address.pedestrian || data.address.suburb || "";
-        const city = data.address.city || data.address.town || data.address.municipality || "Pietermaritzburg";
-        const formatted = [road, city].filter(Boolean).join(", ");
-        setUserStreetAddress(formatted || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-      } else {
-        setUserStreetAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-      }
-    } catch {
-      setUserStreetAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-    } finally {
-      setIsRefreshingAddress(false);
-    }
-  }, []);
-
+  // Load Initial Persisted Reports & Set Up App-Wide Synchronized Listeners
   useEffect(() => {
-    if (userLat && userLng) {
-      fetchAddress(userLat, userLng);
-    }
-  }, [userLat, userLng, fetchAddress]);
-
-  // Load Real Reports from Local Storage & BroadcastChannel Sync with real coordinate mapping
-  const loadReports = useCallback(() => {
     try {
       const saved = localStorage.getItem("resigrid_active_reports");
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const mapped: IncidentMarker[] = parsed.map((item: any, idx: number) => {
-            // Use real coordinates if present, otherwise fallback around user location
-            const lat = item.coords?.lat ?? (userLat + (idx * 0.003 - 0.001));
-            const lng = item.coords?.lng ?? (userLng + (idx * 0.003 - 0.001));
-            
-            // Accurate geospatial mapping within 10km radar scope (10km radius maps to 38% offset from 50% center)
-            const distanceKm = calculateDistance(userLat, userLng, lat, lng);
-            const latDiffKm = (lat - userLat) * 111; // ~111km per degree latitude
-            const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
-
-            // 10km radius corresponds to 38% container width/height from center (50%)
-            const x = Math.min(88, Math.max(12, 50 + (lngDiffKm / 10) * 38));
-            const y = Math.min(88, Math.max(12, 50 - (latDiffKm / 10) * 38));
-
-            return {
-              id: item.id || `INC-${100 + idx}`,
-              type: item.category || "other",
-              title: item.title || "Infrastructure Hazard",
-              location: item.locationAddress || "Local Area",
-              severity: item.priority ? item.priority.toLowerCase() : "high",
-              time: item.time || "Recently",
-              latitude: lat,
-              longitude: lng,
-              coordinates: { x, y },
-              description: item.description || "No description provided.",
-              status: item.status || "Auto-Dispatched",
-              distanceKm,
-            };
-          });
-
-          setLiveIncidents(mapped);
-          setSelectedIncident((prev) => {
-            if (!prev) return mapped[0];
-            const stillExists = mapped.find((m) => m.id === prev.id);
-            return stillExists || mapped[0];
-          });
+          setReports(parsed);
         }
+      } else {
+        localStorage.setItem("resigrid_active_reports", JSON.stringify(DEFAULT_REPORTS));
       }
     } catch (e) {
-      console.error("Error loading saved reports for radar:", e);
+      console.error("Storage read error:", e);
     }
-  }, [userLat, userLng]);
-
-  useEffect(() => {
-    loadReports();
-
-    // Auto-refresh reports data every 30 seconds
-    const dataInterval = setInterval(() => {
-      loadReports();
-    }, 30000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
+
       broadcastChannel.onmessage = (event) => {
-        const { type } = event.data || {};
-        if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
-          loadReports();
+        const { type, payload } = event.data || {};
+
+        if (type === "NEW_REPORT" && payload) {
+          setReports((prev) => {
+            const exists = prev.some((r) => r.id === payload.id);
+            if (exists) return prev;
+            const updated = [payload, ...prev];
+            localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
+            return updated;
+          });
+        }
+
+        if (type === "STATUS_UPDATE" && payload?.id) {
+          setReports((prev) => {
+            const updated = prev.map((r) =>
+              r.id === payload.id ? { ...r, status: payload.status } : r
+            );
+            localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
+            return updated;
+          });
         }
       };
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports") {
-        loadReports();
+      if (e.key === "resigrid_active_reports" && e.newValue) {
+        try {
+          setReports(JSON.parse(e.newValue));
+        } catch (err) {
+          console.error("Storage sync parse error:", err);
+        }
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
 
     return () => {
-      clearInterval(dataInterval);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, [loadReports]);
+  }, []);
 
-  // Manual GPS Re-sync Handler
-  const handleRefreshLocation = (e?: React.SyntheticEvent) => {
-    if (e) e.preventDefault();
-    refreshLocation();
-    if (userLat && userLng) {
-      fetchAddress(userLat, userLng);
+  // Reverse Geocoding Fetch with High Precision
+  const fetchAddressOnce = async (lat: number, lng: number) => {
+    setIsRefreshingGeo(true);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`
+      );
+      const data = await res.json();
+      if (data.address) {
+        const num =
+          data.address.house_number ||
+          data.address.building ||
+          data.address.house_name ||
+          "";
+        const road = data.address.road || data.address.pedestrian || "";
+        const suburb =
+          data.address.suburb ||
+          data.address.neighbourhood ||
+          data.address.city ||
+          "";
+
+        const streetLine = [num, road].filter(Boolean).join(" ");
+        const formatted = [streetLine, suburb].filter(Boolean).join(", ");
+
+        setStreetAddress(formatted || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      }
+    } catch {
+      setStreetAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+    } finally {
+      setIsRefreshingGeo(false);
     }
   };
 
-  // Filter incidents within 10km radius
-  const nearbyIncidents = useMemo(() => {
-    return filterWithinRadius(userLat, userLng, liveIncidents, 10.0);
-  }, [userLat, userLng, liveIncidents]);
+  useEffect(() => {
+    if (location?.latitude && location?.longitude) {
+      fetchAddressOnce(location.latitude, location.longitude);
+    }
+  }, [location?.latitude, location?.longitude]);
 
-  const displayIncidents = nearbyIncidents.length > 0 ? nearbyIncidents : liveIncidents;
-  const filteredIncidents = displayIncidents.filter((inc) => layers[inc.type as keyof typeof layers]);
+  // Manual GPS Re-sync Handler
+  const handleManualRefreshLocation = (e?: React.SyntheticEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    refreshLocation();
+    if (location?.latitude && location?.longitude) {
+      fetchAddressOnce(location.latitude, location.longitude);
+    }
+  };
 
-  const toggleLayer = (layerKey: keyof typeof layers) => {
-    setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));
+  // Category Toggle Action
+  const handleCategorySelect = (cat: "water" | "power" | "roads" | "other", e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCategory(cat);
+  };
+
+  // Address Source Toggle Action
+  const handleToggleAddressSource = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setUseCustomAddress((prev) => !prev);
+  };
+
+  // Real Dispatch Webhook Submission Handler with Full Municipal Metadata
+  const handleSubmitReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim()) return;
+
+    setIsSubmitting(true);
+
+    const activeAddress = useCustomAddress && customAddress.trim()
+      ? customAddress.trim()
+      : streetAddress !== "Locating street..."
+      ? streetAddress
+      : "Current GPS Position";
+
+    const timestamp = new Date().toLocaleTimeString("en-ZA", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const payload: ReportItem = {
+      id: `RPT-${Math.floor(100 + Math.random() * 900)}`,
+      category,
+      title: reportTitle.trim(),
+      description: description.trim(),
+      locationAddress: activeAddress,
+      ward: selectedWard,
+      priority,
+      status: "Auto-Dispatched",
+      time: `Today, ${timestamp} SAST`,
+      reporterName: reporterName.trim(),
+      reporterPhone: reporterPhone.trim(),
+      assignedDepotUnit: "Depot Rapid Response Queue",
+      estimatedFixTime: "Pending Triage",
+      coords: location ? { lat: location.latitude, lng: location.longitude } : undefined,
+    };
+
+    try {
+      await fetch("/api/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+
+      setReports((prev) => {
+        const updated = [payload, ...prev];
+        localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
+        return updated;
+      });
+
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("resigrid_reports_dispatch");
+        bc.postMessage({ type: "NEW_REPORT", payload });
+        bc.close();
+      }
+
+      setReportTitle("");
+      setDescription("");
+      setReporterName("");
+      setReporterPhone("");
+      if (useCustomAddress) setCustomAddress("");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
-      
+    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)] [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       {/* Dynamic Ambient Blur Background Orbs */}
-      <div className="ambient-background" aria-hidden="true">
+      <div className="ambient-background pointer-events-none" aria-hidden="true">
         <div className="ambient-orb orb-one" />
         <div className="ambient-orb orb-two" />
         <div className="ambient-orb orb-three" />
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1500px] space-y-6 px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
-
-        {/* TOP NAVIGATION & CONTROLS */}
-        <header className="glass-header flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
-          <div className="flex items-center gap-3">
-            <div className="feature-icon feature-energy" style={{ color: "var(--accent)" }}>
-              <RadarIcon className="w-5 h-5 animate-spin" style={{ animationDuration: "12s", color: "var(--accent)" }} />
+      <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-4 px-3 pb-24 pt-4 sm:space-y-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
+        
+        {/* TOP HEADER & INDEPENDENT OUTSIDE LOCATION PILL */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <header className="glass-panel p-3.5 sm:p-4 flex items-center gap-3">
+            <div className="feature-icon feature-civic shrink-0" style={{ color: "var(--accent)" }}>
+              <FileText className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "var(--accent)" }} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-white">
-                  COMMUNITY RADAR™
-                </h1>
-              </div>
-              <p className="mt-0.5 text-[9px] tracking-[0.15em] text-muted">
-                REAL-TIME GEOSPATIAL INTELLIGENCE & INFRASTRUCTURE TELEMETRY
+            <div className="min-w-0">
+              <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
+                INCIDENT REPORTING
+              </h1>
+              <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
+                DIRECT MUNICIPAL & NEIGHBORHOOD FAULT BROADCAST
               </p>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {/* GEOSPATIAL RADAR CANVAS & SIDEBAR CONTROL */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* RADAR INTERACTIVE MAP DISPLAY */}
-          <div className="lg:col-span-2 glass-panel p-6 flex flex-col justify-between relative overflow-hidden min-h-[460px]">
-            <div className="panel-reflection" />
-
-            {/* Map Header Overlay Controls */}
-            <div className="flex items-center justify-between mb-4 z-20 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Crosshair className="w-4 h-4" style={{ color: "var(--accent)" }} />
-                <span className="text-xs font-mono text-white font-semibold">SECTOR GRID: 10KM PROXIMITY RADIUS</span>
-              </div>
-
-              {/* Quick Layer Filter Buttons */}
-              <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/10">
-                <button
-                  onClick={() => toggleLayer("power")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.power ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-muted hover:text-white"
-                  }`}
-                  title="Toggle Power Outages Layer"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => toggleLayer("water")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.water ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-muted hover:text-white"
-                  }`}
-                  title="Toggle Water Faults Layer"
-                >
-                  <Droplet className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => toggleLayer("roads")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.roads ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-muted hover:text-white"
-                  }`}
-                  title="Toggle Roads Layer"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => toggleLayer("other")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.other ? "bg-teal-500/20 text-teal-300 border border-teal-500/30" : "text-muted hover:text-white"
-                  }`}
-                  title="Toggle Other Incidents Layer"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* SIMULATED RADAR SCOPE DISPLAY */}
-            <div className="relative w-full flex-1 bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-2 min-h-[300px]">
-              
-              {/* Grid Lines */}
-              <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-15" />
-              
-              {/* Radar Circular Concentric Sweep Rings */}
-              <div className="absolute w-[360px] h-[360px] border border-emerald-500/20 rounded-full pointer-events-none" />
-              <div className="absolute w-[240px] h-[240px] border border-emerald-500/20 rounded-full pointer-events-none" />
-              <div className="absolute w-[120px] h-[120px] border border-emerald-500/20 rounded-full pointer-events-none" />
-              <div className="absolute w-full h-[1px] bg-emerald-500/10 pointer-events-none" />
-              <div className="absolute h-full w-[1px] bg-emerald-500/10 pointer-events-none" />
-
-              {/* Center User Location Marker */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
-                <span className="absolute w-10 h-10 rounded-full animate-ping opacity-40 bg-teal-400" />
-                <div className="w-3.5 h-3.5 rounded-full bg-white ring-2 ring-teal-400 shadow-[0_0_12px_#14b8a6]" />
-              </div>
-
-              {/* Rotating Radar Sweep Line */}
-              {scanning && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-[360px] h-[360px] rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
-                    <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-emerald-500/25 to-transparent origin-bottom-left rounded-tr-full" />
-                  </div>
-                </div>
-              )}
-
-              {/* Dynamic Incident Markers on Canvas */}
-              {filteredIncidents.map((incident) => {
-                const isSelected = selectedIncident?.id === incident.id;
-                
-                let markerBg = "bg-amber-500 text-amber-950";
-                let markerGlow = "shadow-[0_0_15px_rgba(245,158,11,0.6)]";
-                
-                if (incident.type === "water") {
-                  markerBg = "bg-cyan-400 text-cyan-950";
-                  markerGlow = "shadow-[0_0_15px_rgba(34,211,238,0.6)]";
-                } else if (incident.type === "roads") {
-                  markerBg = "bg-purple-400 text-purple-950";
-                  markerGlow = "shadow-[0_0_15px_rgba(192,132,252,0.6)]";
-                } else if (incident.type === "other") {
-                  markerBg = "bg-teal-400 text-teal-950";
-                  markerGlow = "shadow-[0_0_15px_rgba(45,212,191,0.6)]";
-                }
-
-                return (
-                  <button
-                    key={incident.id}
-                    onClick={() => setSelectedIncident(incident)}
-                    style={{ top: `${incident.coordinates.y}%`, left: `${incident.coordinates.x}%` }}
-                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 group z-30`}
-                    title={`${incident.title} (${incident.distanceKm ? incident.distanceKm.toFixed(1) + " km" : ""})`}
-                  >
-                    <div className="relative flex items-center justify-center">
-                      {incident.severity === "high" && (
-                        <span className={`absolute w-6 h-6 rounded-full animate-ping opacity-75 ${
-                          incident.type === "water" ? "bg-cyan-400" : "bg-amber-400"
-                        }`} />
-                      )}
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${markerBg} ${markerGlow} ${
-                        isSelected ? "scale-125 ring-2 ring-white" : "hover:scale-110"
-                      }`}>
-                        {incident.type === "power" && <Zap className="w-3.5 h-3.5" />}
-                        {incident.type === "water" && <Droplet className="w-3.5 h-3.5" />}
-                        {incident.type === "roads" && <AlertTriangle className="w-3.5 h-3.5" />}
-                        {incident.type === "other" && <FileText className="w-3.5 h-3.5" />}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Map Footer Telemetry with Live Address & Manual Refresh */}
-            <div className="flex items-center justify-between text-xs text-muted mt-3 z-20 flex-wrap gap-2">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--accent)" }} />
-                Showing <strong className="text-white">{filteredIncidents.length}</strong> active hazards in 10km radius
-              </span>
-              <div className="flex items-center gap-2">
-                <Navigation className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} />
-                <span className="font-mono text-[11px] text-white">
-                  {geoLoading || isRefreshingAddress ? "Resolving address..." : userStreetAddress} ({userLat.toFixed(4)}, {userLng.toFixed(4)})
+          {/* Fully Independent Outside Location Pill */}
+          <div 
+            className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto"
+            style={{
+              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+              backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+              {geoLoading || isRefreshingGeo ? (
+                <span className="text-[10px] sm:text-xs" style={{ color: "var(--accent)" }}>LOCATING STREET...</span>
+              ) : (
+                <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
+                  {useCustomAddress && customAddress.trim() ? customAddress : streetAddress}
                 </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleManualRefreshLocation}
+              onTouchEnd={handleManualRefreshLocation}
+              title="Refresh Location"
+              className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
+              style={{ color: "var(--accent)" }}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* MAIN LAYOUT GRID */}
+        <form onSubmit={handleSubmitReport} className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 relative z-20">
+          
+          {/* LEFT COLUMN: INDIVIDUAL FROSTED FORM TILES */}
+          <div className="lg:col-span-1 space-y-3.5">
+
+            {/* Category Selection Tile */}
+            <div className="glass-panel p-4 space-y-2">
+              <label className="text-[11px] sm:text-xs font-medium text-muted block">Category</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["water", "power", "roads", "other"] as const).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={(e) => handleCategorySelect(cat, e)}
+                    onTouchEnd={(e) => handleCategorySelect(cat, e)}
+                    className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-wider border transition-all flex items-center gap-1.5 justify-center cursor-pointer touch-manipulation active:scale-95 ${
+                      category === cat
+                        ? "shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
+                        : "bg-white/5 border-white/10 text-muted hover:text-white"
+                    }`}
+                    style={
+                      category === cat
+                        ? {
+                            backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                            color: "var(--accent)",
+                            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                          }
+                        : {}
+                    }
+                  >
+                    {cat === "water" && <Droplet className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    {cat === "power" && <Zap className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    {cat === "roads" && <AlertTriangle className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    {cat === "other" && <FileText className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    <span className="pointer-events-none">{cat}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reporter Information Tile */}
+            <div className="glass-panel p-4 space-y-3">
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <User className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Full Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reporterName}
+                  onChange={(e) => setReporterName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Phone className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Contact No.
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={reporterPhone}
+                  onChange={(e) => setReporterPhone(e.target.value)}
+                  placeholder="e.g. +27 82 123 4567"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                />
+              </div>
+            </div>
+
+            {/* Municipal Ward Tile */}
+            <div className="glass-panel p-4">
+              <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Ward
+              </label>
+              <select
+                value={selectedWard}
+                onChange={(e) => setSelectedWard(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer pointer-events-auto"
+              >
+                <option value="Ward 26 (CBD / Central)" className="bg-neutral-900 text-white">Ward 26 (CBD / Central)</option>
+                <option value="Ward 28 (Raisethorpe / Newholme)" className="bg-neutral-900 text-white">Ward 28 (Raisethorpe / Newholme)</option>
+                <option value="Ward 30 (Northdale / Woodlands)" className="bg-neutral-900 text-white">Ward 30 (Northdale / Woodlands)</option>
+                <option value="Ward 33 (Scottsville / University)" className="bg-neutral-900 text-white">Ward 33 (Scottsville / University)</option>
+              </select>
+            </div>
+
+            {/* Issue Details Tile */}
+            <div className="glass-panel p-4 space-y-3">
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Issue Headline</label>
+                <input
+                  type="text"
+                  required
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                  placeholder="e.g. Burst Water Pipe, Substation Outage..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details & Impact</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Provide additional details regarding the incident..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors resize-none pointer-events-auto"
+                />
+              </div>
+            </div>
+
+            {/* Location Source Tile */}
+            <div className="glass-panel p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] sm:text-[11px] font-medium text-muted block">Precise Location Source</label>
                 <button
                   type="button"
-                  onClick={handleRefreshLocation}
-                  title="Refresh GPS Location"
-                  className="p-1 rounded-lg border border-white/10 hover:text-white transition-colors cursor-pointer touch-manipulation"
-                  style={{ color: "var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
+                  onClick={handleToggleAddressSource}
+                  onTouchEnd={handleToggleAddressSource}
+                  className="text-[8px] sm:text-[9px] hover:opacity-80 flex items-center gap-1 font-medium transition-colors cursor-pointer touch-manipulation pointer-events-auto"
+                  style={{ color: "var(--accent)" }}
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${geoLoading || isRefreshingAddress ? "animate-spin" : ""}`} />
+                  {useCustomAddress ? <MapPin className="h-2 w-2 shrink-0 pointer-events-none" /> : <Edit3 className="h-2 w-2 shrink-0 pointer-events-none" />}
+                  <span className="pointer-events-none">{useCustomAddress ? "Use Auto GPS" : "Enter Exact Address"}</span>
                 </button>
               </div>
+
+              {useCustomAddress ? (
+                <input
+                  type="text"
+                  required
+                  value={customAddress}
+                  onChange={(e) => setCustomAddress(e.target.value)}
+                  placeholder="e.g. 142 Chief Albert Luthuli St, Scottsville..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                />
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
+                    <div className="text-[11px] overflow-hidden text-ellipsis whitespace-nowrap">
+                      <span className="block text-[9px] uppercase font-mono" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>Auto GPS Address:</span>
+                      <span className="text-white font-medium">{streetAddress}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleManualRefreshLocation}
+                    onTouchEnd={handleManualRefreshLocation}
+                    className="transition-colors shrink-0 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-80"
+                    style={{ color: "var(--accent)" }}
+                    title="Re-sync location"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* Action Submit Tile */}
+            <div className="glass-panel p-2 mb-4">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-90"
+                style={{
+                  color: "var(--accent)",
+                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                  boxShadow: "0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)"
+                }}
+              >
+                <Send className="h-4 w-4 shrink-0 pointer-events-none" style={{ color: "var(--accent)" }} />
+                <span className="pointer-events-none">{isSubmitting ? "Dispatching..." : "Dispatch Automated Report"}</span>
+              </button>
+            </div>
+
+            {/* Divider Line Between Dispatch Button & Active Area Reports */}
+            <div className="my-5 border-t border-white/10 w-full" />
+
           </div>
 
-          {/* INCIDENT DETAILS & FILTER CONTROL PANEL */}
-          <div className="glass-panel p-6 flex flex-col justify-between relative">
-            <div className="panel-reflection" />
+          {/* RIGHT COLUMN: ACTIVE REPORTS STREAM IN INDIVIDUAL FROSTED PANELS */}
+          <div className="lg:col-span-2 space-y-3.5 pt-2 lg:pt-0">
+            
+            {/* Reports Stream Title (Clock Icon Removed) */}
+            <div className="flex items-center gap-2 px-1 pb-1">
+              <h2 className="text-sm sm:text-base font-semibold text-white">
+                Active Area Reports & Dispatches
+              </h2>
+            </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4" style={{ color: "var(--accent)" }} /> Hazard Telemetry
-                </h2>
-                <span className="text-[10px] font-mono text-muted">ID: {selectedIncident?.id || "N/A"}</span>
-              </div>
-
-              {selectedIncident ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
+            {/* Individual Report Item Tiles */}
+            <div className="space-y-3">
+              {reports.map((item) => (
+                <div
+                  key={item.id}
+                  className="glass-panel p-4 space-y-2.5 transition-all pointer-events-auto"
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center flex-wrap gap-2">
                       <span 
-                        className="text-xs uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded-md border"
+                        className="text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border"
                         style={{
                           color: "var(--accent)",
                           backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
                           borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
                         }}
                       >
-                        {selectedIncident.type.toUpperCase()} INCIDENT
+                        {item.category}
                       </span>
-                      <span className="text-xs font-medium text-amber-400 flex items-center gap-1">
-                        <Activity className="w-3 h-3" /> {selectedIncident.severity.toUpperCase()} PRIORITY
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="text-base font-bold text-white">{selectedIncident.title}</h3>
-                      <p className="text-xs text-muted mt-1 leading-relaxed">{selectedIncident.description}</p>
-                      <p className="text-xs text-muted flex items-center gap-1 mt-2">
-                        <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--accent)" }} /> {selectedIncident.location}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-muted">
-                      <span>Logged: {selectedIncident.time}</span>
-                      <span className="font-medium" style={{ color: "var(--accent)" }}>{selectedIncident.status}</span>
-                    </div>
-
-                    {selectedIncident.distanceKm !== undefined && (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
-                        <span className="text-muted">Proximity:</span>
-                        <span className="text-white font-bold" style={{ color: "var(--accent)" }}>{selectedIncident.distanceKm.toFixed(2)} km away</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Layer Visibility Selectors */}
-                  <div className="space-y-2 pt-2">
-                    <span className="text-[10px] font-mono tracking-wider text-muted uppercase">ACTIVE RADAR LAYERS</span>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => toggleLayer("power")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.power
-                            ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Power</span>
-                        {layers.power ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-
-                      <button
-                        onClick={() => toggleLayer("water")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.water
-                            ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><Droplet className="w-3.5 h-3.5" /> Water</span>
-                        {layers.water ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-
-                      <button
-                        onClick={() => toggleLayer("roads")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.roads
-                            ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> Roads</span>
-                        {layers.roads ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-
-                      <button
-                        onClick={() => toggleLayer("other")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.other
-                            ? "bg-teal-500/10 border-teal-500/30 text-teal-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Other</span>
-                        {layers.other ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted py-8 text-center">Select an incident marker on the radar map to view telemetry.</p>
-              )}
-            </div>
-
-            <Link 
-              href="/civic" 
-              className="w-full mt-6 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation hover:opacity-90"
-              style={{
-                color: "var(--accent)",
-                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                boxShadow: "0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)"
-              }}
-            >
-              Report New Hazard <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-
-        </div>
-
-        {/* RECENT RADAR FEED LIST */}
-        <div className="glass-panel p-6 relative">
-          <div className="panel-reflection" />
-          <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <Activity className="w-4 h-4" style={{ color: "var(--accent)" }} /> Real-time Hazard Feed ({displayIncidents.length})
-            </h2>
-            <span className="text-xs text-muted font-mono">Live Synced</span>
-          </div>
-
-          <div className="space-y-3 max-h-[350px] overflow-y-auto">
-            {displayIncidents.length === 0 ? (
-              <div className="text-center py-8 text-muted text-xs">
-                No active hazard reports found in your 10km radius.
-              </div>
-            ) : (
-              displayIncidents.map((incident) => {
-                const isSelected = selectedIncident?.id === incident.id;
-                return (
-                  <div
-                    key={incident.id}
-                    onClick={() => setSelectedIncident(incident)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                      isSelected
-                        ? "bg-white/[0.02] shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_20%,transparent)]"
-                        : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04]"
-                    }`}
-                    style={isSelected ? { borderColor: "var(--accent)" } : undefined}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`p-2 rounded-lg shrink-0 ${
-                        incident.type === "power" ? "bg-amber-500/20 text-amber-400" :
-                        incident.type === "water" ? "bg-cyan-500/20 text-cyan-400" :
-                        incident.type === "roads" ? "bg-purple-500/20 text-purple-400" :
-                        "bg-teal-500/20 text-teal-400"
-                      }`}>
-                        {incident.type === "power" && <Zap className="w-4 h-4" />}
-                        {incident.type === "water" && <Droplet className="w-4 h-4" />}
-                        {incident.type === "roads" && <AlertTriangle className="w-4 h-4" />}
-                        {incident.type === "other" && <FileText className="w-4 h-4" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-white truncate">{incident.title}</p>
-                        <p className="text-[11px] text-muted mt-0.5 truncate">{incident.location}</p>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0 pl-2 flex flex-col items-end">
-                      <span className="text-[10px] font-mono text-muted block">{incident.time}</span>
-                      {incident.distanceKm !== undefined && (
-                        <span className="text-[10px] font-mono font-semibold mt-0.5" style={{ color: "var(--accent)" }}>
-                          {incident.distanceKm.toFixed(1)} km away
+                      <span className="text-xs font-mono text-muted">{item.id}</span>
+                      {item.ward && (
+                        <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white font-medium">
+                          {item.ward}
                         </span>
                       )}
                     </div>
+
+                    <span 
+                      className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full border"
+                      style={{
+                        color: "var(--accent)",
+                        backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
+                        borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
+                      }}
+                    >
+                      <CheckCircle2 className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> {item.status}
+                    </span>
                   </div>
-                );
-              })
-            )}
+
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">{item.title}</h3>
+                    <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">{item.description}</p>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between text-[10px] sm:text-[11px] text-muted gap-1.5 sm:gap-2">
+                    <span className="flex items-center gap-1 font-mono min-w-0 truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
+                      <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} />
+                      <span className="truncate">{item.locationAddress}</span>
+                    </span>
+                    <span className="shrink-0 font-mono">{item.time}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
           </div>
-        </div>
+
+        </form>
 
       </div>
     </main>
   );
 }
+

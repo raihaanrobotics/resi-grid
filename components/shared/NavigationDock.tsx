@@ -31,7 +31,6 @@ export default function NavigationDock() {
       <div className="floating-dock-inner">
         {navItems.map((item) => {
           const Icon = item.icon;
-
           let active = false;
 
           if (item.href === "/") {

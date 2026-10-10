@@ -12,6 +12,8 @@ import {
   Palette,
   Smartphone,
   LogOut,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 const ACCENT_PALETTES = [
@@ -23,15 +25,74 @@ const ACCENT_PALETTES = [
   { id: "emerald", name: "Eco Green", hex: "#10b981", border: "border-emerald-500", bg: "bg-emerald-500" },
 ];
 
+const SOUTH_AFRICAN_CITIES_WARDS: Record<string, string[]> = {
+  "Pietermaritzburg (Msunduzi)": [
+    "Ward 26 (CBD / Central / Town Bush)",
+    "Ward 28 (Raisethorpe / Newholme / Woodlands)",
+    "Ward 30 (Northdale / Woodlands / Mountain Rise)",
+    "Ward 33 (Scottsville / University / Pelham)",
+    "Ward 25 (Balgowan / Hilton / Sweetwaters)",
+    "Ward 27 (Chase Valley / Wembley / Athlone)",
+    "Ward 29 (Pandas / Hayfields / Pietermaritzburg West)",
+    "Ward 31 (Sobantu / Plessislaer)",
+    "Ward 32 (Imbali / Ashdown / Georgetown)",
+    "Ward 34 (Edendale / Georgetown / Siyahlala-la)",
+  ],
+  "Johannesburg (City of Joburg)": [
+    "Ward 23 (Auckland Park / Melville / Westdene)",
+    "Ward 64 (Braamfontein / Newtown / Marshalltown)",
+    "Ward 90 (Sandton / Rosebank / Hyde Park)",
+    "Ward 117 (Randburg / Ferndale / Blairgowrie)",
+    "Ward 126 (Roodepoort / Constantia Kloof)",
+    "Ward 54 (Soweto / Diepkloof)",
+    "Ward 29 (Soweto / Orlando West)",
+  ],
+  "Cape Town (City of Cape Town)": [
+    "Ward 54 (Cape Town CBD / Green Point / Waterfront)",
+    "Ward 115 (Sea Point / Camps Bay / Hout Bay)",
+    "Ward 59 (Claremont / Rondebosch / Newlands)",
+    "Ward 71 (Mitchells Plain / Strandfontein)",
+    "Ward 108 (Khayelitsha / Harare)",
+    "Ward 16 (Bellville / Durbanville)",
+  ],
+  "Durban (eThekwini)": [
+    "Ward 26 (Durban CBD / South Beach / North Beach)",
+    "Ward 31 (Morningside / Glenwood / Musgrave)",
+    "Ward 33 (Umhlanga / Durban North)",
+    "Ward 73 (Phoenix / Verulam)",
+    "Ward 75 (Chatsworth / Umlazi)",
+  ],
+  "Pretoria (Tshwane)": [
+    "Ward 59 (Pretoria CBD / Arcadia / Sunnyside)",
+    "Ward 57 (Hatfield / Brooklyn / Lynnwood)",
+    "Ward 44 (Centurion / Lyttelton)",
+    "Ward 16 (Pretoria North / Akasia)",
+  ],
+  "Gqeberha (Nelson Mandela Bay)": [
+    "Ward 5 (Central / Richmond Hill / Humewood)",
+    "Ward 6 (Walmer / Springfield)",
+    "Ward 8 (Summerstrand / Humewood)",
+    "Ward 31 (Motherwell / New Brighton)",
+  ],
+  "Bloemfontein (Mangaung)": [
+    "Ward 21 (Bloemfontein CBD / Westdene)",
+    "Ward 15 (Universitas / Brandwag)",
+    "Ward 48 (Botshabelo)",
+    "Ward 40 (Thaba Nchu)",
+  ],
+};
+
 export default function ProfilePage() {
+  const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
   const [selectedAccent, setSelectedAccent] = useState<string>("teal");
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
 
   // Profile & Contact States
   const [fullName, setFullName] = useState("Raihaan Mahomed");
   const [email, setEmail] = useState("raihaan@rdesigns.co.za");
   const [phone, setPhone] = useState("+27 82 123 4567");
-  const [selectedWard, setSelectedWard] = useState("Ward 26 (CBD / Central)");
+  const [selectedWard, setSelectedWard] = useState("Ward 26 (CBD / Central / Town Bush)");
   const [streetAddress, setStreetAddress] = useState("142 Chief Albert Luthuli St, Pietermaritzburg");
 
   // App Preference Toggles
@@ -58,15 +119,27 @@ export default function ProfilePage() {
         if (parsed.fullName) setFullName(parsed.fullName);
         if (parsed.email) setEmail(parsed.email);
         if (parsed.phone) setPhone(parsed.phone);
+        if (parsed.selectedCity) setSelectedCity(parsed.selectedCity);
         if (parsed.selectedWard) setSelectedWard(parsed.selectedWard);
         if (parsed.streetAddress) setStreetAddress(parsed.streetAddress);
+        if (parsed.emergencyAlerts !== undefined) setEmergencyAlerts(parsed.emergencyAlerts);
+        if (parsed.communityBroadcasts !== undefined) setCommunityBroadcasts(parsed.communityBroadcasts);
       }
     } catch (e) {
       console.error("Error reading saved preferences:", e);
     }
   }, []);
 
-  // Staged Accent Selection Handler (Does not apply globally until save)
+  // Handle City Change to update available wards
+  const handleCityChange = (city: string) => {
+    setSelectedCity(city);
+    const wards = SOUTH_AFRICAN_CITIES_WARDS[city];
+    if (wards && wards.length > 0) {
+      setSelectedWard(wards[0]);
+    }
+  };
+
+  // Staged Accent Selection Handler (Requires explicit click/tap, no hover trigger)
   const handleSelectAccent = (accentId: string) => {
     setSelectedAccent(accentId);
   };
@@ -89,6 +162,7 @@ export default function ProfilePage() {
       fullName,
       email,
       phone,
+      selectedCity,
       selectedWard,
       streetAddress,
       emergencyAlerts,
@@ -96,9 +170,35 @@ export default function ProfilePage() {
     };
 
     localStorage.setItem("resigrid_user_profile", JSON.stringify(profileData));
+    setSuccessMessage("Preferences saved successfully");
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
+
+  // Sign Out Session Handler (Clears session state)
+  const handleSignOut = () => {
+    localStorage.removeItem("resigrid_user_profile");
+    setSuccessMessage("Signed out successfully. Session terminated.");
+    setSavedSuccess(true);
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  };
+
+  // Delete App Data Handler (Completely clears everything across the app)
+  const handleDeleteAllData = () => {
+    if (window.confirm("Are you sure you want to delete all ResiGrid data across the app? This action cannot be undone.")) {
+      localStorage.clear();
+      sessionStorage.clear();
+      setSuccessMessage("All application data deleted completely.");
+      setSavedSuccess(true);
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1500);
+    }
+  };
+
+  const currentWards = SOUTH_AFRICAN_CITIES_WARDS[selectedCity] || [];
 
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
@@ -161,33 +261,17 @@ export default function ProfilePage() {
               <p className="text-xs text-muted truncate mt-0.5">{email}</p>
               <div className="flex items-center gap-2 mt-1.5 text-[10px] sm:text-[11px] text-muted flex-wrap">
                 <span className="flex items-center gap-1 text-accent-dynamic">
-                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedWard}
+                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {selectedWard}
                 </span>
               </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            <button
-              type="button"
-              onClick={() => handleSave()}
-              onTouchEnd={() => handleSave()}
-              className="w-full sm:w-auto px-4 py-2.5 rounded-xl border text-accent-dynamic font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                borderColor: "color-mix(in srgb, var(--accent) 35%, transparent)",
-              }}
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Preferences</span>
-            </button>
           </div>
         </div>
 
         {/* SUCCESS NOTIFICATION TOAST */}
         {savedSuccess && (
           <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-white" /> Saved
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-white" /> {successMessage}
           </div>
         )}
 
@@ -268,7 +352,7 @@ export default function ProfilePage() {
                 <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Personal & Municipal Details
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Update contact information and default municipal ward tag for automated dispatching.
+                Update contact information, select your South African city, and choose your municipal ward.
               </p>
             </div>
 
@@ -307,16 +391,32 @@ export default function ProfilePage() {
               </div>
 
               <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">City / Municipality</label>
+                <select
+                  value={selectedCity}
+                  onChange={(e) => handleCityChange(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                >
+                  {Object.keys(SOUTH_AFRICAN_CITIES_WARDS).map((city) => (
+                    <option key={city} value={city} className="bg-neutral-900 text-white">
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Assigned Ward</label>
                 <select
                   value={selectedWard}
                   onChange={(e) => setSelectedWard(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
-                  <option value="Ward 26 (CBD / Central)" className="bg-neutral-900 text-white">Ward 26 (CBD / Central)</option>
-                  <option value="Ward 28 (Raisethorpe / Newholme)" className="bg-neutral-900 text-white">Ward 28 (Raisethorpe / Newholme)</option>
-                  <option value="Ward 30 (Northdale / Woodlands)" className="bg-neutral-900 text-white">Ward 30 (Northdale / Woodlands)</option>
-                  <option value="Ward 33 (Scottsville / University)" className="bg-neutral-900 text-white">Ward 33 (Scottsville / University)</option>
+                  {currentWards.map((ward) => (
+                    <option key={ward} value={ward} className="bg-neutral-900 text-white">
+                      {ward}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -353,11 +453,11 @@ export default function ProfilePage() {
                   type="button"
                   onClick={() => setEmergencyAlerts(!emergencyAlerts)}
                   onTouchEnd={() => setEmergencyAlerts(!emergencyAlerts)}
-                  className="w-11 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer touch-manipulation z-30 shrink-0"
+                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer touch-manipulation z-30 shrink-0"
                   style={{ backgroundColor: emergencyAlerts ? "var(--accent)" : "rgba(255,255,255,0.1)" }}
                 >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                    emergencyAlerts ? "translate-x-5" : "translate-x-0"
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform ${
+                    emergencyAlerts ? "translate-x-6" : "translate-x-0"
                   }`} />
                 </button>
               </div>
@@ -371,15 +471,32 @@ export default function ProfilePage() {
                   type="button"
                   onClick={() => setCommunityBroadcasts(!communityBroadcasts)}
                   onTouchEnd={() => setCommunityBroadcasts(!communityBroadcasts)}
-                  className="w-11 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer touch-manipulation z-30 shrink-0"
+                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer touch-manipulation z-30 shrink-0"
                   style={{ backgroundColor: communityBroadcasts ? "var(--accent)" : "rgba(255,255,255,0.1)" }}
                 >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                    communityBroadcasts ? "translate-x-5" : "translate-x-0"
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform ${
+                    communityBroadcasts ? "translate-x-6" : "translate-x-0"
                   }`} />
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* SAVE PREFERENCES BUTTON AT THE END AFTER ALERT & DISPATCH CONTAINER */}
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={() => handleSave()}
+              onTouchEnd={() => handleSave()}
+              className="w-full sm:w-auto px-6 py-3 rounded-xl border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30 shadow-lg"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                borderColor: "color-mix(in srgb, var(--accent) 45%, transparent)",
+              }}
+            >
+              <Save className="w-4 h-4" />
+              <span>Save All Preferences</span>
+            </button>
           </div>
 
           {/* SESSION & SECURITY */}
@@ -397,18 +514,29 @@ export default function ProfilePage() {
                 <Smartphone className="w-4 h-4 text-accent-dynamic shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-white truncate">Active Web Session</p>
-                  <p className="text-[10px] text-muted truncate">Pietermaritzburg • Verified</p>
+                  <p className="text-[10px] text-muted truncate">South Africa • Verified</p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleSave()}
-                onTouchEnd={() => handleSave()}
-                className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30"
-              >
-                <LogOut className="w-3.5 h-3.5" /> Sign Out Session
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleSignOut()}
+                  onTouchEnd={() => handleSignOut()}
+                  className="w-full py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/25 text-amber-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30"
+                >
+                  <LogOut className="w-3.5 h-3.5" /> Sign Out Session
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteAllData()}
+                  onTouchEnd={() => handleDeleteAllData()}
+                  className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete All App Data
+                </button>
+              </div>
             </div>
           </div>
 

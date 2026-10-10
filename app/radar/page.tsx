@@ -70,13 +70,14 @@ export default function RadarPage() {
   const [userStreetAddress, setUserStreetAddress] = useState<string>("Locating...");
   const [isRefreshingAddress, setIsRefreshingAddress] = useState<boolean>(false);
 
-  // Active Map Filter Layers
+  // Active Map Filter Layers & Visibility Toggle
   const [layers, setLayers] = useState({
     power: true,
     water: true,
     roads: true,
     other: true,
   });
+  const [markersVisible, setMarkersVisible] = useState(true);
 
   const userLat = location?.latitude || -29.6006;
   const userLng = location?.longitude || 30.3794;
@@ -240,10 +241,10 @@ export default function RadarPage() {
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1400px] space-y-5 px-4 pb-28 pt-5 sm:px-6 lg:px-8">
+      <div className="relative z-10 mx-auto w-full max-w-[1500px] space-y-6 px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
 
         {/* HEADER */}
-        <header className="glass-header flex items-center justify-between p-4">
+        <header className="glass-header flex items-center justify-between p-4 sm:p-4">
           <div className="flex items-center gap-3">
             <div className="feature-icon" style={{ color: "var(--accent)" }}>
               <RadarIcon className="w-5 h-5 animate-spin" style={{ animationDuration: "12s" }} />
@@ -260,61 +261,73 @@ export default function RadarPage() {
         </header>
 
         {/* MAIN RADAR & DETAILS GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6">
           
           {/* RADAR MAP VIEW */}
-          <div className="lg:col-span-2 glass-panel p-5 flex flex-col justify-between relative overflow-hiden min-h-[420px]">
+          <div className="lg:col-span-2 glass-panel p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden">
             <div className="panel-reflection" />
 
             {/* Map Header / Filters */}
             <div className="flex items-center justify-between mb-3 z-20 flex-wrap gap-2">
-              <span className="text-xs font-mono text-muted">
-                {filteredIncidents.length} active hazards nearby
-              </span>
+              <div />
 
-              {/* Layer Filters */}
-              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+              {/* Layer Filters with Eye Toggle on Left */}
+              <div className="flex items-center gap-2 bg-black/40 p-1 rounded-xl border border-white/10">
                 <button
-                  onClick={() => toggleLayer("power")}
-                  className={`p-1.5 rounded-lg text-xs transition-all ${
-                    layers.power ? "bg-amber-500/20 text-amber-300" : "text-muted hover:text-white"
+                  onClick={() => setMarkersVisible((prev) => !prev)}
+                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                    markersVisible ? "text-white bg-white/10" : "text-muted hover:text-white"
                   }`}
-                  title="Power"
+                  title={markersVisible ? "Hide Markers" : "Show Markers"}
                 >
-                  <Zap className="w-3.5 h-3.5" />
+                  {markersVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                 </button>
-                <button
-                  onClick={() => toggleLayer("water")}
-                  className={`p-1.5 rounded-lg text-xs transition-all ${
-                    layers.water ? "bg-cyan-500/20 text-cyan-300" : "text-muted hover:text-white"
-                  }`}
-                  title="Water"
-                >
-                  <Droplet className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => toggleLayer("roads")}
-                  className={`p-1.5 rounded-lg text-xs transition-all ${
-                    layers.roads ? "bg-purple-500/20 text-purple-300" : "text-muted hover:text-white"
-                  }`}
-                  title="Roads"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => toggleLayer("other")}
-                  className={`p-1.5 rounded-lg text-xs transition-all ${
-                    layers.other ? "bg-teal-500/20 text-teal-300" : "text-muted hover:text-white"
-                  }`}
-                  title="Other"
-                >
-                  <FileText className="w-3.5 h-3.5" />
-                </button>
+
+                <div className="w-px h-4 bg-white/10" />
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => toggleLayer("power")}
+                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                      layers.power ? "bg-amber-500/20 text-amber-300" : "text-muted hover:text-white"
+                    }`}
+                    title="Power"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => toggleLayer("water")}
+                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                      layers.water ? "bg-cyan-500/20 text-cyan-300" : "text-muted hover:text-white"
+                    }`}
+                    title="Water"
+                  >
+                    <Droplet className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => toggleLayer("roads")}
+                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                      layers.roads ? "bg-purple-500/20 text-purple-300" : "text-muted hover:text-white"
+                    }`}
+                    title="Roads"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => toggleLayer("other")}
+                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                      layers.other ? "bg-teal-500/20 text-teal-300" : "text-muted hover:text-white"
+                    }`}
+                    title="Other"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* RADAR CANVAS */}
-            <div className="relative w-full flex-1 bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-2 min-h-[280px]">
+            <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-2">
               
               {/* Dynamic Theme Grid dots */}
               <div 
@@ -353,14 +366,14 @@ export default function RadarPage() {
               )}
 
               {/* Incident Markers */}
-              {filteredIncidents.map((incident) => {
+              {markersVisible && filteredIncidents.map((incident) => {
                 const isSelected = selectedIncident?.id === incident.id;
                 return (
                   <button
                     key={incident.id}
                     onClick={() => setSelectedIncident(incident)}
                     style={{ top: `${incident.coordinates.y}%`, left: `${incident.coordinates.x}%` }}
-                    className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all z-30 group"
+                    className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all z-30 group cursor-pointer"
                     title={incident.title}
                   >
                     <div className="relative flex items-center justify-center">
@@ -400,54 +413,78 @@ export default function RadarPage() {
             </div>
           </div>
 
-          {/* INCIDENT DETAILS PANEL */}
-          <div className="glass-panel p-5 flex flex-col justify-between relative">
+          {/* ALL INCIDENT DETAILS PANEL WITH INNER SCROLL & FULL CARDS */}
+          <div className="glass-panel p-5 sm:p-6 flex flex-col justify-between relative">
             <div className="panel-reflection" />
 
             <div>
               <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-                <h2 className="text-xs font-semibold text-white tracking-wider">INCIDENT DETAILS</h2>
-                <span className="text-[10px] font-mono text-muted">{selectedIncident?.id || "N/A"}</span>
+                <h2 className="text-xs font-semibold text-white tracking-wider">ALL INCIDENT DETAILS</h2>
+                <span className="text-[10px] font-mono text-muted">{displayIncidents.length} Active</span>
               </div>
 
-              {selectedIncident ? (
-                <div className="space-y-3">
-                  <div className="p-3.5 bg-white/5 border border-white/10 rounded-xl space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
-                        {selectedIncident.type}
-                      </span>
-                      <span className="text-[10px] font-mono uppercase text-amber-400">
-                        {selectedIncident.severity} priority
-                      </span>
-                    </div>
+              {/* Inner scroll container without visible scrollbars */}
+              <div 
+                className="space-y-3 max-h-[460px] overflow-y-auto pr-1"
+                style={{
+                  scrollbarWidth: "none",
+                  msOverflowStyle: "none",
+                }}
+              >
+                <style jsx>{`
+                  div::-webkit-scrollbar {
+                    display: none;
+                  }
+                `}</style>
 
-                    <div>
-                      <h3 className="text-sm font-bold text-white">{selectedIncident.title}</h3>
-                      <p className="text-xs text-muted mt-1 leading-relaxed">{selectedIncident.description}</p>
-                      <p className="text-xs text-muted flex items-center gap-1 mt-2">
-                        <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--accent)" }} /> {selectedIncident.location}
-                      </p>
-                    </div>
+                {displayIncidents.length === 0 ? (
+                  <p className="text-xs text-muted py-8 text-center">No active incidents found nearby.</p>
+                ) : (
+                  displayIncidents.map((incident) => {
+                    const isSelected = selectedIncident?.id === incident.id;
+                    return (
+                      <div
+                        key={incident.id}
+                        onClick={() => setSelectedIncident(incident)}
+                        className={`p-3.5 bg-white/5 border rounded-xl space-y-2.5 transition-all cursor-pointer ${
+                          isSelected ? "border-[var(--accent)] bg-white/[0.08]" : "border-white/10 hover:border-white/30"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
+                            {incident.type} • {incident.id}
+                          </span>
+                          <span className="text-[10px] font-mono uppercase text-amber-400">
+                            {incident.severity} priority
+                          </span>
+                        </div>
 
-                    {selectedIncident.distanceKm !== undefined && (
-                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
-                        <span className="text-muted">Distance:</span>
-                        <span className="font-bold" style={{ color: "var(--accent)" }}>
-                          {selectedIncident.distanceKm.toFixed(2)} km away
-                        </span>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">{incident.title}</h3>
+                          <p className="text-xs text-muted mt-1 leading-relaxed">{incident.description}</p>
+                          <p className="text-xs text-muted flex items-center gap-1 mt-2">
+                            <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--accent)" }} /> {incident.location}
+                          </p>
+                        </div>
+
+                        {incident.distanceKm !== undefined && (
+                          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
+                            <span className="text-muted">Distance:</span>
+                            <span className="font-bold" style={{ color: "var(--accent)" }}>
+                              {incident.distanceKm.toFixed(2)} km away
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-muted py-8 text-center">Select an incident on the radar to view details.</p>
-              )}
+                    );
+                  })
+                )}
+              </div>
             </div>
 
             <Link 
               href="/civic" 
-              className="w-full mt-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90"
+              className="w-full mt-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
               style={{
                 color: "var(--accent)",
                 borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
@@ -458,67 +495,6 @@ export default function RadarPage() {
             </Link>
           </div>
 
-        </div>
-
-        {/* RECENT HAZARDS FEED LIST */}
-        <div className="glass-panel p-5 relative">
-          <div className="panel-reflection" />
-          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-            <h2 className="text-xs font-semibold text-white tracking-wider flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5" style={{ color: "var(--accent)" }} /> Recent Hazards ({displayIncidents.length})
-            </h2>
-            <span className="text-[10px] text-muted font-mono">Live</span>
-          </div>
-
-          <div className="space-y-2.5 max-h-[300px] overflow-y-auto">
-            {displayIncidents.length === 0 ? (
-              <div className="text-center py-6 text-muted text-xs">
-                No active hazards found within 10km.
-              </div>
-            ) : (
-              displayIncidents.map((incident) => {
-                const isSelected = selectedIncident?.id === incident.id;
-                return (
-                  <div
-                    key={incident.id}
-                    onClick={() => setSelectedIncident(incident)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                      isSelected
-                        ? "bg-white/[0.04]"
-                        : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04]"
-                    }`}
-                    style={isSelected ? { borderColor: "var(--accent)" } : undefined}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`p-2 rounded-lg shrink-0 ${
-                        incident.type === "power" ? "bg-amber-500/20 text-amber-400" :
-                        incident.type === "water" ? "bg-cyan-500/20 text-cyan-400" :
-                        incident.type === "roads" ? "bg-purple-500/20 text-purple-400" :
-                        "bg-teal-500/20 text-teal-400"
-                      }`}>
-                        {incident.type === "power" && <Zap className="w-3.5 h-3.5" />}
-                        {incident.type === "water" && <Droplet className="w-3.5 h-3.5" />}
-                        {incident.type === "roads" && <AlertTriangle className="w-3.5 h-3.5" />}
-                        {incident.type === "other" && <FileText className="w-3.5 h-3.5" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-white truncate">{incident.title}</p>
-                        <p className="text-[11px] text-muted mt-0.5 truncate">{incident.location}</p>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0 pl-2">
-                      {incident.distanceKm !== undefined && (
-                        <span className="text-[10px] font-mono font-semibold" style={{ color: "var(--accent)" }}>
-                          {incident.distanceKm.toFixed(1)} km
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
         </div>
 
       </div>

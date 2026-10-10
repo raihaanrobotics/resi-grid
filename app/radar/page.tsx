@@ -17,8 +17,6 @@ import {
   ShieldAlert,
   Activity,
   Navigation,
-  Compass,
-  CheckCircle2,
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { filterWithinRadius } from "@/lib/geoUtils";
@@ -47,9 +45,9 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
-// Haversine formula for real-world distance calculation in kilometers
+// Haversine formula for distance calculation in kilometers
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -69,7 +67,7 @@ export default function RadarPage() {
   const [liveIncidents, setLiveIncidents] = useState<IncidentMarker[]>([]);
 
   // Reverse Geocoded Street Address State
-  const [userStreetAddress, setUserStreetAddress] = useState<string>("Resolving live coordinates...");
+  const [userStreetAddress, setUserStreetAddress] = useState<string>("Locating...");
   const [isRefreshingAddress, setIsRefreshingAddress] = useState<boolean>(false);
 
   // Active Map Filter Layers
@@ -80,11 +78,10 @@ export default function RadarPage() {
     other: true,
   });
 
-  // Active user lat/lng with Pietermaritzburg default fallback
   const userLat = location?.latitude || -29.6006;
   const userLng = location?.longitude || 30.3794;
 
-  // Bulletproof Theme Persistence on Mount
+  // Theme Persistence on Mount
   useEffect(() => {
     const applySavedTheme = () => {
       try {
@@ -117,7 +114,7 @@ export default function RadarPage() {
     };
   }, []);
 
-  // Fetch Reverse Geocoded Street Address using OpenStreetMap Nominatim
+  // Fetch Street Address using Nominatim
   const fetchAddress = useCallback(async (lat: number, lng: number) => {
     setIsRefreshingAddress(true);
     try {
@@ -129,8 +126,7 @@ export default function RadarPage() {
       if (data.address) {
         const road = data.address.road || data.address.pedestrian || data.address.suburb || "";
         const city = data.address.city || data.address.town || data.address.municipality || "Pietermaritzburg";
-        const formatted = [road, city].filter(Boolean).join(", ");
-        setUserStreetAddress(formatted || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        setUserStreetAddress([road, city].filter(Boolean).join(", ") || `${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       } else {
         setUserStreetAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }
@@ -147,7 +143,7 @@ export default function RadarPage() {
     }
   }, [userLat, userLng, fetchAddress]);
 
-  // Load Real Reports from Local Storage & BroadcastChannel Sync with real coordinate mapping
+  // Load Reports from LocalStorage
   const loadReports = useCallback(() => {
     try {
       const saved = localStorage.getItem("resigrid_active_reports");
@@ -155,23 +151,20 @@ export default function RadarPage() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const mapped: IncidentMarker[] = parsed.map((item: any, idx: number) => {
-            // Use real coordinates if present, otherwise fallback around user location
             const lat = item.coords?.lat ?? (userLat + (idx * 0.003 - 0.001));
             const lng = item.coords?.lng ?? (userLng + (idx * 0.003 - 0.001));
             
-            // Accurate geospatial mapping within 10km radar scope (10km radius maps to 38% offset from 50% center)
             const distanceKm = calculateDistance(userLat, userLng, lat, lng);
-            const latDiffKm = (lat - userLat) * 111; // ~111km per degree latitude
+            const latDiffKm = (lat - userLat) * 111;
             const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
 
-            // 10km radius corresponds to 38% container width/height from center (50%)
             const x = Math.min(88, Math.max(12, 50 + (lngDiffKm / 10) * 38));
             const y = Math.min(88, Math.max(12, 50 - (latDiffKm / 10) * 38));
 
             return {
               id: item.id || `INC-${100 + idx}`,
               type: item.category || "other",
-              title: item.title || "Infrastructure Hazard",
+              title: item.title || "Hazard Report",
               location: item.locationAddress || "Local Area",
               severity: item.priority ? item.priority.toLowerCase() : "high",
               time: item.time || "Recently",
@@ -179,7 +172,7 @@ export default function RadarPage() {
               longitude: lng,
               coordinates: { x, y },
               description: item.description || "No description provided.",
-              status: item.status || "Auto-Dispatched",
+              status: item.status || "Active",
               distanceKm,
             };
           });
@@ -187,60 +180,45 @@ export default function RadarPage() {
           setLiveIncidents(mapped);
           setSelectedIncident((prev) => {
             if (!prev) return mapped[0];
-            const stillExists = mapped.find((m) => m.id === prev.id);
-            return stillExists || mapped[0];
+            return mapped.find((m) => m.id === prev.id) || mapped[0];
           });
         }
       }
     } catch (e) {
-      console.error("Error loading saved reports for radar:", e);
+      console.error("Error loading reports:", e);
     }
   }, [userLat, userLng]);
 
   useEffect(() => {
     loadReports();
+    const interval = setInterval(loadReports, 30000);
 
-    // Auto-refresh reports data every 30 seconds
-    const dataInterval = setInterval(() => {
-      loadReports();
-    }, 30000);
-
-    let broadcastChannel: BroadcastChannel | null = null;
+    let channel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-      broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
-      broadcastChannel.onmessage = (event) => {
-        const { type } = event.data || {};
-        if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
-          loadReports();
-        }
+      channel = new BroadcastChannel("resigrid_reports_dispatch");
+      channel.onmessage = (e) => {
+        if (e.data?.type === "NEW_REPORT" || e.data?.type === "STATUS_UPDATE") loadReports();
       };
     }
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports") {
-        loadReports();
-      }
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "resigrid_active_reports") loadReports();
     };
-
-    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("storage", handleStorage);
 
     return () => {
-      clearInterval(dataInterval);
-      if (broadcastChannel) broadcastChannel.close();
-      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+      if (channel) channel.close();
+      window.removeEventListener("storage", handleStorage);
     };
   }, [loadReports]);
 
-  // Manual GPS Re-sync Handler
   const handleRefreshLocation = (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
     refreshLocation();
-    if (userLat && userLng) {
-      fetchAddress(userLat, userLng);
-    }
+    if (userLat && userLng) fetchAddress(userLat, userLng);
   };
 
-  // Filter incidents within 10km radius
   const nearbyIncidents = useMemo(() => {
     return filterWithinRadius(userLat, userLng, liveIncidents, 10.0);
   }, [userLat, userLng, liveIncidents]);
@@ -255,157 +233,146 @@ export default function RadarPage() {
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
       
-      {/* Dynamic Ambient Blur Background Orbs */}
+      {/* Ambient Background */}
       <div className="ambient-background" aria-hidden="true">
         <div className="ambient-orb orb-one" />
         <div className="ambient-orb orb-two" />
-        <div className="ambient-orb orb-three" />
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1500px] space-y-6 px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
+      <div className="relative z-10 mx-auto w-full max-w-[1400px] space-y-5 px-4 pb-28 pt-5 sm:px-6 lg:px-8">
 
-        {/* TOP NAVIGATION & CONTROLS */}
-        <header className="glass-header flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
+        {/* HEADER */}
+        <header className="glass-header flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
-            <div className="feature-icon feature-energy" style={{ color: "var(--accent)" }}>
-              <RadarIcon className="w-5 h-5 animate-spin" style={{ animationDuration: "12s", color: "var(--accent)" }} />
+            <div className="feature-icon" style={{ color: "var(--accent)" }}>
+              <RadarIcon className="w-5 h-5 animate-spin" style={{ animationDuration: "12s" }} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-white">
-                  COMMUNITY RADAR™
-                </h1>
-              </div>
-              <p className="mt-0.5 text-[9px] tracking-[0.15em] text-muted">
-                REAL-TIME GEOSPATIAL INTELLIGENCE & INFRASTRUCTURE TELEMETRY
+              <h1 className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-white">
+                COMMUNITY RADAR
+              </h1>
+              <p className="text-[10px] tracking-wider text-muted mt-0.5">
+                10KM AREA HAZARD FEED
               </p>
             </div>
           </div>
         </header>
 
-        {/* GEOSPATIAL RADAR CANVAS & SIDEBAR CONTROL */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* MAIN RADAR & DETAILS GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           
-          {/* RADAR INTERACTIVE MAP DISPLAY */}
-          <div className="lg:col-span-2 glass-panel p-6 flex flex-col justify-between relative overflow-hidden min-h-[460px]">
+          {/* RADAR MAP VIEW */}
+          <div className="lg:col-span-2 glass-panel p-5 flex flex-col justify-between relative overflow-hiden min-h-[420px]">
             <div className="panel-reflection" />
 
-            {/* Map Header Overlay Controls */}
-            <div className="flex items-center justify-between mb-4 z-20 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Crosshair className="w-4 h-4" style={{ color: "var(--accent)" }} />
-                <span className="text-xs font-mono text-white font-semibold">SECTOR GRID: 10KM PROXIMITY RADIUS</span>
-              </div>
+            {/* Map Header / Filters */}
+            <div className="flex items-center justify-between mb-3 z-20 flex-wrap gap-2">
+              <span className="text-xs font-mono text-muted">
+                {filteredIncidents.length} active hazards nearby
+              </span>
 
-              {/* Quick Layer Filter Buttons */}
-              <div className="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/10">
+              {/* Layer Filters */}
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
                 <button
                   onClick={() => toggleLayer("power")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.power ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-muted hover:text-white"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    layers.power ? "bg-amber-500/20 text-amber-300" : "text-muted hover:text-white"
                   }`}
-                  title="Toggle Power Outages Layer"
+                  title="Power"
                 >
                   <Zap className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => toggleLayer("water")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.water ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30" : "text-muted hover:text-white"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    layers.water ? "bg-cyan-500/20 text-cyan-300" : "text-muted hover:text-white"
                   }`}
-                  title="Toggle Water Faults Layer"
+                  title="Water"
                 >
                   <Droplet className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => toggleLayer("roads")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.roads ? "bg-purple-500/20 text-purple-300 border border-purple-500/30" : "text-muted hover:text-white"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    layers.roads ? "bg-purple-500/20 text-purple-300" : "text-muted hover:text-white"
                   }`}
-                  title="Toggle Roads Layer"
+                  title="Roads"
                 >
                   <AlertTriangle className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => toggleLayer("other")}
-                  className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-all ${
-                    layers.other ? "bg-teal-500/20 text-teal-300 border border-teal-500/30" : "text-muted hover:text-white"
+                  className={`p-1.5 rounded-lg text-xs transition-all ${
+                    layers.other ? "bg-teal-500/20 text-teal-300" : "text-muted hover:text-white"
                   }`}
-                  title="Toggle Other Incidents Layer"
+                  title="Other"
                 >
                   <FileText className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            {/* SIMULATED RADAR SCOPE DISPLAY */}
-            <div className="relative w-full flex-1 bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-2 min-h-[300px]">
+            {/* RADAR CANVAS */}
+            <div className="relative w-full flex-1 bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-2 min-h-[280px]">
               
-              {/* Grid Lines */}
-              <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-15" />
+              {/* Dynamic Theme Grid dots */}
+              <div 
+                className="absolute inset-0 opacity-20"
+                style={{
+                  backgroundImage: `radial-gradient(var(--accent) 1px, transparent 1px)`,
+                  backgroundSize: "24px 24px"
+                }}
+              />
               
-              {/* Radar Circular Concentric Sweep Rings */}
-              <div className="absolute w-[360px] h-[360px] border border-emerald-500/20 rounded-full pointer-events-none" />
-              <div className="absolute w-[240px] h-[240px] border border-emerald-500/20 rounded-full pointer-events-none" />
-              <div className="absolute w-[120px] h-[120px] border border-emerald-500/20 rounded-full pointer-events-none" />
-              <div className="absolute w-full h-[1px] bg-emerald-500/10 pointer-events-none" />
-              <div className="absolute h-full w-[1px] bg-emerald-500/10 pointer-events-none" />
+              {/* Theme Radar Rings */}
+              <div className="absolute w-[320px] h-[320px] rounded-full border pointer-events-none" style={{ borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)" }} />
+              <div className="absolute w-[200px] h-[200px] rounded-full border pointer-events-none" style={{ borderColor: "color-mix(in srgb, var(--accent) 20%, transparent)" }} />
+              <div className="absolute w-[80px] h-[80px] rounded-full border pointer-events-none" style={{ borderColor: "color-mix(in srgb, var(--accent) 15%, transparent)" }} />
+              <div className="absolute w-full h-[1px] pointer-events-none" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)" }} />
+              <div className="absolute h-full w-[1px] pointer-events-none" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)" }} />
 
-              {/* Center User Location Marker */}
+              {/* Center User Pin */}
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
-                <span className="absolute w-10 h-10 rounded-full animate-ping opacity-40 bg-teal-400" />
-                <div className="w-3.5 h-3.5 rounded-full bg-white ring-2 ring-teal-400 shadow-[0_0_12px_#14b8a6]" />
+                <span className="absolute w-8 h-8 rounded-full animate-ping opacity-40" style={{ backgroundColor: "var(--accent)" }} />
+                <div className="w-3 h-3 rounded-full bg-white ring-2 ring-[var(--accent)] shadow-[0_0_10px_var(--accent)]" />
               </div>
 
-              {/* Rotating Radar Sweep Line */}
+              {/* Theme Rotating Sweep */}
               {scanning && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-[360px] h-[360px] rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
-                    <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-emerald-500/25 to-transparent origin-bottom-left rounded-tr-full" />
+                  <div className="w-[320px] h-[320px] rounded-full relative animate-spin" style={{ animationDuration: "5s" }}>
+                    <div 
+                      className="absolute top-0 right-0 w-1/2 h-1/2 origin-bottom-left rounded-tr-full"
+                      style={{
+                        background: `linear-gradient(to bottom left, color-mix(in srgb, var(--accent) 30%, transparent), transparent)`
+                      }}
+                    />
                   </div>
                 </div>
               )}
 
-              {/* Dynamic Incident Markers on Canvas */}
+              {/* Incident Markers */}
               {filteredIncidents.map((incident) => {
                 const isSelected = selectedIncident?.id === incident.id;
-                
-                let markerBg = "bg-amber-500 text-amber-950";
-                let markerGlow = "shadow-[0_0_15px_rgba(245,158,11,0.6)]";
-                
-                if (incident.type === "water") {
-                  markerBg = "bg-cyan-400 text-cyan-950";
-                  markerGlow = "shadow-[0_0_15px_rgba(34,211,238,0.6)]";
-                } else if (incident.type === "roads") {
-                  markerBg = "bg-purple-400 text-purple-950";
-                  markerGlow = "shadow-[0_0_15px_rgba(192,132,252,0.6)]";
-                } else if (incident.type === "other") {
-                  markerBg = "bg-teal-400 text-teal-950";
-                  markerGlow = "shadow-[0_0_15px_rgba(45,212,191,0.6)]";
-                }
-
                 return (
                   <button
                     key={incident.id}
                     onClick={() => setSelectedIncident(incident)}
                     style={{ top: `${incident.coordinates.y}%`, left: `${incident.coordinates.x}%` }}
-                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 group z-30`}
-                    title={`${incident.title} (${incident.distanceKm ? incident.distanceKm.toFixed(1) + " km" : ""})`}
+                    className="absolute transform -translate-x-1/2 -translate-y-1/2 transition-all z-30 group"
+                    title={incident.title}
                   >
                     <div className="relative flex items-center justify-center">
-                      {incident.severity === "high" && (
-                        <span className={`absolute w-6 h-6 rounded-full animate-ping opacity-75 ${
-                          incident.type === "water" ? "bg-cyan-400" : "bg-amber-400"
-                        }`} />
-                      )}
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${markerBg} ${markerGlow} ${
-                        isSelected ? "scale-125 ring-2 ring-white" : "hover:scale-110"
-                      }`}>
-                        {incident.type === "power" && <Zap className="w-3.5 h-3.5" />}
-                        {incident.type === "water" && <Droplet className="w-3.5 h-3.5" />}
-                        {incident.type === "roads" && <AlertTriangle className="w-3.5 h-3.5" />}
-                        {incident.type === "other" && <FileText className="w-3.5 h-3.5" />}
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
+                        incident.type === "water" ? "bg-cyan-400 text-cyan-950" :
+                        incident.type === "roads" ? "bg-purple-400 text-purple-950" :
+                        "bg-amber-400 text-amber-950"
+                      } ${isSelected ? "scale-125 ring-2 ring-white shadow-lg" : "hover:scale-110"}`}>
+                        {incident.type === "power" && <Zap className="w-3 h-3" />}
+                        {incident.type === "water" && <Droplet className="w-3 h-3" />}
+                        {incident.type === "roads" && <AlertTriangle className="w-3 h-3" />}
+                        {incident.type === "other" && <FileText className="w-3 h-3" />}
                       </div>
                     </div>
                   </button>
@@ -413,150 +380,78 @@ export default function RadarPage() {
               })}
             </div>
 
-            {/* Map Footer Telemetry with Live Address & Manual Refresh */}
-            <div className="flex items-center justify-between text-xs text-muted mt-3 z-20 flex-wrap gap-2">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: "var(--accent)" }} />
-                Showing <strong className="text-white">{filteredIncidents.length}</strong> active hazards in 10km radius
-              </span>
-              <div className="flex items-center gap-2">
+            {/* Map Footer GPS */}
+            <div className="flex items-center justify-between text-xs text-muted mt-2">
+              <span className="flex items-center gap-1.5 truncate">
                 <Navigation className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} />
-                <span className="font-mono text-[11px] text-white">
-                  {geoLoading || isRefreshingAddress ? "Resolving address..." : userStreetAddress} ({userLat.toFixed(4)}, {userLng.toFixed(4)})
+                <span className="font-mono text-[11px] text-white truncate">
+                  {geoLoading || isRefreshingAddress ? "Locating..." : userStreetAddress}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleRefreshLocation}
-                  title="Refresh GPS Location"
-                  className="p-1 rounded-lg border border-white/10 hover:text-white transition-colors cursor-pointer touch-manipulation"
-                  style={{ color: "var(--accent)", backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" }}
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${geoLoading || isRefreshingAddress ? "animate-spin" : ""}`} />
-                </button>
-              </div>
+              </span>
+              <button
+                type="button"
+                onClick={handleRefreshLocation}
+                title="Refresh Location"
+                className="p-1 rounded-lg border border-white/10 hover:text-white transition-colors cursor-pointer"
+                style={{ color: "var(--accent)" }}
+              >
+                <RefreshCw className={`h-3 w-3 ${geoLoading || isRefreshingAddress ? "animate-spin" : ""}`} />
+              </button>
             </div>
           </div>
 
-          {/* INCIDENT DETAILS & FILTER CONTROL PANEL */}
-          <div className="glass-panel p-6 flex flex-col justify-between relative">
+          {/* INCIDENT DETAILS PANEL */}
+          <div className="glass-panel p-5 flex flex-col justify-between relative">
             <div className="panel-reflection" />
 
             <div>
-              <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4" style={{ color: "var(--accent)" }} /> Hazard Telemetry
-                </h2>
-                <span className="text-[10px] font-mono text-muted">ID: {selectedIncident?.id || "N/A"}</span>
+              <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+                <h2 className="text-xs font-semibold text-white tracking-wider">INCIDENT DETAILS</h2>
+                <span className="text-[10px] font-mono text-muted">{selectedIncident?.id || "N/A"}</span>
               </div>
 
               {selectedIncident ? (
-                <div className="space-y-4">
-                  <div className="p-4 bg-white/5 border border-white/10 rounded-2xl space-y-3">
+                <div className="space-y-3">
+                  <div className="p-3.5 bg-white/5 border border-white/10 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between">
-                      <span 
-                        className="text-xs uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded-md border"
-                        style={{
-                          color: "var(--accent)",
-                          backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
-                          borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
-                        }}
-                      >
-                        {selectedIncident.type.toUpperCase()} INCIDENT
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--accent)]">
+                        {selectedIncident.type}
                       </span>
-                      <span className="text-xs font-medium text-amber-400 flex items-center gap-1">
-                        <Activity className="w-3 h-3" /> {selectedIncident.severity.toUpperCase()} PRIORITY
+                      <span className="text-[10px] font-mono uppercase text-amber-400">
+                        {selectedIncident.severity} priority
                       </span>
                     </div>
 
                     <div>
-                      <h3 className="text-base font-bold text-white">{selectedIncident.title}</h3>
+                      <h3 className="text-sm font-bold text-white">{selectedIncident.title}</h3>
                       <p className="text-xs text-muted mt-1 leading-relaxed">{selectedIncident.description}</p>
                       <p className="text-xs text-muted flex items-center gap-1 mt-2">
                         <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--accent)" }} /> {selectedIncident.location}
                       </p>
                     </div>
 
-                    <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs text-muted">
-                      <span>Logged: {selectedIncident.time}</span>
-                      <span className="font-medium" style={{ color: "var(--accent)" }}>{selectedIncident.status}</span>
-                    </div>
-
                     {selectedIncident.distanceKm !== undefined && (
                       <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
-                        <span className="text-muted">Proximity:</span>
-                        <span className="text-white font-bold" style={{ color: "var(--accent)" }}>{selectedIncident.distanceKm.toFixed(2)} km away</span>
+                        <span className="text-muted">Distance:</span>
+                        <span className="font-bold" style={{ color: "var(--accent)" }}>
+                          {selectedIncident.distanceKm.toFixed(2)} km away
+                        </span>
                       </div>
                     )}
                   </div>
-
-                  {/* Layer Visibility Selectors */}
-                  <div className="space-y-2 pt-2">
-                    <span className="text-[10px] font-mono tracking-wider text-muted uppercase">ACTIVE RADAR LAYERS</span>
-                    
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => toggleLayer("power")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.power
-                            ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> Power</span>
-                        {layers.power ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-
-                      <button
-                        onClick={() => toggleLayer("water")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.water
-                            ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><Droplet className="w-3.5 h-3.5" /> Water</span>
-                        {layers.water ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-
-                      <button
-                        onClick={() => toggleLayer("roads")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.roads
-                            ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5" /> Roads</span>
-                        {layers.roads ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-
-                      <button
-                        onClick={() => toggleLayer("other")}
-                        className={`p-2.5 rounded-xl border text-xs font-medium flex items-center justify-between transition-all ${
-                          layers.other
-                            ? "bg-teal-500/10 border-teal-500/30 text-teal-300"
-                            : "bg-black/20 border-white/5 text-muted hover:text-white"
-                        }`}
-                      >
-                        <span className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Other</span>
-                        {layers.other ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               ) : (
-                <p className="text-xs text-muted py-8 text-center">Select an incident marker on the radar map to view telemetry.</p>
+                <p className="text-xs text-muted py-8 text-center">Select an incident on the radar to view details.</p>
               )}
             </div>
 
             <Link 
               href="/civic" 
-              className="w-full mt-6 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation hover:opacity-90"
+              className="w-full mt-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90"
               style={{
                 color: "var(--accent)",
                 borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                boxShadow: "0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)"
+                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)"
               }}
             >
               Report New Hazard <ChevronRight className="w-4 h-4" />
@@ -565,20 +460,20 @@ export default function RadarPage() {
 
         </div>
 
-        {/* RECENT RADAR FEED LIST */}
-        <div className="glass-panel p-6 relative">
+        {/* RECENT HAZARDS FEED LIST */}
+        <div className="glass-panel p-5 relative">
           <div className="panel-reflection" />
-          <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-3">
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <Activity className="w-4 h-4" style={{ color: "var(--accent)" }} /> Real-time Hazard Feed ({displayIncidents.length})
+          <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+            <h2 className="text-xs font-semibold text-white tracking-wider flex items-center gap-2">
+              <Activity className="w-3.5 h-3.5" style={{ color: "var(--accent)" }} /> Recent Hazards ({displayIncidents.length})
             </h2>
-            <span className="text-xs text-muted font-mono">Live Synced</span>
+            <span className="text-[10px] text-muted font-mono">Live</span>
           </div>
 
-          <div className="space-y-3 max-h-[350px] overflow-y-auto">
+          <div className="space-y-2.5 max-h-[300px] overflow-y-auto">
             {displayIncidents.length === 0 ? (
-              <div className="text-center py-8 text-muted text-xs">
-                No active hazard reports found in your 10km radius.
+              <div className="text-center py-6 text-muted text-xs">
+                No active hazards found within 10km.
               </div>
             ) : (
               displayIncidents.map((incident) => {
@@ -587,9 +482,9 @@ export default function RadarPage() {
                   <div
                     key={incident.id}
                     onClick={() => setSelectedIncident(incident)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
                       isSelected
-                        ? "bg-white/[0.02] shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_20%,transparent)]"
+                        ? "bg-white/[0.04]"
                         : "bg-white/[0.02] border-white/5 hover:bg-white/[0.04]"
                     }`}
                     style={isSelected ? { borderColor: "var(--accent)" } : undefined}
@@ -601,10 +496,10 @@ export default function RadarPage() {
                         incident.type === "roads" ? "bg-purple-500/20 text-purple-400" :
                         "bg-teal-500/20 text-teal-400"
                       }`}>
-                        {incident.type === "power" && <Zap className="w-4 h-4" />}
-                        {incident.type === "water" && <Droplet className="w-4 h-4" />}
-                        {incident.type === "roads" && <AlertTriangle className="w-4 h-4" />}
-                        {incident.type === "other" && <FileText className="w-4 h-4" />}
+                        {incident.type === "power" && <Zap className="w-3.5 h-3.5" />}
+                        {incident.type === "water" && <Droplet className="w-3.5 h-3.5" />}
+                        {incident.type === "roads" && <AlertTriangle className="w-3.5 h-3.5" />}
+                        {incident.type === "other" && <FileText className="w-3.5 h-3.5" />}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-white truncate">{incident.title}</p>
@@ -612,11 +507,10 @@ export default function RadarPage() {
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0 pl-2 flex flex-col items-end">
-                      <span className="text-[10px] font-mono text-muted block">{incident.time}</span>
+                    <div className="text-right shrink-0 pl-2">
                       {incident.distanceKm !== undefined && (
-                        <span className="text-[10px] font-mono font-semibold mt-0.5" style={{ color: "var(--accent)" }}>
-                          {incident.distanceKm.toFixed(1)} km away
+                        <span className="text-[10px] font-mono font-semibold" style={{ color: "var(--accent)" }}>
+                          {incident.distanceKm.toFixed(1)} km
                         </span>
                       )}
                     </div>

@@ -84,6 +84,10 @@ const ACCENT_HEX_MAP: Record<string, string> = {
 
 export default function HomePage() {
   const [greeting, setGreeting] = useState<string>("");
+  const [waterStatus, setWaterStatus] = useState<string>("Normal");
+  const [energyStatus, setEnergyStatus] = useState<string>("Normal");
+  const [routesStatus, setRoutesStatus] = useState<string>("Clear");
+  const [summaryText, setSummaryText] = useState<string>("Water, power, and roads are looking good in your area today.");
 
   useEffect(() => {
     // 1. Bulletproof Theme Persistence on Mount & Refresh
@@ -142,8 +146,69 @@ export default function HomePage() {
 
     setGreeting(`${timeOfDayGreeting}, ${savedName}`);
 
+    // 3. Real-time Status Sync from localStorage & BroadcastChannel
+    const syncStatusFromData = () => {
+      try {
+        const saved = localStorage.getItem("resigrid_active_reports");
+        let hasWaterIssue = false;
+        let hasPowerIssue = false;
+        let hasRoadIssue = false;
+
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((report: any) => {
+              const cat = (report.category || "").toLowerCase();
+              if (cat === "water") hasWaterIssue = true;
+              if (cat === "power") hasPowerIssue = true;
+              if (cat === "roads") hasRoadIssue = true;
+            });
+          }
+        }
+
+        const newWater = hasWaterIssue ? "Issue reported" : "Normal";
+        const newEnergy = hasPowerIssue ? "Issue reported" : "Normal";
+        const newRoutes = hasRoadIssue ? "Issue reported" : "Clear";
+
+        setWaterStatus(newWater);
+        setEnergyStatus(newEnergy);
+        setRoutesStatus(newRoutes);
+
+        if (hasWaterIssue || hasPowerIssue || hasRoadIssue) {
+          setSummaryText("Some infrastructure issues have been reported nearby.");
+        } else {
+          setSummaryText("Water, power, and roads are looking good in your area today.");
+        }
+      } catch (e) {
+        console.error("Error reading status data:", e);
+      }
+    };
+
+    syncStatusFromData();
+
+    let broadcastChannel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
+      broadcastChannel.onmessage = (event) => {
+        const { type } = event.data || {};
+        if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
+          syncStatusFromData();
+        }
+      };
+    }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "resigrid_active_reports") {
+        syncStatusFromData();
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+
     return () => {
       window.removeEventListener("resigrid_theme_change", handleThemeEvent);
+      if (broadcastChannel) broadcastChannel.close();
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
@@ -190,6 +255,19 @@ export default function HomePage() {
           </div>
         </header>
 
+        {/* GREETING & UPDATE TEXT OUTSIDE CONTAINER */}
+        <div className="mb-5 max-w-2xl px-1 sm:mb-7">
+          {greeting && (
+            <h2 className="mb-2 text-2xl font-bold tracking-[-0.03em] text-[var(--accent)] sm:text-3xl lg:text-4xl">
+              {greeting}
+            </h2>
+          )}
+
+          <p className="mt-2 max-w-xl text-xs leading-5 text-muted sm:text-sm sm:leading-6">
+            {summaryText}
+          </p>
+        </div>
+
         {/* DASHBOARD */}
         <div className="w-full space-y-5 sm:space-y-6">
           {/* RADAR */}
@@ -198,37 +276,25 @@ export default function HomePage() {
             <div className="panel-bottom-glow radar-glow" />
 
             <div className="relative z-10">
-              <div className="mb-5 max-w-2xl sm:mb-7">
-                {greeting && (
-                  <h2 className="mb-2 text-2xl font-bold tracking-[-0.03em] text-[var(--accent)] sm:text-3xl lg:text-4xl">
-                    {greeting}
-                  </h2>
-                )}
-
-                <p className="mt-2 max-w-xl text-xs leading-5 text-muted sm:text-sm sm:leading-6">
-                  Water, power, and roads are looking good in your area today.
-                </p>
-              </div>
-
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <StatusItem
                   icon={Droplets}
                   label="Water"
-                  status="Normal"
+                  status={waterStatus}
                   color="water"
                 />
 
                 <StatusItem
                   icon={Zap}
                   label="Energy"
-                  status="Normal"
+                  status={energyStatus}
                   color="energy"
                 />
 
                 <StatusItem
                   icon={Route}
                   label="Routes"
-                  status="Clear"
+                  status={routesStatus}
                   color="transport"
                 />
               </div>

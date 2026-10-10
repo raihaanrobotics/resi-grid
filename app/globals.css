@@ -20,7 +20,8 @@
   --text-secondary: rgba(245, 247, 248, 0.62);
   --text-muted: rgba(245, 247, 248, 0.36);
 
-  --accent: #8be9e8;
+  /* Dynamic Accent Color synchronized with User Profile Palette */
+  --accent: var(--feature-accent, #8be9e8);
 
   /* Exact slider matching: Blur ~20% (16px), Corner Radius ~55% (24px) */
   --blur: 16px;
@@ -42,7 +43,7 @@
   --text-secondary: rgba(16, 20, 22, 0.64);
   --text-muted: rgba(16, 20, 22, 0.42);
 
-  --accent: #168f91;
+  --accent: var(--feature-accent, #168f91);
 }
 
 * {
@@ -327,7 +328,7 @@ a {
 }
 
 /* ========================================================= */
-/* FEATURE COLOURS */
+/* FEATURE COLOURS (PRESERVED SPECIFIC MODULE SYSTEM) */
 /* ========================================================= */
 
 .feature-water {
@@ -688,11 +689,11 @@ a {
   align-items: center;
   gap: 8px;
 
-  border: 1px solid rgba(52, 211, 153, 0.16);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 
   border-radius: 999px;
 
-  background: rgba(52, 211, 153, 0.045);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 
   padding: 7px 11px;
 
@@ -701,7 +702,7 @@ a {
 
   letter-spacing: 0.12em;
 
-  color: #34d399;
+  color: var(--accent);
 }
 
 .status-dot {
@@ -710,10 +711,10 @@ a {
 
   border-radius: 50%;
 
-  background: #34d399;
+  background: var(--accent);
 
   box-shadow:
-    0 0 14px rgba(52, 211, 153, 0.75);
+    0 0 14px var(--accent);
 }
 
 /* ========================================================= */

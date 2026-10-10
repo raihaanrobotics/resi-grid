@@ -73,10 +73,49 @@ const navItems = [
   { label: "Profile", href: "/profile", icon: UserRound },
 ];
 
+const ACCENT_HEX_MAP: Record<string, string> = {
+  teal: "#14b8a6",
+  navy: "#1e3a8a",
+  amber: "#f59e0b",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+  emerald: "#10b981",
+};
+
 export default function HomePage() {
   const [greeting, setGreeting] = useState<string>("");
 
   useEffect(() => {
+    // 1. Bulletproof Theme Persistence on Mount & Refresh
+    const applySavedTheme = () => {
+      try {
+        const savedAccent = localStorage.getItem("resigrid_accent_theme");
+        if (savedAccent && ACCENT_HEX_MAP[savedAccent]) {
+          const hex = ACCENT_HEX_MAP[savedAccent];
+          document.documentElement.style.setProperty("--feature-accent", hex);
+          document.documentElement.style.setProperty("--accent", hex);
+        }
+      } catch (e) {
+        console.error("Error reading theme setting:", e);
+      }
+    };
+
+    applySavedTheme();
+
+    // Event listener for real-time updates when modified on profile page
+    const handleThemeEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ hex?: string }>;
+      if (customEvent.detail?.hex) {
+        document.documentElement.style.setProperty("--feature-accent", customEvent.detail.hex);
+        document.documentElement.style.setProperty("--accent", customEvent.detail.hex);
+      } else {
+        applySavedTheme();
+      }
+    };
+
+    window.addEventListener("resigrid_theme_change", handleThemeEvent);
+
+    // 2. Greeting & User Name Handler
     const hour = new Date().getHours();
     let timeOfDayGreeting = "Good morning";
 
@@ -86,8 +125,26 @@ export default function HomePage() {
       timeOfDayGreeting = "Good evening";
     }
 
-    const savedName = localStorage.getItem("resigrid-user-name") || "Sipho";
+    let savedName = "Raihaan";
+    try {
+      const profileData = localStorage.getItem("resigrid_user_profile");
+      if (profileData) {
+        const parsed = JSON.parse(profileData);
+        if (parsed.fullName) {
+          savedName = parsed.fullName.split(" ")[0];
+        }
+      } else {
+        savedName = localStorage.getItem("resigrid-user-name") || "Raihaan";
+      }
+    } catch {
+      savedName = "Raihaan";
+    }
+
     setGreeting(`${timeOfDayGreeting}, ${savedName}`);
+
+    return () => {
+      window.removeEventListener("resigrid_theme_change", handleThemeEvent);
+    };
   }, []);
 
   return (
@@ -105,7 +162,8 @@ export default function HomePage() {
         {/* HEADER */}
         <header className="glass-header mb-6 flex items-center justify-between px-4 py-3 sm:mb-8 sm:px-5 lg:px-6">
           <Link href="/" className="flex items-center gap-3">
-            <div className="brand-icon">
+            {/* BRAND ICON LOCKED TO RESI TEAL ALWAYS */}
+            <div className="brand-icon !text-[#14b8a6] !border-[#14b8a6]/20">
               <Activity className="h-[18px] w-[18px]" />
             </div>
 
@@ -142,14 +200,10 @@ export default function HomePage() {
             <div className="relative z-10">
               <div className="mb-5 max-w-2xl sm:mb-7">
                 {greeting && (
-                  <h2 className="mb-2 text-2xl font-bold tracking-[-0.03em] text-accent sm:text-3xl lg:text-4xl">
+                  <h2 className="mb-2 text-2xl font-bold tracking-[-0.03em] text-[var(--accent)] sm:text-3xl lg:text-4xl">
                     {greeting}
                   </h2>
                 )}
-
-                <h3 className="text-base font-medium tracking-[-0.02em] opacity-90 sm:text-lg lg:text-xl">
-                  All systems running smoothly
-                </h3>
 
                 <p className="mt-2 max-w-xl text-xs leading-5 text-muted sm:text-sm sm:leading-6">
                   Water, power, and roads are looking good in your area today.
@@ -184,7 +238,7 @@ export default function HomePage() {
                 className="glass-action mt-3 flex items-center justify-between px-4 py-3.5"
               >
                 <div className="flex items-center gap-2.5">
-                  <Radio className="h-4 w-4 text-accent" />
+                  <Radio className="h-4 w-4 text-[var(--accent)]" />
 
                   <span className="text-xs font-medium">
                     Open live radar

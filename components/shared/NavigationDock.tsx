@@ -28,7 +28,7 @@ export default function NavigationDock() {
 
   return (
     <nav className="floating-dock">
-      <div className="floating-dock-inner" style={{ background: "rgba(12, 15, 18, 0.92)", backdropFilter: "blur(32px) saturate(180%)", WebkitBackdropFilter: "blur(32px) saturate(180%)" }}>
+      <div className="floating-dock-inner">
         {navItems.map((item) => {
           const Icon = item.icon;
 

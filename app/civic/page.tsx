@@ -335,8 +335,9 @@ export default function CivicAIPage() {
             <button
               type="button"
               onClick={handleManualRefreshLocation}
+              onTouchEnd={handleManualRefreshLocation}
               title="Refresh Location"
-              className="hover:text-white transition-colors text-teal-400 shrink-0 cursor-pointer p-1 touch-manipulation z-30 pointer-events-auto"
+              className="hover:text-white transition-colors text-teal-400 shrink-0 cursor-pointer p-1 touch-manipulation z-30"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
             </button>
@@ -349,30 +350,34 @@ export default function CivicAIPage() {
           {/* LEFT COLUMN: INDIVIDUAL FROSTED FORM TILES */}
           <div className="lg:col-span-1 space-y-3.5">
 
-            {/* Category Selection: Direct Standalone Button Panels (No Outer Container, No Icons) */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] sm:text-xs font-medium text-muted block px-1">Category</label>
+            {/* Category Selection Tile */}
+            <div className="glass-panel p-4 space-y-2">
+              <label className="text-[11px] sm:text-xs font-medium text-muted block">Category</label>
               <div className="grid grid-cols-2 gap-2">
                 {(["water", "power", "roads", "civic"] as const).map((cat) => (
-                  <div key={cat} className="glass-panel p-1.5 pointer-events-auto relative z-30">
-                    <button
-                      type="button"
-                      onClick={(e) => handleCategorySelect(cat, e)}
-                      className={`w-full py-2.5 px-3 rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-wider border transition-all flex items-center justify-center cursor-pointer touch-manipulation active:scale-[0.99] pointer-events-auto ${
-                        category === cat
-                          ? "bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-[0_0_15px_rgba(45,212,191,0.2)]"
-                          : "bg-white/5 border-white/10 text-muted hover:text-white"
-                      }`}
-                    >
-                      <span className="pointer-events-none">{cat}</span>
-                    </button>
-                  </div>
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={(e) => handleCategorySelect(cat, e)}
+                    onTouchEnd={(e) => handleCategorySelect(cat, e)}
+                    className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-wider border transition-all flex items-center gap-1.5 justify-center cursor-pointer touch-manipulation active:scale-95 ${
+                      category === cat
+                        ? "bg-teal-500/20 text-teal-300 border-teal-500/40 shadow-[0_0_15px_rgba(45,212,191,0.2)]"
+                        : "bg-white/5 border-white/10 text-muted hover:text-white"
+                    }`}
+                  >
+                    {cat === "water" && <Droplet className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    {cat === "power" && <Zap className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    {cat === "roads" && <AlertTriangle className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    {cat === "civic" && <FileText className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
+                    <span className="pointer-events-none">{cat}</span>
+                  </button>
                 ))}
               </div>
             </div>
 
             {/* Reporter Information Tile */}
-            <div className="glass-panel p-4 space-y-3 pointer-events-auto relative z-30">
+            <div className="glass-panel p-4 space-y-3">
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
                   <User className="h-3 w-3 text-teal-400 shrink-0" /> Full Name
@@ -403,7 +408,7 @@ export default function CivicAIPage() {
             </div>
 
             {/* Municipal Ward Tile */}
-            <div className="glass-panel p-4 pointer-events-auto relative z-30">
+            <div className="glass-panel p-4">
               <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
                 <Building className="h-3 w-3 text-teal-400 shrink-0" /> Municipal Ward
               </label>
@@ -420,7 +425,7 @@ export default function CivicAIPage() {
             </div>
 
             {/* Issue Details Tile */}
-            <div className="glass-panel p-4 space-y-3 pointer-events-auto relative z-30">
+            <div className="glass-panel p-4 space-y-3">
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Issue Headline</label>
                 <input
@@ -446,59 +451,54 @@ export default function CivicAIPage() {
               </div>
             </div>
 
-            {/* Address Toggle Standalone Tile */}
-            <div className="glass-panel p-2 pointer-events-auto relative z-30">
-              <button
-                type="button"
-                onClick={handleToggleAddressSource}
-                className="w-full py-3 px-3.5 rounded-xl bg-white/5 border border-white/10 hover:border-teal-500/30 text-teal-300 font-semibold text-xs transition-all flex items-center justify-between gap-2 cursor-pointer touch-manipulation pointer-events-auto active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {useCustomAddress ? <MapPin className="h-4 w-4 text-teal-400 shrink-0 pointer-events-none" /> : <Edit3 className="h-4 w-4 text-teal-400 shrink-0 pointer-events-none" />}
-                  <span className="pointer-events-none truncate text-[11px] sm:text-xs">
-                    {useCustomAddress ? "Switch back to Auto GPS Location" : "Tap to enter custom street address"}
-                  </span>
-                </div>
-                <span className="text-[10px] text-teal-400 font-mono shrink-0 uppercase tracking-wider border border-teal-500/30 bg-teal-500/10 px-2 py-0.5 rounded-md pointer-events-none">
-                  {useCustomAddress ? "GPS Mode" : "Manual Mode"}
-                </span>
-              </button>
-            </div>
+            {/* Location Source Tile */}
+            <div className="glass-panel p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] sm:text-[11px] font-medium text-muted block">Precise Location Source</label>
+                <button
+                  type="button"
+                  onClick={handleToggleAddressSource}
+                  onTouchEnd={handleToggleAddressSource}
+                  className="text-[8px] sm:text-[9px] text-teal-400 hover:text-teal-300 flex items-center gap-1 font-medium transition-colors cursor-pointer touch-manipulation pointer-events-auto"
+                >
+                  {useCustomAddress ? <MapPin className="h-2 w-2 shrink-0 pointer-events-none" /> : <Edit3 className="h-2 w-2 shrink-0 pointer-events-none" />}
+                  <span className="pointer-events-none">{useCustomAddress ? "Use Auto GPS" : "Enter Exact Address"}</span>
+                </button>
+              </div>
 
-            {/* Address Input / GPS Display Tile */}
-            {useCustomAddress ? (
-              <div className="glass-panel p-3 pointer-events-auto relative z-30">
+              {useCustomAddress ? (
                 <input
                   type="text"
                   required
                   value={customAddress}
                   onChange={(e) => setCustomAddress(e.target.value)}
                   placeholder="e.g. 142 Chief Albert Luthuli St, Scottsville..."
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-teal-500/50 transition-colors pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-teal-500/50 transition-colors pointer-events-auto"
                 />
-              </div>
-            ) : (
-              <div className="glass-panel p-3 pointer-events-auto relative z-30 flex items-center justify-between">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <MapPin className="h-4 w-4 text-teal-400 shrink-0" />
-                  <div className="text-[11px] overflow-hidden text-ellipsis whitespace-nowrap">
-                    <span className="text-teal-300/80 block text-[9px] uppercase font-mono">Auto GPS Address:</span>
-                    <span className="text-white font-medium">{streetAddress}</span>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <MapPin className="h-4 w-4 text-teal-400 shrink-0" />
+                    <div className="text-[11px] overflow-hidden text-ellipsis whitespace-nowrap">
+                      <span className="text-teal-300/80 block text-[9px] uppercase font-mono">Auto GPS Address:</span>
+                      <span className="text-white font-medium">{streetAddress}</span>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleManualRefreshLocation}
+                    onTouchEnd={handleManualRefreshLocation}
+                    className="p-1 hover:text-teal-300 text-teal-400 transition-colors shrink-0 cursor-pointer touch-manipulation pointer-events-auto"
+                    title="Re-sync location"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleManualRefreshLocation}
-                  className="p-1 hover:text-teal-300 text-teal-400 transition-colors shrink-0 cursor-pointer touch-manipulation pointer-events-auto z-30"
-                  title="Re-sync location"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
-                </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Action Submit Tile */}
-            <div className="glass-panel p-2 mb-6 sm:mb-8 pointer-events-auto relative z-30">
+            <div className="glass-panel p-2 mb-6 sm:mb-8">
               <button
                 type="submit"
                 disabled={isSubmitting}

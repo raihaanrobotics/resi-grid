@@ -18,58 +18,6 @@ import {
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 
-interface ReportItem {
-  id: string;
-  category: "water" | "power" | "roads" | "other";
-  title: string;
-  description: string;
-  locationAddress: string;
-  status: "Auto-Dispatched" | "Pending Review" | "Resolved";
-  time: string;
-  ward?: string;
-  priority?: "High" | "Medium" | "Low" | "Critical";
-  reporterName?: string;
-  reporterPhone?: string;
-  assignedDepotUnit?: string;
-  estimatedFixTime?: string;
-  coords?: { lat: number; lng: number };
-}
-
-const DEFAULT_REPORTS: ReportItem[] = [
-  {
-    id: "RPT-101",
-    category: "water",
-    title: "Burst Water Main",
-    description: "Severe leak flooding roadway and affecting water pressure.",
-    locationAddress: "142 Chief Albert Luthuli St, Pietermaritzburg",
-    ward: "Ward 26 (CBD / Central)",
-    priority: "Critical",
-    status: "Auto-Dispatched",
-    time: "Today, 10:14 SAST",
-    reporterName: "Raihaan Mahomed",
-    reporterPhone: "+27 82 123 4567",
-    assignedDepotUnit: "Water Rapid Response Crew #4",
-    estimatedFixTime: "4 Hours",
-    coords: { lat: -29.6006, lng: 30.3794 },
-  },
-  {
-    id: "RPT-102",
-    category: "power",
-    title: "Substation Transformer Trip",
-    description: "Total power blackout across Sector 3 grid block.",
-    locationAddress: "88 Dr Chota Motala Rd, Raisethorpe",
-    ward: "Ward 28 (Raisethorpe / Newholme)",
-    priority: "High",
-    status: "Pending Review",
-    time: "Today, 09:48 SAST",
-    reporterName: "Sipho Dlamini",
-    reporterPhone: "+27 83 987 6543",
-    assignedDepotUnit: "Electricity Depot - Unit B",
-    estimatedFixTime: "6 Hours",
-    coords: { lat: -29.5823, lng: 30.4021 },
-  },
-];
-
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
   navy: "#1e3a8a",
@@ -97,11 +45,9 @@ export default function CivicAIPage() {
   const [selectedWard, setSelectedWard] = useState("Ward 26 (CBD / Central)");
   const [priority] = useState<"High" | "Medium" | "Low" | "Critical">("High");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  // Live Area Reports Feed State
-  const [reports, setReports] = useState<ReportItem[]>(DEFAULT_REPORTS);
-
-  // Bulletproof Theme Persistence on Mount
+  // Bulletproof Theme Persistence & Profile Auto-Fill on Mount
   useEffect(() => {
     const applySavedTheme = () => {
       try {
@@ -129,71 +75,25 @@ export default function CivicAIPage() {
     };
 
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
-    return () => {
-      window.removeEventListener("resigrid_theme_change", handleThemeEvent);
-    };
-  }, []);
 
-  // Load Initial Persisted Reports & Set Up App-Wide Synchronized Listeners
-  useEffect(() => {
+    // Auto-fill profile data if available
     try {
-      const saved = localStorage.getItem("resigrid_active_reports");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setReports(parsed);
+      const savedProfile = localStorage.getItem("resigrid_user_profile");
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed.fullName) setReporterName(parsed.fullName);
+        if (parsed.phone) setReporterPhone(parsed.phone);
+        if (parsed.selectedWard) setSelectedWard(parsed.selectedWard);
+        if (parsed.streetAddress) {
+          setCustomAddress(parsed.streetAddress);
         }
-      } else {
-        localStorage.setItem("resigrid_active_reports", JSON.stringify(DEFAULT_REPORTS));
       }
     } catch (e) {
-      console.error("Storage read error:", e);
+      console.error("Error reading profile auto-fill:", e);
     }
-
-    let broadcastChannel: BroadcastChannel | null = null;
-    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-      broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
-
-      broadcastChannel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
-
-        if (type === "NEW_REPORT" && payload) {
-          setReports((prev) => {
-            const exists = prev.some((r) => r.id === payload.id);
-            if (exists) return prev;
-            const updated = [payload, ...prev];
-            localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
-            return updated;
-          });
-        }
-
-        if (type === "STATUS_UPDATE" && payload?.id) {
-          setReports((prev) => {
-            const updated = prev.map((r) =>
-              r.id === payload.id ? { ...r, status: payload.status } : r
-            );
-            localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
-            return updated;
-          });
-        }
-      };
-    }
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" && e.newValue) {
-        try {
-          setReports(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error("Storage sync parse error:", err);
-        }
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
 
     return () => {
-      if (broadcastChannel) broadcastChannel.close();
-      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("resigrid_theme_change", handleThemeEvent);
     };
   }, []);
 
@@ -280,7 +180,7 @@ export default function CivicAIPage() {
       minute: "2-digit",
     });
 
-    const payload: ReportItem = {
+    const payload = {
       id: `RPT-${Math.floor(100 + Math.random() * 900)}`,
       category,
       title: reportTitle.trim(),
@@ -304,11 +204,15 @@ export default function CivicAIPage() {
         body: JSON.stringify(payload),
       }).catch(() => {});
 
-      setReports((prev) => {
-        const updated = [payload, ...prev];
+      // Save to active reports storage so radar and other modules sync
+      try {
+        const existing = localStorage.getItem("resigrid_active_reports");
+        const parsed = existing ? JSON.parse(existing) : [];
+        const updated = [payload, ...parsed];
         localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
-        return updated;
-      });
+      } catch (err) {
+        console.error("Storage write error:", err);
+      }
 
       if (typeof window !== "undefined" && "BroadcastChannel" in window) {
         const bc = new BroadcastChannel("resigrid_reports_dispatch");
@@ -318,9 +222,8 @@ export default function CivicAIPage() {
 
       setReportTitle("");
       setDescription("");
-      setReporterName("");
-      setReporterPhone("");
-      if (useCustomAddress) setCustomAddress("");
+      setSubmitSuccess(true);
+      setTimeout(() => setSubmitSuccess(false), 4000);
     } finally {
       setIsSubmitting(false);
     }
@@ -336,7 +239,7 @@ export default function CivicAIPage() {
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-4 px-3 pb-24 pt-4 sm:space-y-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
+      <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-4 px-3 pb-32 pt-4 sm:space-y-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
         
         {/* TOP HEADER & INDEPENDENT OUTSIDE LOCATION PILL */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -385,49 +288,65 @@ export default function CivicAIPage() {
           </div>
         </div>
 
-        {/* MAIN LAYOUT GRID */}
-        <form onSubmit={handleSubmitReport} className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 relative z-20">
-          
-          {/* LEFT COLUMN: INDIVIDUAL FROSTED FORM TILES */}
-          <div className="lg:col-span-1 space-y-3.5">
+        {/* SUCCESS NOTIFICATION TOAST */}
+        {submitSuccess && (
+          <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
+            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent)" }} /> Report successfully dispatched to municipal rapid response queue.
+          </div>
+        )}
 
-            {/* Category Selection Tile */}
-            <div className="glass-panel p-4 space-y-2">
-              <label className="text-[11px] sm:text-xs font-medium text-muted block">Category</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["water", "power", "roads", "other"] as const).map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={(e) => handleCategorySelect(cat, e)}
-                    onTouchEnd={(e) => handleCategorySelect(cat, e)}
-                    className={`py-2 px-2.5 rounded-xl text-[10px] sm:text-xs font-semibold uppercase tracking-wider border transition-all flex items-center gap-1.5 justify-center cursor-pointer touch-manipulation active:scale-95 ${
-                      category === cat
-                        ? "shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
-                        : "bg-white/5 border-white/10 text-muted hover:text-white"
-                    }`}
-                    style={
-                      category === cat
-                        ? {
-                            backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
-                            color: "var(--accent)",
-                            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                          }
-                        : {}
-                    }
-                  >
-                    {cat === "water" && <Droplet className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
-                    {cat === "power" && <Zap className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
-                    {cat === "roads" && <AlertTriangle className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
-                    {cat === "other" && <FileText className="h-3.5 w-3.5 shrink-0 pointer-events-none" />}
-                    <span className="pointer-events-none">{cat}</span>
-                  </button>
-                ))}
-              </div>
+        {/* EXPLANATORY INTRO TEXT BEFORE CATEGORIES */}
+        <div className="glass-panel p-4 sm:p-5 relative z-20 w-full">
+          <div className="panel-reflection pointer-events-none" />
+          <p className="text-xs sm:text-sm text-muted leading-relaxed">
+            Use this secure municipal interface to report infrastructure faults, water line breaks, power grid outages, and road hazards directly to your assigned municipal ward and emergency response teams. Fill in the details below to trigger automated dispatching.
+          </p>
+        </div>
+
+        {/* MAIN FORM CONTAINER */}
+        <form onSubmit={handleSubmitReport} className="space-y-4 relative z-20 w-full">
+
+          {/* Category Selection Tile */}
+          <div className="glass-panel p-4 sm:p-6 space-y-2.5 w-full">
+            <div className="panel-reflection pointer-events-none" />
+            <label className="text-[11px] sm:text-xs font-medium text-muted block">Select Incident Category</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {(["water", "power", "roads", "other"] as const).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={(e) => handleCategorySelect(cat, e)}
+                  onTouchEnd={(e) => handleCategorySelect(cat, e)}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-semibold uppercase tracking-wider border transition-all flex items-center gap-2 justify-center cursor-pointer touch-manipulation active:scale-95 ${
+                    category === cat
+                      ? "shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
+                      : "bg-white/5 border-white/10 text-muted hover:text-white"
+                  }`}
+                  style={
+                    category === cat
+                      ? {
+                          backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                          color: "var(--accent)",
+                          borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                        }
+                      : {}
+                  }
+                >
+                  {cat === "water" && <Droplet className="h-4 w-4 shrink-0 pointer-events-none" />}
+                  {cat === "power" && <Zap className="h-4 w-4 shrink-0 pointer-events-none" />}
+                  {cat === "roads" && <AlertTriangle className="h-4 w-4 shrink-0 pointer-events-none" />}
+                  {cat === "other" && <FileText className="h-4 w-4 shrink-0 pointer-events-none" />}
+                  <span className="pointer-events-none">{cat}</span>
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Reporter Information Tile */}
-            <div className="glass-panel p-4 space-y-3">
+          {/* Reporter Information & Ward Tile */}
+          <div className="glass-panel p-4 sm:p-6 space-y-4 w-full">
+            <div className="panel-reflection pointer-events-none" />
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
                   <User className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Full Name
@@ -438,7 +357,7 @@ export default function CivicAIPage() {
                   value={reporterName}
                   onChange={(e) => setReporterName(e.target.value)}
                   placeholder="e.g. John Doe"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
                 />
               </div>
 
@@ -452,191 +371,123 @@ export default function CivicAIPage() {
                   value={reporterPhone}
                   onChange={(e) => setReporterPhone(e.target.value)}
                   placeholder="e.g. +27 82 123 4567"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
-                />
-              </div>
-            </div>
-
-            {/* Municipal Ward Tile */}
-            <div className="glass-panel p-4">
-              <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Ward
-              </label>
-              <select
-                value={selectedWard}
-                onChange={(e) => setSelectedWard(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer pointer-events-auto"
-              >
-                <option value="Ward 26 (CBD / Central)" className="bg-neutral-900 text-white">Ward 26 (CBD / Central)</option>
-                <option value="Ward 28 (Raisethorpe / Newholme)" className="bg-neutral-900 text-white">Ward 28 (Raisethorpe / Newholme)</option>
-                <option value="Ward 30 (Northdale / Woodlands)" className="bg-neutral-900 text-white">Ward 30 (Northdale / Woodlands)</option>
-                <option value="Ward 33 (Scottsville / University)" className="bg-neutral-900 text-white">Ward 33 (Scottsville / University)</option>
-              </select>
-            </div>
-
-            {/* Issue Details Tile */}
-            <div className="glass-panel p-4 space-y-3">
-              <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Issue Headline</label>
-                <input
-                  type="text"
-                  required
-                  value={reportTitle}
-                  onChange={(e) => setReportTitle(e.target.value)}
-                  placeholder="e.g. Burst Water Pipe, Substation Outage..."
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details & Impact</label>
-                <textarea
-                  rows={2}
-                  required
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Provide additional details regarding the incident..."
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors resize-none pointer-events-auto"
-                />
-              </div>
-            </div>
-
-            {/* Location Source Tile */}
-            <div className="glass-panel p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[10px] sm:text-[11px] font-medium text-muted block">Precise Location Source</label>
-                <button
-                  type="button"
-                  onClick={handleToggleAddressSource}
-                  onTouchEnd={handleToggleAddressSource}
-                  className="text-[8px] sm:text-[9px] hover:opacity-80 flex items-center gap-1 font-medium transition-colors cursor-pointer touch-manipulation pointer-events-auto"
-                  style={{ color: "var(--accent)" }}
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Ward
+                </label>
+                <select
+                  value={selectedWard}
+                  onChange={(e) => setSelectedWard(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer pointer-events-auto"
                 >
-                  {useCustomAddress ? <MapPin className="h-2 w-2 shrink-0 pointer-events-none" /> : <Edit3 className="h-2 w-2 shrink-0 pointer-events-none" />}
-                  <span className="pointer-events-none">{useCustomAddress ? "Use Auto GPS" : "Enter Exact Address"}</span>
-                </button>
+                  <option value="Ward 26 (CBD / Central)" className="bg-neutral-900 text-white">Ward 26 (CBD / Central)</option>
+                  <option value="Ward 28 (Raisethorpe / Newholme)" className="bg-neutral-900 text-white">Ward 28 (Raisethorpe / Newholme)</option>
+                  <option value="Ward 30 (Northdale / Woodlands)" className="bg-neutral-900 text-white">Ward 30 (Northdale / Woodlands)</option>
+                  <option value="Ward 33 (Scottsville / University)" className="bg-neutral-900 text-white">Ward 33 (Scottsville / University)</option>
+                </select>
               </div>
+            </div>
+          </div>
 
-              {useCustomAddress ? (
-                <input
-                  type="text"
-                  required
-                  value={customAddress}
-                  onChange={(e) => setCustomAddress(e.target.value)}
-                  placeholder="e.g. 142 Chief Albert Luthuli St, Scottsville..."
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
-                />
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 overflow-hidden">
-                    <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
-                    <div className="text-[11px] overflow-hidden text-ellipsis whitespace-nowrap">
-                      <span className="block text-[9px] uppercase font-mono" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>Auto GPS Address:</span>
-                      <span className="text-white font-medium">{streetAddress}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleManualRefreshLocation}
-                    onTouchEnd={handleManualRefreshLocation}
-                    className="transition-colors shrink-0 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-80"
-                    style={{ color: "var(--accent)" }}
-                    title="Re-sync location"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
-                  </button>
-                </div>
-              )}
+          {/* Issue Details Tile */}
+          <div className="glass-panel p-4 sm:p-6 space-y-4 w-full">
+            <div className="panel-reflection pointer-events-none" />
+
+            <div>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Issue Headline</label>
+              <input
+                type="text"
+                required
+                value={reportTitle}
+                onChange={(e) => setReportTitle(e.target.value)}
+                placeholder="e.g. Burst Water Pipe, Substation Outage..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+              />
             </div>
 
-            {/* Action Submit Tile */}
-            <div className="glass-panel p-2 mb-4">
+            <div>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details & Impact</label>
+              <textarea
+                rows={3}
+                required
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Provide additional details regarding the incident..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors resize-none pointer-events-auto"
+              />
+            </div>
+          </div>
+
+          {/* Location Source Tile */}
+          <div className="glass-panel p-4 sm:p-6 space-y-2.5 w-full">
+            <div className="panel-reflection pointer-events-none" />
+            
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] sm:text-xs font-medium text-muted block">Precise Location Source</label>
               <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-90"
-                style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                  boxShadow: "0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)"
-                }}
+                type="button"
+                onClick={handleToggleAddressSource}
+                onTouchEnd={handleToggleAddressSource}
+                className="text-[9px] sm:text-[10px] hover:opacity-80 flex items-center gap-1 font-medium transition-colors cursor-pointer touch-manipulation pointer-events-auto"
+                style={{ color: "var(--accent)" }}
               >
-                <Send className="h-4 w-4 shrink-0 pointer-events-none" style={{ color: "var(--accent)" }} />
-                <span className="pointer-events-none">{isSubmitting ? "Dispatching..." : "Dispatch Automated Report"}</span>
+                {useCustomAddress ? <MapPin className="h-3 w-3 shrink-0 pointer-events-none" /> : <Edit3 className="h-3 w-3 shrink-0 pointer-events-none" />}
+                <span className="pointer-events-none">{useCustomAddress ? "Use Auto GPS" : "Enter exact address"}</span>
               </button>
             </div>
 
-            {/* Divider Line Between Dispatch Button & Active Area Reports */}
-            <div className="my-5 border-t border-white/10 w-full" />
-
-          </div>
-
-          {/* RIGHT COLUMN: ACTIVE REPORTS STREAM IN INDIVIDUAL FROSTED PANELS */}
-          <div className="lg:col-span-2 space-y-3.5 pt-2 lg:pt-0">
-            
-            {/* Reports Stream Title (Clock Icon Removed) */}
-            <div className="flex items-center gap-2 px-1 pb-1">
-              <h2 className="text-sm sm:text-base font-semibold text-white">
-                Active Area Reports & Dispatches
-              </h2>
-            </div>
-
-            {/* Individual Report Item Tiles */}
-            <div className="space-y-3">
-              {reports.map((item) => (
-                <div
-                  key={item.id}
-                  className="glass-panel p-4 space-y-2.5 transition-all pointer-events-auto"
-                >
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center flex-wrap gap-2">
-                      <span 
-                        className="text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border"
-                        style={{
-                          color: "var(--accent)",
-                          backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
-                          borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
-                        }}
-                      >
-                        {item.category}
-                      </span>
-                      <span className="text-xs font-mono text-muted">{item.id}</span>
-                      {item.ward && (
-                        <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white font-medium">
-                          {item.ward}
-                        </span>
-                      )}
-                    </div>
-
-                    <span 
-                      className="text-[10px] font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: "var(--accent)",
-                        backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
-                        borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
-                      }}
-                    >
-                      <CheckCircle2 className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> {item.status}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-white">{item.title}</h3>
-                    <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">{item.description}</p>
-                  </div>
-
-                  <div className="pt-2 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between text-[10px] sm:text-[11px] text-muted gap-1.5 sm:gap-2">
-                    <span className="flex items-center gap-1 font-mono min-w-0 truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
-                      <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} />
-                      <span className="truncate">{item.locationAddress}</span>
-                    </span>
-                    <span className="shrink-0 font-mono">{item.time}</span>
+            {useCustomAddress ? (
+              <input
+                type="text"
+                required
+                value={customAddress}
+                onChange={(e) => setCustomAddress(e.target.value)}
+                placeholder="e.g. 142 Chief Albert Luthuli St, Scottsville..."
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+              />
+            ) : (
+              <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
+                  <div className="text-xs overflow-hidden text-ellipsis whitespace-nowrap">
+                    <span className="block text-[9px] uppercase font-mono" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>Auto GPS Address:</span>
+                    <span className="text-white font-medium">{streetAddress}</span>
                   </div>
                 </div>
-              ))}
-            </div>
+                <button
+                  type="button"
+                  onClick={handleManualRefreshLocation}
+                  onTouchEnd={handleManualRefreshLocation}
+                  className="transition-colors shrink-0 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-80 p-1"
+                  style={{ color: "var(--accent)" }}
+                  title="Re-sync location"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+            )}
+          </div>
 
+          {/* Action Submit Button */}
+          <div className="pt-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl border font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-90 shadow-lg"
+              style={{
+                color: "var(--accent)",
+                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                boxShadow: "0 0 25px color-mix(in srgb, var(--accent) 20%, transparent)"
+              }}
+            >
+              <Send className="h-4 w-4 shrink-0 pointer-events-none" style={{ color: "var(--accent)" }} />
+              <span className="pointer-events-none">{isSubmitting ? "Dispatching..." : "Dispatch Automated Report"}</span>
+            </button>
           </div>
 
         </form>
@@ -645,4 +496,3 @@ export default function CivicAIPage() {
     </main>
   );
 }
-

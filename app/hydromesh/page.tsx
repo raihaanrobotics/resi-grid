@@ -510,7 +510,7 @@ export default function HydroMeshPage() {
               </button>
             </div>
 
-            {/* Report Button with Plus Icon Next to Location Pill */}
+            {/* Report Button with Plus Icon Next to Location Pill (Visible on mobile too) */}
             <Link
               href="/civic"
               className="glass-panel px-3.5 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
@@ -520,7 +520,7 @@ export default function HydroMeshPage() {
               }}
             >
               <Plus className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />
-              <span className="hidden sm:inline">Report</span>
+              <span className="inline">Report</span>
             </Link>
           </div>
         </div>
@@ -539,7 +539,7 @@ export default function HydroMeshPage() {
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>INDUSTRIAL ACOUSTIC SENSOR</p>
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>ACOUSTIC SENSOR</p>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
                       Tap Pressure & Flow Scan
                     </h2>
@@ -634,8 +634,8 @@ export default function HydroMeshPage() {
               </div>
             </section>
 
-            {/* SEPARATE METRIC TILES - WHITE ONLY FOR STATS */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* SEPARATE METRIC TILES - WHITE ONLY FOR STATS WITH BOTTOM CLEARANCE SPACE */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6 sm:mb-8">
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto">
                 <p className="text-[9px] uppercase tracking-[0.08em] text-muted">Line Status</p>
                 <p className="mt-1 text-xs sm:text-sm font-semibold text-white">Pressurized</p>
@@ -666,7 +666,7 @@ export default function HydroMeshPage() {
               
               <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
                 <div>
-                  <p className="eyebrow" style={{ color: "var(--accent)" }}>LIVE AREA REPORTS</p>
+                  <p className="eyebrow" style={{ color: "var(--accent)" }}>AREA REPORTS</p>
                   <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
                     Water Faults Nearby
                   </h2>
@@ -727,7 +727,7 @@ export default function HydroMeshPage() {
           
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="eyebrow" style={{ color: "var(--accent)" }}>COMMUNITY WATER</p>
+                <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}></p>
               <h2 className="mt-1 text-base sm:text-lg font-medium text-white">
                 Neighborhood Water Sharing Nodes
               </h2>

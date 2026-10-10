@@ -112,6 +112,8 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
+const ENERGY_YELLOW = "#f59e0b";
+
 export default function VoltShieldPage() {
   const { streetAddress } = useGeo();
 
@@ -420,7 +422,7 @@ export default function VoltShieldPage() {
 
       <div className="relative z-10 mx-auto w-full max-w-[1920px] px-3 pb-32 pt-4 sm:px-6 sm:space-y-6 lg:px-10 lg:pb-12 lg:pt-7 space-y-5">
         
-        {/* TOP ROW: HEADER & INDEPENDENT OUTSIDE LOCATION PILL */}
+        {/* TOP ROW: HEADER & INDEPENDENT LOCATION PILL WITH REPORT BUTTON */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <header className="glass-header flex items-center gap-3 p-3.5 sm:p-4">
             <div className="feature-icon feature-energy shrink-0" style={{ color: "var(--accent)" }}>
@@ -437,78 +439,87 @@ export default function VoltShieldPage() {
             </div>
           </header>
 
-          {/* Fully Independent Outside Location Pill */}
-          <div 
-            className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto"
-            style={{
-              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-              backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
-            }}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
-              <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                {activeAddress}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleManualRefreshLocation}
-              title="Refresh Location"
-              className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-              style={{ color: "var(--accent)" }}
+          <div className="flex items-center gap-2">
+            {/* Independent Location Pill */}
+            <div 
+              className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto flex-1 sm:flex-initial"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+              }}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
-            </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+                <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
+                  {activeAddress}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleManualRefreshLocation}
+                title="Refresh Location"
+                className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
+                style={{ color: "var(--accent)" }}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+
+            {/* Report Button with Plus Icon Next to Location Pill (Visible on mobile too) */}
+            <Link
+              href="/civic"
+              className="glass-panel px-3.5 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+              }}
+            >
+              <Plus className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />
+              <span className="inline">Report</span>
+            </Link>
           </div>
         </div>
 
         {/* MAIN DASHBOARD LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6 relative z-20">
           
-          {/* LEFT COLUMN: INDUSTRIAL BATTERY SHUNT & RIPPLE SENSOR & STATS */}
+          {/* LEFT COLUMN: HARDWARE SHUNT SCANNER & STATS */}
           <div className="lg:col-span-2 space-y-5">
             
-            {/* ENTIRE FROSTED GLASS CONTAINER ACTS AS HARDWARE SHUNT TELEMETRY INTERFACE */}
+            {/* HARDWARE SHUNT SCANNER INTERFACE - UNCAGED CONTAINER WITH BREATHING ROOM */}
             <section
               onClick={isScanning ? stopShuntScan : startShuntScan}
-              className="glass-panel relative overflow-hidden p-6 sm:p-8 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between min-h-[320px]"
-              style={{
-                borderColor: "color-mix(in srgb, var(--accent) 35%, transparent)",
-              }}
+              className="relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5"
             >
-              <div className="panel-reflection pointer-events-none" />
-              <div className="panel-bottom-glow energy-glow pointer-events-none" />
-
               <div className="relative z-10">
-                <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="eyebrow" style={{ color: "var(--accent)" }}>HARDWARE SHUNT & RIPPLE SENSOR</p>
-                    <h2 className="mt-1 text-base sm:text-xl font-medium tracking-[-0.025em] text-white sm:text-2xl">
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>HARDWARE SHUNT & RIPPLE SENSOR</p>
+                    <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
                       Live Charging Current & Outage Pre-Warning
                     </h2>
-                    <p className="mt-1 text-[11px] sm:text-xs leading-relaxed text-muted max-w-xl">
-                      Tap anywhere on this panel to sample device charging shunt current ({shuntCurrentMa} mA) and DC bus ripple voltage ({dcRippleMv} mV). Sudden ripple spikes detect upstream substation instability before load-shedding occurs.
+                    <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
+                      Tap anywhere below to sample device charging shunt current ({shuntCurrentMa} mA) and DC bus ripple voltage ({dcRippleMv} mV). Sudden ripple spikes detect upstream substation instability before load-shedding occurs.
                     </p>
                   </div>
                 </div>
 
                 {/* DYNAMIC SCAN DISPLAY AREA */}
-                <div className="my-6 flex flex-col items-center justify-center">
+                <div className="my-5 flex flex-col items-center justify-center">
                   {/* IDLE STATE */}
                   {scanPhase === "idle" && (
-                    <div className="text-center py-4">
+                    <div className="text-center py-3">
                       <div 
-                        className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border animate-pulse"
+                        className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border animate-pulse"
                         style={{
                           borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
                           backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
                           color: "var(--accent)",
                         }}
                       >
-                        <Gauge className="h-7 w-7" />
+                        <Gauge className="h-6 w-6" />
                       </div>
-                      <p className="text-sm font-semibold text-white">Tap Panel to Run Shunt Ripple Diagnostic</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Tap to Run Shunt Ripple Diagnostic</p>
                       <p className="mt-1 text-[11px]" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>
                         Analyzes charging current fluctuations &amp; AC line sag
                       </p>
@@ -518,11 +529,11 @@ export default function VoltShieldPage() {
                   {/* ANALYZING / SCANNING STATE */}
                   {scanPhase === "analyzing" && (
                     <div className="w-full text-center py-2">
-                      <div className="mx-auto mb-6 flex h-24 items-end justify-center gap-2 px-2 max-w-md">
+                      <div className="mx-auto mb-5 flex h-20 items-end justify-center gap-2 px-2 max-w-md">
                         {rippleSpectrum.map((val, i) => (
                           <div
                             key={i}
-                            className="w-2.5 rounded-t transition-all duration-75"
+                            className="w-2 rounded-t transition-all duration-75"
                             style={{ 
                               height: `${val}%`, 
                               backgroundColor: "var(--accent)",
@@ -543,31 +554,31 @@ export default function VoltShieldPage() {
 
                   {/* SCAN COMPLETE STATE */}
                   {scanPhase === "complete" && (
-                    <div className="text-center py-4">
+                    <div className="text-center py-3">
                       <div 
-                        className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border"
+                        className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border"
                         style={{
                           borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
                           backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
                           color: "var(--accent)",
                         }}
                       >
-                        <CheckCircle2 className="h-7 w-7" />
+                        <CheckCircle2 className="h-6 w-6" />
                       </div>
-                      <h3 className="text-base sm:text-xl font-semibold" style={{ color: "var(--accent)" }}>
+                      <h3 className="text-sm sm:text-lg font-semibold" style={{ color: "var(--accent)" }}>
                         {gridStabilityScore}% Stability — Shunt Telemetry Nominal
                       </h3>
-                      <p className="mt-1 text-xs text-muted max-w-sm mx-auto">
-                        No upstream voltage sag detected. Tap anywhere on panel to re-sample.
+                      <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
+                        No upstream voltage sag detected. Tap again to re-sample.
                       </p>
                     </div>
                   )}
 
                   {/* ERROR STATE */}
                   {scanPhase === "error" && (
-                    <div className="text-center py-4">
-                      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-400">
-                        <AlertTriangle className="h-7 w-7" />
+                    <div className="text-center py-3">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-400">
+                        <AlertTriangle className="h-6 w-6" />
                       </div>
                       <p className="text-xs font-medium text-rose-300 max-w-xs mx-auto">
                         {errorMessage}
@@ -578,11 +589,11 @@ export default function VoltShieldPage() {
               </div>
             </section>
 
-            {/* SEPARATE METRIC TILES IN INDIVIDUAL FROSTED CONTAINERS */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {/* SEPARATE METRIC TILES - WHITE ONLY FOR STATS WITH BOTTOM CLEARANCE SPACE */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6 sm:mb-8">
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto">
                 <p className="text-[9px] uppercase tracking-[0.08em] text-muted">Grid Voltage</p>
-                <p className="mt-1 text-xs sm:text-sm font-semibold" style={{ color: "var(--accent)" }}>230.4V AC</p>
+                <p className="mt-1 text-xs sm:text-sm font-semibold text-white">230.4V AC</p>
               </div>
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto">
@@ -592,14 +603,14 @@ export default function VoltShieldPage() {
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto">
                 <p className="text-[9px] uppercase tracking-[0.08em] text-muted">Power Sense</p>
-                <p className="mt-1 text-xs sm:text-sm font-semibold" style={{ color: "var(--accent)" }}>
+                <p className="mt-1 text-xs sm:text-sm font-semibold text-white">
                   {batteryInfo.charging ? "AC Stable" : "Battery Mode"}
                 </p>
               </div>
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto">
                 <p className="text-[9px] uppercase tracking-[0.08em] text-muted">Outage Risk</p>
-                <p className="mt-1 text-xs sm:text-sm font-semibold" style={{ color: "var(--accent)" }}>
+                <p className="mt-1 text-xs sm:text-sm font-semibold text-white">
                   {!batteryInfo.charging ? "Critical (Grid Down)" : dcRippleMv > 16 ? "Elevated (28%)" : "Low (4.2%)"}
                 </p>
               </div>
@@ -607,8 +618,8 @@ export default function VoltShieldPage() {
 
           </div>
 
-          {/* RIGHT COLUMN: REAL-TIME POWER FAULTS */}
-          <aside className="space-y-5">
+          {/* RIGHT COLUMN: REAL-TIME POWER FAULTS WITH TOP SPACE CLEARANCE */}
+          <aside className="space-y-5 pt-2 sm:pt-4">
             <section className="glass-panel p-4 sm:p-6 relative pointer-events-auto">
               <div className="panel-reflection pointer-events-none" />
               
@@ -619,13 +630,6 @@ export default function VoltShieldPage() {
                     Power Outages Nearby
                   </h2>
                 </div>
-                <Link
-                  href="/civic"
-                  className="text-xs flex items-center gap-1 font-medium transition-colors cursor-pointer relative z-30 hover:opacity-80"
-                  style={{ color: "var(--accent)" }}
-                >
-                  Report <ChevronRight className="h-3.5 w-3.5" />
-                </Link>
               </div>
 
               <div className="space-y-3">
@@ -634,72 +638,76 @@ export default function VoltShieldPage() {
                     No active power outage reports logged in your area.
                   </div>
                 ) : (
-                  deduplicatedPowerReports.map((report) => (
-                    <div
-                      key={report.id}
-                      className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all space-y-1.5 relative z-20 pointer-events-auto"
-                    >
-                      <div className="flex items-center justify-between flex-wrap gap-1">
-                        <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
-                          {report.id}
-                        </span>
-                        <span 
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                          style={{
-                            color: "var(--accent)",
-                            backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
-                            borderColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
-                          }}
-                        >
-                          {report.status}
-                        </span>
-                      </div>
+                  deduplicatedPowerReports.map((report) => {
+                    const isResolved = report.status === "Resolved" || report.status === "Auto-Dispatched";
+                    const statusColor = isResolved ? "#10b981" : "#f59e0b"; // Green vs Orange
 
-                      <h3 className="text-xs sm:text-sm font-bold text-white">{report.title}</h3>
-                      <p className="text-[11px] text-muted leading-relaxed">{report.description}</p>
+                    return (
+                      <div
+                        key={report.id}
+                        className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all space-y-1.5 relative z-20 pointer-events-auto"
+                      >
+                        <div className="flex items-center justify-between flex-wrap gap-1">
+                          <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
+                            {report.id}
+                          </span>
+                          <span 
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                            style={{
+                              color: statusColor,
+                              backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
+                              borderColor: `color-mix(in srgb, ${statusColor} 25%, transparent)`,
+                            }}
+                          >
+                            {report.status}
+                          </span>
+                        </div>
 
-                      <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-white/5 gap-2">
-                        <span className="flex items-center gap-1 font-mono truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
-                          <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> <span className="truncate">{report.locationAddress}</span>
-                        </span>
-                        <span className="shrink-0">{report.time}</span>
+                        <h3 className="text-xs sm:text-sm font-bold text-white">{report.title}</h3>
+                        <p className="text-[11px] text-muted leading-relaxed">{report.description}</p>
+
+                        <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-white/5 gap-2">
+                          <span className="flex items-center gap-1 font-mono truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
+                            <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> <span className="truncate">{report.locationAddress}</span>
+                          </span>
+                          <span className="shrink-0">{report.time}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </section>
           </aside>
         </div>
 
-        {/* POWER SHARING MARKETPLACE: STANDALONE SHARE BACKUP BUTTON & SEPARATE LISTING PANELS */}
-        <div className="space-y-4 pt-2">
+        {/* POWER SHARING MARKETPLACE */}
+        <div className="space-y-4 pt-4">
           
-          {/* SEPARATED MARKETPLACE HEADER & SHARE BACKUP BUTTON */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="eyebrow" style={{ color: "var(--accent)" }}>COMMUNITY POWER</p>
+              <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}></p>
               <h2 className="mt-1 text-base sm:text-lg font-medium text-white">
                 Neighborhood Backup Power Sharing Nodes
               </h2>
             </div>
 
+            {/* SMALLER SHARE BACKUP BUTTON IN ENERGY YELLOW */}
             <button
               type="button"
               onClick={() => setIsShareModalOpen(true)}
-              className="glass-panel px-4 py-3 flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 active:scale-95"
+              className="glass-panel px-3 py-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 active:scale-95 w-full sm:w-auto"
               style={{
-                color: "var(--accent)",
-                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
+                color: ENERGY_YELLOW,
+                borderColor: "color-mix(in srgb, #f59e0b 40%, transparent)",
+                backgroundColor: "color-mix(in srgb, #f59e0b 12%, transparent)",
               }}
             >
-              <Plus className="h-4 w-4 shrink-0 pointer-events-none" style={{ color: "var(--accent)" }} />
+              <Plus className="h-3.5 w-3.5 shrink-0 pointer-events-none" style={{ color: ENERGY_YELLOW }} />
               <span className="pointer-events-none">Share Backup Node</span>
             </button>
           </div>
 
-          {/* INDIVIDUAL FROSTED GLASS PANELS FOR EACH LISTING (ENTIRE PANEL ACTS AS REQUEST BUTTON) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {powerNodesList.map((node) => {
               const isSelected = activeDispatchNode?.id === node.id;
@@ -716,8 +724,8 @@ export default function VoltShieldPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="brand-icon feature-energy shrink-0" style={{ color: "var(--accent)" }}>
-                        <Zap className="h-4 w-4" style={{ color: "var(--accent)" }} />
+                      <div className="brand-icon feature-energy shrink-0" style={{ color: ENERGY_YELLOW, borderColor: "color-mix(in srgb, #f59e0b 20%, transparent)" }}>
+                        <Zap className="h-4 w-4" style={{ color: ENERGY_YELLOW }} />
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-xs sm:text-sm font-semibold text-white truncate">{node.owner}</h3>
@@ -741,18 +749,19 @@ export default function VoltShieldPage() {
                   </div>
 
                   <p className="text-[11px] text-muted flex items-center gap-1.5 truncate">
-                    <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+                    <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: ENERGY_YELLOW }} />
                     <span className="truncate">{node.location} ({node.distance})</span>
                   </p>
 
                   <div className="border-t border-white/10 pt-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-bold" style={{ color: "var(--accent)" }}>{node.capacity}</p>
+                      <p className="text-xs font-bold" style={{ color: ENERGY_YELLOW }}>{node.capacity}</p>
                       <p className="text-[10px] text-muted">{node.price}</p>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: "var(--accent)" }}>
-                      <MessageCircle className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
+                    {/* REQUEST VIA WHATSAPP IN PURE WHITE TEXT */}
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                      <MessageCircle className="h-4 w-4 shrink-0" style={{ color: ENERGY_YELLOW }} />
                       <span>Request via WhatsApp</span>
                     </div>
                   </div>
@@ -769,13 +778,13 @@ export default function VoltShieldPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
           <div 
             className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+            style={{ borderColor: "color-mix(in srgb, #f59e0b 30%, transparent)" }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Zap className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Register Backup Power Node
+                <Zap className="h-4 w-4 shrink-0" style={{ color: ENERGY_YELLOW }} /> Register Backup Power Node
               </h3>
               <button
                 type="button"
@@ -855,10 +864,10 @@ export default function VoltShieldPage() {
                 type="submit"
                 className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer touch-manipulation relative z-30 pointer-events-auto hover:opacity-90"
                 style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                  boxShadow: "0 0 20px color-mix(in srgb, var(--accent) 15%, transparent)"
+                  color: ENERGY_YELLOW,
+                  borderColor: "color-mix(in srgb, #f59e0b 40%, transparent)",
+                  backgroundColor: "color-mix(in srgb, #f59e0b 15%, transparent)",
+                  boxShadow: "0 0 20px color-mix(in srgb, #f59e0b 15%, transparent)"
                 }}
               >
                 Publish Power Node

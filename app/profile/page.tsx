@@ -13,7 +13,6 @@ import {
   Smartphone,
   LogOut,
   Trash2,
-  AlertTriangle,
 } from "lucide-react";
 
 const ACCENT_PALETTES = [
@@ -85,6 +84,7 @@ const SOUTH_AFRICAN_CITIES_WARDS: Record<string, string[]> = {
 export default function ProfilePage() {
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
   const [selectedAccent, setSelectedAccent] = useState<string>("teal");
+  const [stagedAccent, setStagedAccent] = useState<string>("teal");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
 
@@ -107,6 +107,7 @@ export default function ProfilePage() {
 
       if (savedAccent) {
         setSelectedAccent(savedAccent);
+        setStagedAccent(savedAccent);
         const matchedPalette = ACCENT_PALETTES.find((p) => p.id === savedAccent);
         if (matchedPalette) {
           document.documentElement.style.setProperty("--feature-accent", matchedPalette.hex);
@@ -139,22 +140,23 @@ export default function ProfilePage() {
     }
   };
 
-  // Staged Accent Selection Handler (Requires explicit click/tap, no hover trigger)
+  // Staged Accent Selection Handler (Does not apply globally until save)
   const handleSelectAccent = (accentId: string) => {
-    setSelectedAccent(accentId);
+    setStagedAccent(accentId);
   };
 
   // Save All Profile Settings & Apply Accent Theme
   const handleSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    const matchedPalette = ACCENT_PALETTES.find((p) => p.id === selectedAccent);
+    setSelectedAccent(stagedAccent);
+    const matchedPalette = ACCENT_PALETTES.find((p) => p.id === stagedAccent);
     if (matchedPalette) {
-      localStorage.setItem("resigrid_accent_theme", selectedAccent);
+      localStorage.setItem("resigrid_accent_theme", stagedAccent);
       document.documentElement.style.setProperty("--feature-accent", matchedPalette.hex);
       document.documentElement.style.setProperty("--accent", matchedPalette.hex);
       window.dispatchEvent(
-        new CustomEvent("resigrid_theme_change", { detail: { hex: matchedPalette.hex, id: selectedAccent } })
+        new CustomEvent("resigrid_theme_change", { detail: { hex: matchedPalette.hex, id: stagedAccent } })
       );
     }
 
@@ -293,32 +295,32 @@ export default function ProfilePage() {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
               {ACCENT_PALETTES.map((pal) => {
-                const isSelected = selectedAccent === pal.id;
+                const isSelected = stagedAccent === pal.id;
                 return (
                   <button
                     key={pal.id}
                     type="button"
                     onClick={() => handleSelectAccent(pal.id)}
-                    onTouchEnd={() => handleSelectAccent(pal.id)}
-                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer touch-manipulation relative z-30 ${
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative z-30 select-none ${
                       isSelected
-                        ? "border-white/30 bg-white/10 scale-[1.02]"
+                        ? "border-white/40 bg-white/15 scale-[1.02] shadow-md"
                         : "border-white/10 bg-black/30 hover:bg-white/5"
                     }`}
+                    style={{ touchAction: "manipulation" }}
                   >
                     {/* LIQUID GLASS DOCK STYLE CIRCLE SWATCH */}
-                    <div className="relative flex items-center justify-center p-1">
+                    <div className="relative flex items-center justify-center p-1 pointer-events-none">
                       {/* Subtle Ambient Liquid Underglow */}
                       <span 
                         className={`absolute inset-0 rounded-full blur-[3px] transition-opacity duration-300 pointer-events-none ${
-                          isSelected ? "opacity-40 scale-105" : "opacity-15"
+                          isSelected ? "opacity-45 scale-105" : "opacity-15"
                         }`}
                         style={{ backgroundColor: pal.hex }}
                       />
 
                       {/* Liquid Glass Orb Container */}
                       <span 
-                        className="w-7 h-7 rounded-full relative flex items-center justify-center overflow-hidden transition-all duration-300 border border-white/20 shadow-inner"
+                        className="w-7 h-7 rounded-full relative flex items-center justify-center overflow-hidden transition-all duration-300 border border-white/20 shadow-inner pointer-events-none"
                         style={{
                           backgroundColor: pal.hex,
                           boxShadow: isSelected 
@@ -336,7 +338,7 @@ export default function ProfilePage() {
                       </span>
                     </div>
 
-                    <span className="text-[10px] font-semibold text-white">{pal.name}</span>
+                    <span className="text-[10px] font-semibold text-white pointer-events-none">{pal.name}</span>
                   </button>
                 );
               })}
@@ -452,11 +454,13 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setEmergencyAlerts(!emergencyAlerts)}
-                  onTouchEnd={() => setEmergencyAlerts(!emergencyAlerts)}
-                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer touch-manipulation z-30 shrink-0"
-                  style={{ backgroundColor: emergencyAlerts ? "var(--accent)" : "rgba(255,255,255,0.1)" }}
+                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer z-30 shrink-0 select-none"
+                  style={{ 
+                    backgroundColor: emergencyAlerts ? "var(--accent)" : "rgba(255,255,255,0.1)",
+                    touchAction: "manipulation"
+                  }}
                 >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform ${
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform pointer-events-none ${
                     emergencyAlerts ? "translate-x-6" : "translate-x-0"
                   }`} />
                 </button>
@@ -470,11 +474,13 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => setCommunityBroadcasts(!communityBroadcasts)}
-                  onTouchEnd={() => setCommunityBroadcasts(!communityBroadcasts)}
-                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer touch-manipulation z-30 shrink-0"
-                  style={{ backgroundColor: communityBroadcasts ? "var(--accent)" : "rgba(255,255,255,0.1)" }}
+                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer z-30 shrink-0 select-none"
+                  style={{ 
+                    backgroundColor: communityBroadcasts ? "var(--accent)" : "rgba(255,255,255,0.1)",
+                    touchAction: "manipulation"
+                  }}
                 >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform ${
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform pointer-events-none ${
                     communityBroadcasts ? "translate-x-6" : "translate-x-0"
                   }`} />
                 </button>
@@ -487,15 +493,15 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => handleSave()}
-              onTouchEnd={() => handleSave()}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30 shadow-lg"
+              className="w-full sm:w-auto px-6 py-3 rounded-xl border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
                 borderColor: "color-mix(in srgb, var(--accent) 45%, transparent)",
+                touchAction: "manipulation",
               }}
             >
-              <Save className="w-4 h-4" />
-              <span>Save All Preferences</span>
+              <Save className="w-4 h-4 pointer-events-none" />
+              <span className="pointer-events-none">Save All Preferences</span>
             </button>
           </div>
 
@@ -505,7 +511,7 @@ export default function ProfilePage() {
 
             <div className="border-b border-white/10 pb-3">
               <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                <Shield className="w-4 h-4 text-emerald-400 shrink-0" /> Session & Security
+                Session & Security
               </h2>
             </div>
 
@@ -522,19 +528,19 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => handleSignOut()}
-                  onTouchEnd={() => handleSignOut()}
-                  className="w-full py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/25 text-amber-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30"
+                  className="w-full py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/25 text-amber-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none"
+                  style={{ touchAction: "manipulation" }}
                 >
-                  <LogOut className="w-3.5 h-3.5" /> Sign Out Session
+                  <LogOut className="w-3.5 h-3.5 pointer-events-none" /> <span className="pointer-events-none">Sign Out Session</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleDeleteAllData()}
-                  onTouchEnd={() => handleDeleteAllData()}
-                  className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer touch-manipulation relative z-30"
+                  className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none"
+                  style={{ touchAction: "manipulation" }}
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete All App Data
+                  <Trash2 className="w-3.5 h-3.5 pointer-events-none" /> <span className="pointer-events-none">Delete All App Data</span>
                 </button>
               </div>
             </div>

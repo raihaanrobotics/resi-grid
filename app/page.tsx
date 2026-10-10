@@ -83,7 +83,8 @@ const ACCENT_HEX_MAP: Record<string, string> = {
 };
 
 export default function HomePage() {
-  const [greeting, setGreeting] = useState<string>("");
+  const [greetingPrefix, setGreetingPrefix] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
   const [waterStatus, setWaterStatus] = useState<string>("Normal");
   const [energyStatus, setEnergyStatus] = useState<string>("Normal");
   const [routesStatus, setRoutesStatus] = useState<string>("Clear");
@@ -144,7 +145,8 @@ export default function HomePage() {
       savedName = "Raihaan";
     }
 
-    setGreeting(`${timeOfDayGreeting}, ${savedName}`);
+    setGreetingPrefix(timeOfDayGreeting);
+    setUserName(savedName);
 
     // 3. Real-time Status Sync from localStorage & BroadcastChannel
     const syncStatusFromData = () => {
@@ -239,7 +241,7 @@ export default function HomePage() {
                 </span>
               </div>
 
-              <p className="mt-0.5 hidden text-[9px] tracking-[0.15em] text-muted sm:block">
+              <p className="mt-0.5 block text-[9px] tracking-[0.15em] text-muted">
                 YOUR LOCAL NEIGHBORHOOD HUB
               </p>
             </div>
@@ -257,9 +259,10 @@ export default function HomePage() {
 
         {/* GREETING & UPDATE TEXT OUTSIDE CONTAINER */}
         <div className="mb-5 max-w-2xl px-1 sm:mb-7">
-          {greeting && (
-            <h2 className="mb-2 text-2xl font-bold tracking-[-0.03em] text-[var(--accent)] sm:text-3xl lg:text-4xl">
-              {greeting}
+          {greetingPrefix && (
+            <h2 className="mb-2 text-2xl font-bold tracking-[-0.03em] sm:text-3xl lg:text-4xl">
+              <span className="text-white">{greetingPrefix}, </span>
+              <span className="text-[var(--accent)]">{userName}</span>
             </h2>
           )}
 
@@ -271,7 +274,7 @@ export default function HomePage() {
         {/* DASHBOARD */}
         <div className="w-full space-y-5 sm:space-y-6">
           {/* RADAR */}
-          <section className="glass-panel radar-panel relative overflow-hidden p-4 sm:p-6 lg:p-7">
+          <section className="glass-panel radar-panel relative mb-8 overflow-hidden p-4 sm:mb-10 sm:p-6 lg:p-7">
             <div className="panel-reflection" />
             <div className="panel-bottom-glow radar-glow" />
 

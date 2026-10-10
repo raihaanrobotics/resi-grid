@@ -661,6 +661,7 @@ export default function HydroMeshPage() {
 
           {/* RIGHT COLUMN: REAL-TIME WATER FAULTS WITH TOP SPACE CLEARANCE */}
           <aside className="space-y-5 pt-2 sm:pt-4">
+            <div className="w-full h-px bg-white/20 mb-4" />
             <section className="glass-panel p-4 sm:p-6 relative pointer-events-auto">
               <div className="panel-reflection pointer-events-none" />
               
@@ -724,11 +725,12 @@ export default function HydroMeshPage() {
 
         {/* WATER SHARING MARKETPLACE */}
         <div className="space-y-4 pt-4">
+          <div className="w-full h-px bg-white/20 mb-4" />
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-center sm:text-left">
+            <div className="mx-auto sm:mx-0">
                 <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}></p>
-              <h2 className="mt-1 text-base sm:text-lg font-medium text-white">
+              <h2 className="mt-1 text-base sm:text-lg font-medium text-white text-center sm:text-left">
                 Neighborhood Water Sharing Nodes
               </h2>
             </div>

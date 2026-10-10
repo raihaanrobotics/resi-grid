@@ -8,7 +8,6 @@ import {
   Tag,
   Search,
   Plus,
-  Clock,
   ChevronRight,
   BatteryCharging,
   Droplets,
@@ -18,6 +17,7 @@ import {
   MapPin,
   Navigation,
   RefreshCw,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
@@ -151,6 +151,7 @@ export default function MarketplacePage() {
   const [activeCategory, setActiveCategory] = useState<"all" | "power" | "water" | "goods" | "services">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [listings, setListings] = useState<ListingItem[]>(INITIAL_MARKETPLACE_LISTINGS);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Modal State for New Listing Creation
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -296,38 +297,54 @@ export default function MarketplacePage() {
             </div>
           </header>
 
-          {/* Fully Independent Outside Location Pill */}
-          <div 
-            className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto"
-            style={{
-              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-              backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
-            }}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
-              <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                {activeAddress} (Showing within 10km)
-              </span>
+          <div className="flex items-center gap-2">
+            {/* Independent Location Pill */}
+            <div 
+              className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto flex-1 sm:flex-initial"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+              }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+                <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
+                  {activeAddress}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleManualRefreshLocation}
+                title="Refresh Location"
+                className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
+                style={{ color: "var(--accent)" }}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+              </button>
             </div>
+
+            {/* Post Listing Badge Pill Next to Location Pill */}
             <button
               type="button"
-              onClick={handleManualRefreshLocation}
-              title="Refresh Location"
-              className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-              style={{ color: "var(--accent)" }}
+              onClick={() => setIsModalOpen(true)}
+              className="glass-panel px-3.5 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+              }}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+              <Plus className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />
+              <span className="inline">Post Listing</span>
             </button>
           </div>
         </div>
 
-        {/* SEARCH & CATEGORY FILTER BAR */}
-        <div className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 relative pointer-events-auto">
+        {/* SEARCH & FILTER ICON BAR */}
+        <div className="glass-panel p-4 flex items-center gap-3 relative pointer-events-auto">
           <div className="panel-reflection pointer-events-none" />
 
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[240px]">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -338,34 +355,19 @@ export default function MarketplacePage() {
             />
           </div>
 
-          {/* Category Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-            {(["all", "power", "water", "goods", "services"] as const).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
-                  activeCategory === cat
-                    ? "bg-white/15 text-white border border-white/30"
-                    : "bg-white/5 border border-white/10 text-muted hover:text-white"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Post New Listing Button */}
+          {/* Filter Modal Trigger Button */}
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95"
+            type="button"
+            onClick={() => setIsFilterModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
             style={{
               color: "var(--accent)",
               borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
               backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
             }}
           >
-            <Plus className="w-4 h-4" /> Post Listing
+            <SlidersHorizontal className="w-3.5 h-3.5" />
+            <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
           </button>
         </div>
 
@@ -408,7 +410,9 @@ export default function MarketplacePage() {
                     </span>
                   </div>
 
-                  <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                  <div className="w-full h-px bg-white/20 my-3" />
+
+                  <h3 className="text-base font-bold text-white transition-colors">
                     {item.title}
                   </h3>
 
@@ -445,41 +449,51 @@ export default function MarketplacePage() {
           )}
         </div>
 
-        {/* LIVE SETTLEMENT STREAM */}
-        <div className="glass-panel p-6 relative pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <Clock className="w-4 h-4" style={{ color: "var(--accent)" }} /> Neighborhood Activity Stream
-            </h2>
-          </div>
+      </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                <div>
-                  <p className="text-xs font-medium text-white">Solar Power Transfer: 12 kWh Shared</p>
-                  <p className="text-[10px] text-muted">Direct Peer Dispatch • Settled</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-mono text-muted">Today, 15:12</span>
+      {/* FILTER SELECTION POPUP MODAL */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+          <div
+            className="glass-panel w-full max-w-sm p-5 sm:p-6 relative space-y-4 pointer-events-auto"
+            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+          >
+            <div className="panel-reflection pointer-events-none" />
+
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
+              <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Filter Listings By Category
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsFilterModalOpen(false)}
+                className="text-muted hover:text-white cursor-pointer relative z-30 p-1"
+              >
+                <X className="h-4 w-4 pointer-events-none" />
+              </button>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-cyan-400" />
-                <div>
-                  <p className="text-xs font-medium text-white">Emergency Water Reserve Fill Requested</p>
-                  <p className="text-[10px] text-muted">Water Depot Station #2</p>
-                </div>
-              </div>
-              <span className="text-[10px] font-mono text-muted">Today, 14:02</span>
+            <div className="space-y-2 relative z-25 py-2">
+              {(["all", "power", "water", "goods", "services"] as const).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    setIsFilterModalOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer border ${
+                    activeCategory === cat
+                      ? "bg-white/20 text-white border-white/30"
+                      : "bg-black/40 border-white/10 text-muted hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  {cat === "all" ? "All Categories" : cat}
+                </button>
+              ))}
             </div>
           </div>
         </div>
-
-      </div>
+      )}
 
       {/* CREATE NEW LISTING MODAL */}
       {isModalOpen && (

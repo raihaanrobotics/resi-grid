@@ -42,7 +42,7 @@ export function filterWithinRadius<T extends { latitude: number; longitude: numb
   userLat: number,
   userLng: number,
   items: T[],
-  radiusKm = 5.0
+  radiusKm = 10.0
 ): (T & { distanceKm: number; formattedDistance: string })[] {
   return items
     .map((item) => {

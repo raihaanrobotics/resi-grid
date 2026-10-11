@@ -4,36 +4,51 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Store,
-  ShoppingBag,
-  ShieldCheck,
-  AlertTriangle,
-  Truck,
-  Activity,
+  Zap,
+  Droplets,
   PackageCheck,
-  DollarSign,
-  Clock,
-  ChevronRight,
-  TrendingUp,
+  Search,
+  Plus,
   MapPin,
-  CheckCircle2,
   Navigation,
   RefreshCw,
-  Plus,
   MessageCircle,
   X,
+  ShieldCheck,
+  Flame,
+  AlertTriangle,
+  BatteryCharging,
+  Truck,
+  Megaphone,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
-interface SpazaListingItem {
+interface SpazaRescueShop {
+  id: string;
+  shopName: string;
+  owner: string;
+  location: string;
+  ward: string;
+  isOperating: boolean;
+  hasDryStock: boolean; // Non-perishables
+  hasGasOrParaffin: boolean; // Gas refills or Paraffin
+  hasEmergencyCharging: boolean; // 12V Car battery / micro-charging
+  perishableClearanceAlert?: string; // Spoilage clearance deal
+  essentialStock: string[];
+  contactPhone: string;
+  distanceKm: number;
+}
+
+interface EmergencyReliefRequest {
   id: string;
   title: string;
-  category: "goods" | "power" | "water" | "services";
-  price: string;
-  seller: string;
+  type: "bulk-need" | "tanker-alert";
   location: string;
-  status: "Available" | "Pending" | "Fulfilled";
-  contactPhone?: string;
-  distanceKm?: number;
+  postedBy: string;
+  urgency: "Critical" | "Moderate";
+  description: string;
+  contactPhone: string;
+  distanceKm: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -45,10 +60,84 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
+const DEFAULT_CRISIS_SHOPS: SpazaRescueShop[] = [
+  {
+    id: "SPAZA-101",
+    shopName: "Mam' Rose Spaza & Dry Goods",
+    owner: "Rose Dlamini",
+    location: "144 Victoria Road",
+    ward: "Ward 26",
+    isOperating: true,
+    hasDryStock: true,
+    hasGasOrParaffin: true,
+    hasEmergencyCharging: false,
+    perishableClearanceAlert: "Fresh Milk & Bread 50% off - Buy before 2 PM power loss!",
+    essentialStock: ["Maize Meal (10kg)", "LPG Gas 9kg", "Candles", "Canned Beans"],
+    contactPhone: "27821234567",
+    distanceKm: 0.4,
+  },
+  {
+    id: "SPAZA-102",
+    shopName: "Sipho's Corner Shop",
+    owner: "Sipho Khumalo",
+    location: "Block C, Section 4",
+    ward: "Ward 22",
+    isOperating: true,
+    hasDryStock: true,
+    hasGasOrParaffin: false,
+    hasEmergencyCharging: true,
+    essentialStock: ["10-Min Phone Charging (12V)", "Dry Biscuits", "Matches", "Paraffin"],
+    contactPhone: "27839876543",
+    distanceKm: 0.9,
+  },
+  {
+    id: "SPAZA-103",
+    shopName: "Edendale Community Supply & Paraffin",
+    owner: "David Naidoo",
+    location: "Main Road, Edendale",
+    ward: "Ward 8",
+    isOperating: true,
+    hasDryStock: true,
+    hasGasOrParaffin: true,
+    hasEmergencyCharging: false,
+    essentialStock: ["Paraffin (per Litre)", "25L Water Drums", "Candles", "Batteries"],
+    contactPhone: "27815550192",
+    distanceKm: 2.1,
+  },
+];
+
+const DEFAULT_RELIEF_REQUESTS: EmergencyReliefRequest[] = [
+  {
+    id: "RELIEF-501",
+    title: "Ward 22 Spaza Bulk Restock Needed",
+    type: "bulk-need",
+    location: "Block C Community Centre",
+    postedBy: "Sipho Khumalo (Spaza Owner)",
+    urgency: "Critical",
+    description: "Running completely out of maize meal and paraffin. Looking for wholesale distributor with transport heading to Section 4.",
+    contactPhone: "27839876543",
+    distanceKm: 0.9,
+  },
+  {
+    id: "RELIEF-502",
+    title: "Roving Municipal Water Tanker Parked",
+    type: "tanker-alert",
+    location: "Main Road & Victoria Intersection",
+    postedBy: "Community Wardens",
+    urgency: "Moderate",
+    description: "Municipal water tanker is stationed here for the next 2 hours filling 25L drums for residents and shops.",
+    contactPhone: "27821234567",
+    distanceKm: 0.4,
+  },
+];
+
 export default function SpazaRescuePage() {
   const { streetAddress } = useGeo();
 
-  // Location State: Automatically loads on mount once, locks in
+  // Navigation Tabs: 'shops' | 'relief'
+  const [activeTab, setActiveTab] = useState<"shops" | "relief">("shops");
+
+  // Location State
   const [isRefreshingGeo, setIsRefreshingGeo] = useState(false);
   const [activeAddress, setActiveAddress] = useState<string>("Locating street...");
   const hasInitializedGeo = useRef(false);
@@ -70,7 +159,7 @@ export default function SpazaRescuePage() {
     }, 600);
   };
 
-  // Bulletproof Theme Persistence on Mount
+  // Theme Persistence
   useEffect(() => {
     const applySavedTheme = () => {
       try {
@@ -103,56 +192,127 @@ export default function SpazaRescuePage() {
     };
   }, []);
 
-  const [dispatchActive, setDispatchActive] = useState(false);
-  const [stockLevel, setStockLevel] = useState(88.5);
+  const [shops, setShops] = useState<SpazaRescueShop[]>(DEFAULT_CRISIS_SHOPS);
+  const [reliefRequests, setReliefRequests] = useState<EmergencyReliefRequest[]>(DEFAULT_RELIEF_REQUESTS);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [gasParaffinFilter, setGasParaffinFilter] = useState(false);
+  const [clearanceFilter, setClearanceFilter] = useState(false);
 
-  // Modal State for Restock / Listing
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [itemTitle, setItemTitle] = useState("");
-  const [itemPrice, setItemPrice] = useState("");
-  const [storeName, setStoreName] = useState("");
-  const [phoneNum, setPhoneNum] = useState("");
+  // Modal State for Shops
+  const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [shopName, setShopName] = useState("");
+  const [owner, setOwner] = useState("");
+  const [hasDry, setHasDry] = useState(true);
+  const [hasGasPara, setHasGasPara] = useState(true);
+  const [hasCharging, setHasCharging] = useState(false);
+  const [clearanceText, setClearanceText] = useState("");
+  const [stockInput, setStockInput] = useState("");
+  const [shopPhone, setShopPhone] = useState("");
 
-  // Live Telemetry Simulation
+  // Modal State for Relief / Tanker Requests
+  const [isReliefModalOpen, setIsReliefModalOpen] = useState(false);
+  const [reliefTitle, setReliefTitle] = useState("");
+  const [reliefType, setReliefType] = useState<"bulk-need" | "tanker-alert">("bulk-need");
+  const [reliefDesc, setReliefDesc] = useState("");
+  const [reliefPhone, setReliefPhone] = useState("");
+
+  // Storage sync
   useEffect(() => {
-    const interval = setInterval(() => {
-      setStockLevel(+(88 + (Math.random() * 1.2 - 0.6)).toFixed(1));
-    }, 3000);
-    return () => clearInterval(interval);
+    try {
+      const savedShops = localStorage.getItem("resigrid_spaza_crisis_shops");
+      if (savedShops) {
+        const parsed = JSON.parse(savedShops);
+        if (Array.isArray(parsed) && parsed.length > 0) setShops(parsed);
+      }
+      const savedRelief = localStorage.getItem("resigrid_spaza_relief_requests");
+      if (savedRelief) {
+        const parsed = JSON.parse(savedRelief);
+        if (Array.isArray(parsed) && parsed.length > 0) setReliefRequests(parsed);
+      }
+    } catch (e) {
+      console.error("Error loading local storage:", e);
+    }
   }, []);
 
-  // Publish to ResiMarket Local Storage
-  const handlePublishListing = (e: React.FormEvent) => {
+  const handleRegisterShop = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemTitle || !itemPrice || !storeName) return;
+    if (!shopName || !owner) return;
 
-    const newListing: SpazaListingItem = {
+    const newShop: SpazaRescueShop = {
       id: `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`,
-      title: itemTitle.trim(),
-      category: "goods",
-      price: itemPrice.trim(),
-      seller: storeName.trim(),
+      shopName: shopName.trim(),
+      owner: owner.trim(),
       location: activeAddress !== "Locating street..." ? activeAddress : "Local Sector",
-      status: "Available",
-      contactPhone: phoneNum.replace(/[^0-9]/g, "") || "27821234567",
+      ward: "Ward 26",
+      isOperating: true,
+      hasDryStock: hasDry,
+      hasGasOrParaffin: hasGasPara,
+      hasEmergencyCharging: hasCharging,
+      perishableClearanceAlert: clearanceText.trim() || undefined,
+      essentialStock: stockInput ? stockInput.split(",").map((s) => s.trim()) : ["Maize", "Candles"],
+      contactPhone: shopPhone.replace(/[^0-9]/g, "") || "27821234567",
       distanceKm: 0.2,
     };
 
-    try {
-      const existing = localStorage.getItem("resigrid_marketplace_listings");
-      let list = existing ? JSON.parse(existing) : [];
-      list = [newListing, ...list];
-      localStorage.setItem("resigrid_marketplace_listings", JSON.stringify(list));
-    } catch (err) {
-      console.error("Storage error:", err);
-    }
+    const updated = [newShop, ...shops];
+    setShops(updated);
+    localStorage.setItem("resigrid_spaza_crisis_shops", JSON.stringify(updated));
 
-    setIsModalOpen(false);
-    setItemTitle("");
-    setItemPrice("");
-    setStoreName("");
-    setPhoneNum("");
+    setIsShopModalOpen(false);
+    setShopName("");
+    setOwner("");
+    setStockInput("");
+    setClearanceText("");
+    setShopPhone("");
   };
+
+  const handlePostRelief = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reliefTitle || !reliefDesc) return;
+
+    const newRelief: EmergencyReliefRequest = {
+      id: `RELIEF-${Math.floor(Math.random() * 8999 + 1000)}`,
+      title: reliefTitle.trim(),
+      type: reliefType,
+      location: activeAddress !== "Locating street..." ? activeAddress : "Local Sector",
+      postedBy: "Community Member / Spaza",
+      urgency: "Critical",
+      description: reliefDesc.trim(),
+      contactPhone: reliefPhone.replace(/[^0-9]/g, "") || "27821234567",
+      distanceKm: 0.3,
+    };
+
+    const updated = [newRelief, ...reliefRequests];
+    setReliefRequests(updated);
+    localStorage.setItem("resigrid_spaza_relief_requests", JSON.stringify(updated));
+
+    setIsReliefModalOpen(false);
+    setReliefTitle("");
+    setReliefDesc("");
+    setReliefPhone("");
+  };
+
+  const handleContactWhatsApp = (targetPhone: string, msgText: string) => {
+    const cleanNum = targetPhone || "27821234567";
+    const msg = encodeURIComponent(`Hello, contacting via SpazaRescue regarding: "${msgText}". Is this available/active?`);
+    window.open(`https://wa.me/${cleanNum}?text=${msg}`, "_blank");
+  };
+
+  const filteredShops = shops.filter((s) => {
+    const matchesSearch =
+      s.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.essentialStock.some((item) => item.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      s.location.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesGasPara = !gasParaffinFilter || s.hasGasOrParaffin;
+    const matchesClearance = !clearanceFilter || !!s.perishableClearanceAlert;
+    return matchesSearch && matchesGasPara && matchesClearance;
+  });
+
+  const filteredRelief = reliefRequests.filter((r) =>
+    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.location.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] pb-32 pt-5 px-4 sm:px-6 lg:px-8 max-w-[1500px] mx-auto space-y-6 selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
@@ -165,7 +325,7 @@ export default function SpazaRescuePage() {
         <div className="ambient-grid" />
       </div>
 
-      {/* TOP NAVIGATION & INDEPENDENT OUTSIDE LOCATION PILL */}
+      {/* HEADER & LOCATION */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between relative z-10">
         <header className="glass-header p-4 sm:p-5 flex items-center gap-3">
           <div className="feature-icon feature-food shrink-0" style={{ color: "var(--accent)" }}>
@@ -184,16 +344,16 @@ export default function SpazaRescuePage() {
                   backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
                 }}
               >
-                SUPPLY MESH ACTIVE
+                LOW-TECH OUTAGE & RELIEF HUB
               </span>
             </div>
             <p className="mt-0.5 text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-              MICRO-RETAIL STABILIZATION & EMERGENCY RESTOCKING
+              DRY-STOCK SHOPS, SPOILAGE CLEARANCE, MICRO-CHARGING & ROVING TANKER ALERTS
             </p>
           </div>
         </header>
 
-        {/* Fully Independent Outside Location Pill */}
+        {/* Location Pill */}
         <div 
           className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto"
           style={{
@@ -219,275 +379,259 @@ export default function SpazaRescuePage() {
         </div>
       </div>
 
-      {/* STATS TILES */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
-        
-        {/* Metric 1 */}
-        <div className="glass-panel p-5 flex flex-col justify-between pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">ACTIVE SPAZA STORES</span>
-            <Store className="w-4 h-4" style={{ color: "var(--accent)" }} />
-          </div>
-          <div className="my-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-white">342</span>
-              <span className="text-sm font-medium text-muted">Registered</span>
-            </div>
-            <span className="text-xs font-medium flex items-center gap-1 mt-1" style={{ color: "var(--accent)" }}>
-              <CheckCircle2 className="w-3 h-3" /> +12 Added This Month
-            </span>
-          </div>
+      {/* TABS & ACTION BAR */}
+      <div className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 relative pointer-events-auto z-10">
+        <div className="panel-reflection pointer-events-none" />
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <button
+            onClick={() => setActiveTab("shops")}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "shops"
+                ? "bg-white/20 text-white border border-white/30"
+                : "bg-white/5 border border-white/10 text-muted hover:text-white"
+            }`}
+          >
+            <Store className="w-3.5 h-3.5" /> Off-Grid Spazas & Clearance
+          </button>
+
+          <button
+            onClick={() => setActiveTab("relief")}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+              activeTab === "relief"
+                ? "bg-white/20 text-white border border-white/30"
+                : "bg-white/5 border border-white/10 text-muted hover:text-white"
+            }`}
+          >
+            <Megaphone className="w-3.5 h-3.5" /> Emergency Relief & Tankers
+          </button>
         </div>
 
-        {/* Metric 2 */}
-        <div className="glass-panel p-5 flex flex-col justify-between pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">ESSENTIAL STOCK INDEX</span>
-            <PackageCheck className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="my-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-white">
-                {stockLevel}%
-              </span>
-            </div>
-            <div className="w-full bg-white/5 rounded-full h-1.5 mt-2 overflow-hidden">
-              <div
-                className="bg-emerald-400 h-full rounded-full transition-all duration-500"
-                style={{ width: `${stockLevel}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Metric 3 */}
-        <div className="glass-panel p-5 flex flex-col justify-between pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">DISPATCH RUNS</span>
-            <Truck className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="my-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-white">14</span>
-              <span className="text-sm font-medium text-muted">En Route</span>
-            </div>
-            <span className="text-xs text-amber-400 font-medium flex items-center gap-1 mt-1">
-              <Activity className="w-3 h-3" /> Average Delivery: 38 mins
-            </span>
-          </div>
-        </div>
-
-        {/* Metric 4 */}
-        <div className="glass-panel p-5 flex flex-col justify-between pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="eyebrow">STABILIZATION POOL</span>
-            <DollarSign className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="my-3">
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold tracking-tight text-white">R84.5k</span>
-              <span className="text-sm font-medium text-muted">Disbursed</span>
-            </div>
-            <span className="text-xs text-cyan-400 font-medium flex items-center gap-1 mt-1">
-              <TrendingUp className="w-3 h-3" /> Zero-Interest Credit
-            </span>
-          </div>
-        </div>
-
+        <button
+          onClick={() => {
+            if (activeTab === "shops") setIsShopModalOpen(true);
+            else setIsReliefModalOpen(true);
+          }}
+          className="px-4 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 ml-auto"
+          style={{
+            color: "var(--accent)",
+            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+          }}
+        >
+          <Plus className="w-4 h-4" />
+          {activeTab === "shops" ? "Register Shop Status" : "Post Relief / Tanker Alert"}
+        </button>
       </div>
 
-      {/* MAIN SECTION: SUPPLY HUB MONITOR & EMERGENCY TRIGGER */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
-        
-        {/* Hub Distribution Grid */}
-        <div className="lg:col-span-2 glass-panel p-6 flex flex-col justify-between pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-          
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <MapPin className="w-4 h-4" style={{ color: "var(--accent)" }} /> Local Hub Distribution Grid
-              </h2>
-              <p className="text-xs text-muted mt-0.5">
-                Real-time stock monitoring & bulk-buying distribution nodes
-              </p>
-            </div>
+      {/* SEARCH & FILTERS */}
+      <div className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 relative pointer-events-auto z-10">
+        <div className="panel-reflection pointer-events-none" />
+
+        <div className="relative flex-1 min-w-[240px]">
+          <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder={activeTab === "shops" ? "Search maize, paraffin, gas, micro-charging..." : "Search bulk needs, municipal tankers..."}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+          />
+        </div>
+
+        {activeTab === "shops" && (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer hover:opacity-90 active:scale-95"
-              style={{
-                color: "var(--accent)",
-                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-              }}
+              onClick={() => setGasParaffinFilter(!gasParaffinFilter)}
+              className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                gasParaffinFilter
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                  : "bg-white/5 border-white/10 text-muted hover:text-white"
+              }`}
             >
-              <Plus className="w-4 h-4" /> List Stock to Market
+              <Flame className="w-3.5 h-3.5" />
+              <span>{gasParaffinFilter ? "Gas / Paraffin Only" : "Filter Fuel"}</span>
+            </button>
+
+            <button
+              onClick={() => setClearanceFilter(!clearanceFilter)}
+              className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                clearanceFilter
+                  ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                  : "bg-white/5 border-white/10 text-muted hover:text-white"
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              <span>{clearanceFilter ? "Spoilage Clearance Only" : "Food Clearance Deals"}</span>
             </button>
           </div>
-
-          <div className="relative w-full h-60 bg-black/40 border border-white/5 rounded-2xl p-4 overflow-hidden flex flex-col justify-between">
-            <div className="absolute inset-0 bg-[radial-gradient(var(--accent)_1px,transparent_1px)] [background-size:16px_16px] opacity-15" />
-            
-            <div className="relative z-10 flex items-center justify-between">
-              <div className="px-3 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-lg text-xs font-mono text-white">
-                Sector 4: Township Central
-              </div>
-              <div 
-                className="px-3 py-1 rounded-lg text-xs font-mono border"
-                style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
-                }}
-              >
-                8 Critical Depots Active
-              </div>
-            </div>
-
-            <div className="relative z-10 grid grid-cols-3 gap-3 my-auto">
-              <div className="p-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl">
-                <p className="text-[10px] text-muted uppercase">Primary Hub</p>
-                <p className="text-sm font-bold text-white mt-0.5">Depot Alpha</p>
-                <span className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> 94% Stocked
-                </span>
-              </div>
-              <div className="p-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl">
-                <p className="text-[10px] text-muted uppercase">Cold Chain</p>
-                <p className="text-sm font-bold text-white mt-0.5">Depot Bravo</p>
-                <span className="text-[10px] text-amber-400 flex items-center gap-1 mt-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Low Stock
-                </span>
-              </div>
-              <div className="p-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl">
-                <p className="text-[10px] text-muted uppercase">Staples</p>
-                <p className="text-sm font-bold text-white mt-0.5">Depot Charlie</p>
-                <span className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> 100% Stocked
-                </span>
-              </div>
-            </div>
-
-            <div className="relative z-10 flex items-center justify-between text-xs text-muted pt-2 border-t border-white/10">
-              <span>Next Bulk Purchase Cycle: <strong>04h 12m</strong></span>
-              <span className="font-semibold cursor-pointer hover:underline" style={{ color: "var(--accent)" }}>
-                View Full Map
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Emergency Dispatch Trigger */}
-        <div className="glass-panel p-6 flex flex-col justify-between pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
-
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" style={{ color: "var(--accent)" }} /> Emergency Restock
-              </h2>
-              <span
-                className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full border ${
-                  dispatchActive
-                    ? "bg-rose-500/10 text-rose-400 border-rose-500/20 animate-pulse"
-                    : "bg-white/5 text-muted border-white/10"
-                }`}
-              >
-                {dispatchActive ? "DISPATCH READY" : "STANDBY"}
-              </span>
-            </div>
-
-            <p className="text-xs text-muted mb-6 leading-relaxed">
-              Trigger priority emergency stock delivery for critical local shortages (Bread, Maize Meal, Milk).
-            </p>
-
-            <div className="bg-black/20 border border-white/5 rounded-2xl p-5 text-center space-y-4">
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setDispatchActive(!dispatchActive)}
-                  className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer ${
-                    dispatchActive
-                      ? "bg-rose-500/10 border-2 border-rose-400/50 text-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.3)] hover:scale-105"
-                      : "bg-white/5 border-2 border-white/20 text-muted hover:text-white hover:scale-105"
-                  }`}
-                >
-                  <Truck className="w-8 h-8" />
-                </button>
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  {dispatchActive ? "Emergency Rapid Dispatch Active" : "Press to Request Priority Stock"}
-                </p>
-                <p className="text-[11px] text-muted mt-0.5">
-                  Connects to the nearest local distribution van
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2 mt-6">
-            <div className="flex items-center justify-between text-xs py-2 border-b border-white/5">
-              <span className="text-muted">Express Delivery Time</span>
-              <span className="font-semibold text-white">&lt; 30 Minutes</span>
-            </div>
-            <div className="flex items-center justify-between text-xs py-2">
-              <span className="text-muted">Community Subsidy</span>
-              <span className="font-semibold" style={{ color: "var(--accent)" }}>100% Covered</span>
-            </div>
-          </div>
-        </div>
-
+        )}
       </div>
 
-      {/* RECENT DISPATCHES LOG */}
-      <div className="glass-panel p-6 relative z-10 pointer-events-auto">
-        <div className="panel-reflection pointer-events-none" />
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
-            <Clock className="w-4 h-4" style={{ color: "var(--accent)" }} /> Recent Supply Dispatches
-          </h2>
-          <Link
-            href="/marketplace"
-            className="text-xs font-medium flex items-center gap-1 hover:opacity-80 transition-colors"
-            style={{ color: "var(--accent)" }}
-          >
-            View marketplace <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <div>
-                <p className="text-xs font-medium text-white">Bulk Maize & Bread Delivery Complete</p>
-                <p className="text-[10px] text-muted">Delivered to Sipho's Spaza (Zone 2) — 24 Units</p>
-              </div>
+      {/* CONTENT GRID */}
+      {activeTab === "shops" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 relative z-10">
+          {filteredShops.length === 0 ? (
+            <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
+              No off-grid spaza shops registered matching these criteria.
             </div>
-            <span className="text-[10px] font-mono text-muted">Today, 11:20</span>
-          </div>
+          ) : (
+            filteredShops.map((shop) => (
+              <div
+                key={shop.id}
+                className="glass-panel p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+              >
+                <div className="panel-reflection pointer-events-none" />
 
-          <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-colors">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-amber-400" />
-              <div>
-                <p className="text-xs font-medium text-white">Emergency Restock Dispatched</p>
-                <p className="text-[10px] text-muted">En route to Mam' Rose Store — Express Trike #4</p>
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                      {shop.shopName}
+                    </h3>
+                    <span className="text-xs font-mono text-muted">{shop.distanceKm} km away</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-muted mb-3">
+                    <span>Owner: <strong className="text-white">{shop.owner}</strong></span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {shop.location}
+                    </span>
+                  </div>
+
+                  {/* Spoilage Clearance Banner */}
+                  {shop.perishableClearanceAlert && (
+                    <div className="mb-4 p-2.5 bg-rose-500/15 border border-rose-500/30 rounded-xl text-xs text-rose-200 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-white text-[11px] uppercase tracking-wider">
+                          Daily Fresh Spoilage Clearance
+                        </strong>
+                        <span>{shop.perishableClearanceAlert}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Low-Tech Status Badges */}
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    {shop.hasDryStock && (
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1">
+                        🕯️ Dry-Stock Active Only
+                      </span>
+                    )}
+
+                    {shop.hasGasOrParaffin && (
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
+                        <Flame className="w-3 h-3" /> Gas / Paraffin
+                      </span>
+                    )}
+
+                    {shop.hasEmergencyCharging && (
+                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-cyan-500/10 text-cyan-400 border-cyan-500/30 flex items-center gap-1">
+                        <BatteryCharging className="w-3 h-3" /> 12V Micro-Charging
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Stock Tags */}
+                  <div>
+                    <span className="text-[10px] uppercase text-muted tracking-wider block mb-1">
+                      Available Outage Staples:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {shop.essentialStock.map((item, idx) => (
+                        <span key={idx} className="text-[10px] bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-white">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-muted flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Community Verified
+                  </span>
+
+                  <button
+                    onClick={() => handleContactWhatsApp(shop.contactPhone, shop.shopName)}
+                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" /> WhatsApp Shop
+                  </button>
+                </div>
               </div>
-            </div>
-            <span className="text-[10px] font-mono text-muted">Today, 10:45</span>
-          </div>
+            ))
+          )}
         </div>
-      </div>
+      ) : (
+        /* RELIEF & TANKER ALERTS TAB */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 relative z-10">
+          {filteredRelief.length === 0 ? (
+            <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
+              No active emergency relief or tanker alerts found.
+            </div>
+          ) : (
+            filteredRelief.map((req) => (
+              <div
+                key={req.id}
+                className="glass-panel p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+              >
+                <div className="panel-reflection pointer-events-none" />
 
-      {/* PUBLISH TO MARKETPLACE MODAL */}
-      {isModalOpen && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span
+                      className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
+                        req.type === "bulk-need"
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          : "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
+                      }`}
+                    >
+                      {req.type === "bulk-need" ? <Megaphone className="w-3 h-3" /> : <Droplets className="w-3 h-3" />}
+                      {req.type === "bulk-need" ? "Spaza Bulk Restock Need" : "Roving Municipal Tanker"}
+                    </span>
+
+                    <span className="text-xs font-mono text-muted">{req.distanceKm} km away</span>
+                  </div>
+
+                  <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                    {req.title}
+                  </h3>
+
+                  <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-3">
+                    <span>By: <strong className="text-white">{req.postedBy}</strong></span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> {req.location}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-white/80 bg-black/30 p-3 rounded-xl border border-white/5">
+                    {req.description}
+                  </p>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                  <span className="text-xs text-rose-400 font-mono font-semibold flex items-center gap-1">
+                    Urgency: {req.urgency}
+                  </span>
+
+                  <button
+                    onClick={() => handleContactWhatsApp(req.contactPhone, req.title)}
+                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" /> Coordinate via WhatsApp
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* REGISTER SHOP MODAL */}
+      {isShopModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
           <div
             className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
@@ -497,63 +641,112 @@ export default function SpazaRescuePage() {
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Store className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Publish Spaza Stock to ResiMarket
+                <Store className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Register Off-Grid Spaza Status
               </h3>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => setIsShopModalOpen(false)}
                 className="text-muted hover:text-white cursor-pointer relative z-30 p-1"
               >
                 <X className="h-4 w-4 pointer-events-none" />
               </button>
             </div>
 
-            <form onSubmit={handlePublishListing} className="space-y-3 relative z-20">
+            <form onSubmit={handleRegisterShop} className="space-y-3 relative z-20">
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Stock Item / Bundle Title</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Spaza / Shop Name</label>
                 <input
                   type="text"
                   required
-                  value={itemTitle}
-                  onChange={(e) => setItemTitle(e.target.value)}
-                  placeholder="e.g. Bulk Maize Meal (10kg Bags) - 20 Units"
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                  placeholder="e.g. Mam' Rose Spaza"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Wholesale Price</label>
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Owner Name</label>
+                <input
+                  type="text"
+                  required
+                  value={owner}
+                  onChange={(e) => setOwner(e.target.value)}
+                  placeholder="e.g. Rose Dlamini"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              {/* Low-Tech Status Toggles */}
+              <div className="space-y-2 py-1">
+                <label className="text-[11px] sm:text-xs text-muted block">Low-Tech & Outage Capabilities:</label>
+
+                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                  <span className="text-xs text-white flex items-center gap-1.5">
+                    🕯️ Dry-Stock Active Only (Maize, Rice, Canned, Candles)
+                  </span>
                   <input
-                    type="text"
-                    required
-                    value={itemPrice}
-                    onChange={(e) => setItemPrice(e.target.value)}
-                    placeholder="e.g. R950 / Batch"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                    type="checkbox"
+                    checked={hasDry}
+                    onChange={(e) => setHasDry(e.target.checked)}
+                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
                   />
                 </div>
 
-                <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Store / Hub Name</label>
+                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                  <span className="text-xs text-white flex items-center gap-1.5">
+                    <Flame className="w-3.5 h-3.5 text-amber-400" /> Gas Refills & Paraffin Available
+                  </span>
                   <input
-                    type="text"
-                    required
-                    value={storeName}
-                    onChange={(e) => setStoreName(e.target.value)}
-                    placeholder="e.g. Depot Alpha"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                    type="checkbox"
+                    checked={hasGasPara}
+                    onChange={(e) => setHasGasPara(e.target.checked)}
+                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                  <span className="text-xs text-white flex items-center gap-1.5">
+                    <BatteryCharging className="w-3.5 h-3.5 text-cyan-400" /> 12V Car Battery Micro-Charging
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={hasCharging}
+                    onChange={(e) => setHasCharging(e.target.checked)}
+                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Order Number</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Daily Fresh Spoilage Clearance (Optional)</label>
+                <input
+                  type="text"
+                  value={clearanceText}
+                  onChange={(e) => setClearanceText(e.target.value)}
+                  placeholder="e.g. Meat & Milk 50% off before power loss"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Available Essentials (comma-separated)</label>
+                <input
+                  type="text"
+                  value={stockInput}
+                  onChange={(e) => setStockInput(e.target.value)}
+                  placeholder="Maize Meal, Candles, Matches, Paraffin"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Phone Number</label>
                 <input
                   type="text"
                   required
-                  value={phoneNum}
-                  onChange={(e) => setPhoneNum(e.target.value)}
+                  value={shopPhone}
+                  onChange={(e) => setShopPhone(e.target.value)}
                   placeholder="e.g. 27821234567"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
@@ -568,7 +761,94 @@ export default function SpazaRescuePage() {
                   backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
                 }}
               >
-                Publish to ResiMarket
+                Post Status to Community Grid
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* POST RELIEF / TANKER ALERT MODAL */}
+      {isReliefModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+          <div
+            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
+            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+          >
+            <div className="panel-reflection pointer-events-none" />
+
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
+              <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                <Megaphone className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Post Emergency Relief or Tanker Alert
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsReliefModalOpen(false)}
+                className="text-muted hover:text-white cursor-pointer relative z-30 p-1"
+              >
+                <X className="h-4 w-4 pointer-events-none" />
+              </button>
+            </div>
+
+            <form onSubmit={handlePostRelief} className="space-y-3 relative z-20">
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Alert Title</label>
+                <input
+                  type="text"
+                  required
+                  value={reliefTitle}
+                  onChange={(e) => setReliefTitle(e.target.value)}
+                  placeholder="e.g. Spaza Bulk Restock Needed or Tanker at Corner"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Alert Type</label>
+                <select
+                  value={reliefType}
+                  onChange={(e) => setReliefType(e.target.value as any)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
+                >
+                  <option value="bulk-need" className="bg-neutral-900 text-white">📢 Spaza Emergency Bulk Need (Restock / Distributor)</option>
+                  <option value="tanker-alert" className="bg-neutral-900 text-white">🚰 Roving Municipal Water Tanker / Generator Alert</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Description & Location Details</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={reliefDesc}
+                  onChange={(e) => setReliefDesc(e.target.value)}
+                  placeholder="Describe what is needed or where the tanker/generator is parked..."
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact Phone</label>
+                <input
+                  type="text"
+                  required
+                  value={reliefPhone}
+                  onChange={(e) => setReliefPhone(e.target.value)}
+                  placeholder="e.g. 27821234567"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
+                style={{
+                  color: "var(--accent)",
+                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                }}
+              >
+                Broadcast Alert to Community
               </button>
             </form>
           </div>

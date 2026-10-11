@@ -26,16 +26,47 @@ const ACCENT_PALETTES = [
 
 const SOUTH_AFRICAN_CITIES_WARDS: Record<string, string[]> = {
   "Pietermaritzburg (Msunduzi)": [
-    "Ward 26 (CBD / Central / Town Bush)",
-    "Ward 28 (Raisethorpe / Newholme / Woodlands)",
-    "Ward 30 (Northdale / Woodlands / Mountain Rise)",
-    "Ward 33 (Scottsville / University / Pelham)",
-    "Ward 25 (Balgowan / Hilton / Sweetwaters)",
-    "Ward 27 (Chase Valley / Wembley / Athlone)",
-    "Ward 29 (Pandas / Hayfields / Pietermaritzburg West)",
-    "Ward 31 (Sobantu / Plessislaer)",
-    "Ward 32 (Imbali / Ashdown / Georgetown)",
-    "Ward 34 (Edendale / Georgetown / Siyahlala-la)",
+    "Ward 1: Phayiphini, Laduma, Komkhulu, Mbutshane, Ntokozweni, Kwamafindo, Mbuncwane, and Mpumuza",
+    "Ward 2: KwaMbanjwa, Mkangala, Zayeka, Nadi, and Sweetwaters/Mbubu",
+    "Ward 3: Gezubuso, Inadi, and parts of Sweetwaters",
+    "Ward 4: KwaNxamalala, Mbubu, Taylor’s Halt, and surrounding rural communities",
+    "Ward 5: Smero, Henley-on-Klip, and parts of Edendale",
+    "Ward 6: Caluza, Mpumuza, and surrounding sectors of Edendale",
+    "Ward 7: Willowfontein East, Khanya Village, and surrounding hillsides",
+    "Ward 8: Machibisa, Dambuza, and central Edendale zones",
+    "Ward 9: Harewood, Willowfontein West, and parts of the greater Edendale area",
+    "Ward 10: Azalea, Imbali Unit 1, and Imbali Unit 2",
+    "Ward 11: Imbali Unit 13, Unit 14, and Unit 15",
+    "Ward 12: Imbali Stage 2, Unit 3, and Unit 4",
+    "Ward 13: Imbali Unit BB, Unit CC, and parts of Unit J",
+    "Ward 14: Imbali Unit 18, Unit 19, and Tindi Village",
+    "Ward 15: Imbali Unit 14, Slangspruit, and surrounding informal settlements",
+    "Ward 16: Ashdown, Buffer, and parts of Edendale",
+    "Ward 17: France township, Ridge Park, and Unit H (Imbali)",
+    "Ward 18: Grange, Westgate, Ridge Park, and Bisley Heights",
+    "Ward 19: Pelham, Scottsville (West), Oribi, and the University of KwaZulu-Natal (UKZN) campus",
+    "Ward 20: Camperdown side boundaries, Ashburton, Lynnfield Park, and Cleland",
+    "Ward 21: Epworth, Hayfields, Lincoln Meade, and Bellevue",
+    "Ward 22: Pietermaritzburg Central Business District (CBD Central), and central loops",
+    "Ward 23: Signal Hill, Richmond Crest, and parts of the western CBD",
+    "Ward 24: Napierville, Prestbury, Clarendon, and Wembley",
+    "Ward 25: Montrose, Chase Valley, Woodlands, Oak Park, and Town Bush Valley",
+    "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands",
+    "Ward 27: Allandale, Raisethorpe, and Newholme",
+    "Ward 28: Northdale (Sections including Bombay Heights, Springfields)",
+    "Ward 29: Copesville, Swapo, and Jadeite sections",
+    "Ward 30: Haniville, Claridge rural margins, and portions of upper Copesville",
+    "Ward 31: Northdale (Lower blocks), Truro, and Dunveria",
+    "Ward 32: Woodlands (Main extension), Glenwood, and mountain rises",
+    "Ward 33: Manor, Sobantu (West), and the KwaJika Joe informal settlement",
+    "Ward 34: Mountain Rise Industrial Area, Willowton, and parts of the inner city fringes",
+    "Ward 35: Sobantu Township (Central and East), and adjacent community zones",
+    "Ward 36: Imbali Unit 14 (Upper limits) and parts of greater Dambuza",
+    "Ward 37: Greater Edendale Hospital areas and Georgetown",
+    "Ward 38: Esigodini and upper regions of the Edendale valley corridor",
+    "Ward 39: Plessisslaer, Imbali Unit AA, and lower Westgate buffers",
+    "Ward 40: Whispers, Thembalihle, and newly expanded settlement nodes near the outer city boundary",
+    "Ward 41: Khobonina, Vulindlela fringes, and deep traditional authorities flanking the western municipality rim",
   ],
   "Johannesburg (City of Joburg)": [
     "Ward 23 (Auckland Park / Melville / Westdene)",
@@ -92,7 +123,7 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState("Raihaan Mahomed");
   const [email, setEmail] = useState("raihaan@rdesigns.co.za");
   const [phone, setPhone] = useState("+27 82 123 4567");
-  const [selectedWard, setSelectedWard] = useState("Ward 26 (CBD / Central / Town Bush)");
+  const [selectedWard, setSelectedWard] = useState("Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
   const [streetAddress, setStreetAddress] = useState("142 Chief Albert Luthuli St, Pietermaritzburg");
 
   // App Preference Toggles
@@ -201,6 +232,7 @@ export default function ProfilePage() {
   };
 
   const currentWards = SOUTH_AFRICAN_CITIES_WARDS[selectedCity] || [];
+  const wardNumberOnly = selectedWard ? selectedWard.split(":")[0] : selectedWard;
 
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
@@ -263,17 +295,20 @@ export default function ProfilePage() {
               <p className="text-xs text-muted truncate mt-0.5">{email}</p>
               <div className="flex items-center gap-2 mt-1.5 text-[10px] sm:text-[11px] text-muted flex-wrap">
                 <span className="flex items-center gap-1 text-accent-dynamic">
-                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {selectedWard}
+                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {wardNumberOnly}
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* SUCCESS NOTIFICATION TOAST */}
+        {/* CENTERED SUCCESS NOTIFICATION MODAL TOAST */}
         {savedSuccess && (
-          <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-white" /> {successMessage}
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4 animate-fadeIn">
+            <div className="p-4 bg-black/90 border border-white/30 rounded-2xl text-white text-xs sm:text-sm font-semibold flex items-center gap-3 shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-xl">
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-accent-dynamic" /> 
+              <span>{successMessage}</span>
+            </div>
           </div>
         )}
 
@@ -301,10 +336,10 @@ export default function ProfilePage() {
                     key={pal.id}
                     type="button"
                     onClick={() => handleSelectAccent(pal.id)}
-                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative z-30 select-none ${
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative z-30 select-none bg-black/30 hover:bg-white/5 ${
                       isSelected
-                        ? "border-white/40 bg-white/15 scale-[1.02] shadow-md"
-                        : "border-white/10 bg-black/30 hover:bg-white/5"
+                        ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/50 scale-[1.02]"
+                        : "border-white/10"
                     }`}
                     style={{ touchAction: "manipulation" }}
                   >
@@ -528,7 +563,7 @@ export default function ProfilePage() {
                 <button
                   type="button"
                   onClick={() => handleSignOut()}
-                  className="w-full py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/25 text-amber-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none"
+                  className="w-full py-2.5 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none"
                   style={{ touchAction: "manipulation" }}
                 >
                   <LogOut className="w-3.5 h-3.5 pointer-events-none" /> <span className="pointer-events-none">Sign Out Session</span>

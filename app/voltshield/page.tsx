@@ -659,212 +659,212 @@ export default function VoltShieldPage() {
 
           </div>
 
-          {/* RIGHT COLUMN: REAL-TIME POWER FAULTS */}
+          {/* RIGHT COLUMN: LIVE MUNICIPAL ELECTRICITY TARIFF BILL & CALCULATOR */}
           <aside className="space-y-5 pt-2 sm:pt-4">
             <div className="w-full h-px bg-white/25 my-8 sm:my-10" />
-            <section className="glass-panel p-4 sm:p-6 relative pointer-events-auto">
+            <section 
+              className="glass-panel p-4 sm:p-6 relative pointer-events-auto border space-y-4"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 5%, transparent)",
+              }}
+            >
               <div className="panel-reflection pointer-events-none" />
               
-              <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-                <div>
-                  <p className="eyebrow" style={{ color: "var(--accent)" }}>LIVE AREA REPORTS</p>
-                  <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
-                    Power Outages Nearby
+              <div className="flex flex-col gap-4 border-b border-white/10 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="w-4 h-4" style={{ color: "var(--accent)" }} />
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>EXACT MUNICIPAL ELECTRICITY TARIFF ENGINE</p>
+                  </div>
+                  <h2 className="text-base sm:text-lg font-semibold text-white">
+                    Electricity Bill &amp; Savings Calculator
                   </h2>
+                </div>
+
+                {/* SUBTLE SWITCH & RESPONSIVE INPUT FIELD */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full">
+                  {/* Subtle Switch for Single Use */}
+                  <div className="flex items-center justify-between sm:justify-start gap-2 bg-black/40 px-3 py-2 rounded-xl border border-white/10">
+                    <span className="text-xs text-muted font-medium">Single Use</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={isSingleCycleMode}
+                      onClick={() => setIsSingleCycleMode(!isSingleCycleMode)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        isSingleCycleMode ? "bg-[var(--accent)]" : "bg-neutral-800"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          isSingleCycleMode ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Input Field based on Mode */}
+                  {!isSingleCycleMode ? (
+                    <div className="flex items-center justify-between sm:justify-start gap-3 bg-black/50 p-2.5 rounded-xl border border-white/15 flex-1">
+                      <label htmlFor="electricity-usage-kwh" className="text-xs text-muted font-medium whitespace-nowrap">
+                        Monthly Usage:
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          id="electricity-usage-kwh"
+                          type="number"
+                          min="0"
+                          max="10000"
+                          value={monthlyUsageKwh || ""}
+                          onChange={(e) => setMonthlyUsageKwh(Math.max(0, Number(e.target.value)))}
+                          placeholder="e.g. 600"
+                          className="w-28 bg-black/80 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none text-right"
+                          style={{
+                            borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
+                          }}
+                        />
+                        <span className="text-xs font-mono text-muted">kWh</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between sm:justify-start gap-3 bg-black/50 p-2.5 rounded-xl border border-white/15 flex-1">
+                      <label htmlFor="single-usage-kwh" className="text-xs text-muted font-medium whitespace-nowrap">
+                        Appliance Usage:
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          id="single-usage-kwh"
+                          type="number"
+                          min="0"
+                          max="1000"
+                          value={singleUsageKwh || ""}
+                          onChange={(e) => setSingleUsageKwh(Math.max(0, Number(e.target.value)))}
+                          placeholder="e.g. 5"
+                          className="w-28 bg-black/80 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none text-right"
+                          style={{
+                            borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
+                          }}
+                        />
+                        <span className="text-xs font-mono text-muted">kWh</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="space-y-3">
-                {deduplicatedPowerReports.length === 0 ? (
-                  <div className="text-center py-8 text-muted text-xs">
-                    No active power outage reports logged in your area.
+              {/* METRICS RESULTS: MONTHLY (WITH SAVINGS) OR SINGLE CYCLE (COST ONLY) */}
+              {!isSingleCycleMode ? (
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="p-4 bg-black/40 border border-white/10 rounded-xl space-y-1">
+                    <p className="text-[10px] text-muted uppercase font-mono">Estimated Municipal Bill</p>
+                    <p className="text-2xl font-bold font-mono text-white mt-1">R{estimatedMunicipalBill}</p>
+                    <p className="text-[10px] text-muted">Based on your current {usageKwh} kWh monthly consumption</p>
                   </div>
-                ) : (
-                  deduplicatedPowerReports.map((report) => {
-                    const isResolved = report.status === "Resolved" || report.status === "Auto-Dispatched";
-                    const statusColor = isResolved ? "#10b981" : "#f59e0b";
 
-                    return (
-                      <div
-                        key={report.id}
-                        className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all space-y-1.5 relative z-20 pointer-events-auto"
-                      >
-                        <div className="flex items-center justify-between flex-wrap gap-1">
-                          <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
-                            {report.id}
-                          </span>
-                          <span 
-                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                            style={{
-                              color: statusColor,
-                              backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
-                              borderColor: `color-mix(in srgb, ${statusColor} 25%, transparent)`,
-                            }}
-                          >
-                            {report.status}
-                          </span>
-                        </div>
+                  <div 
+                    className="p-4 border rounded-xl space-y-1"
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                      backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
+                    }}
+                  >
+                    <p className="text-[10px] uppercase font-mono font-semibold flex items-center gap-1" style={{ color: "var(--accent)" }}>
+                      <TrendingDown className="w-3.5 h-3.5" /> Savings From Last Month
+                    </p>
+                    <p className="text-2xl font-bold font-mono mt-1" style={{ color: "var(--accent)" }}>
+                      R{estimatedSavingsFromLastMonth}
+                    </p>
+                    <p className="text-[10px] text-muted">Calculated variance based on your usage efficiency</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4">
+                  <div className="p-4 bg-black/40 border border-white/10 rounded-xl space-y-1">
+                    <p className="text-[10px] text-muted uppercase font-mono">Appliance Run Cost ({singleUsageKwh} kWh)</p>
+                    <p className="text-2xl font-bold font-mono text-white mt-1">R{singleApplianceCost.toFixed(2)}</p>
+                    <p className="text-[10px] text-muted">Calculated using your current marginal electricity tariff tier</p>
+                  </div>
+                </div>
+              )}
 
-                        <h3 className="text-xs sm:text-sm font-bold text-white">{report.title}</h3>
-                        <p className="text-[11px] text-muted leading-relaxed">{report.description}</p>
-
-                        <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-white/5 gap-2">
-                          <span className="flex items-center gap-1 font-mono truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
-                            <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> <span className="truncate">{report.locationAddress}</span>
-                          </span>
-                          <span className="shrink-0">{report.time}</span>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+              {/* DYNAMIC USAGE TIP (MONTHLY ONLY) */}
+              {!isSingleCycleMode && (
+                <div className="p-3.5 bg-black/60 border border-white/10 rounded-xl flex items-start gap-2.5 text-xs text-white">
+                  <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--accent)" }} />
+                  <div>
+                    <strong className="block text-[11px] uppercase tracking-wider mb-0.5" style={{ color: "var(--accent)" }}>
+                      Smart Conservation Insight
+                    </strong>
+                    <span className="text-muted">{usageTip}</span>
+                  </div>
+                </div>
+              )}
             </section>
           </aside>
         </div>
 
-        {/* LIVE MUNICIPAL ELECTRICITY TARIFF BILL & CALCULATOR */}
+        {/* REAL-TIME POWER FAULTS SECTION */}
         <div className="space-y-6 pt-4">
           <div className="w-full h-px bg-white/25 my-8 sm:my-10" />
-
-          <section 
-            className="glass-panel p-4 sm:p-6 relative pointer-events-auto border space-y-4"
-            style={{
-              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-              backgroundColor: "color-mix(in srgb, var(--accent) 5%, transparent)",
-            }}
-          >
+          
+          <section className="glass-panel p-4 sm:p-6 relative pointer-events-auto">
             <div className="panel-reflection pointer-events-none" />
             
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <Calculator className="w-4 h-4" style={{ color: "var(--accent)" }} />
-                  <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>EXACT MUNICIPAL ELECTRICITY TARIFF ENGINE</p>
-                </div>
-                <h2 className="text-base sm:text-lg font-semibold text-white">
-                  Electricity Bill &amp; Savings Calculator
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <div>
+                <p className="eyebrow" style={{ color: "var(--accent)" }}>LIVE AREA REPORTS</p>
+                <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
+                  Power Outages Nearby
                 </h2>
-              </div>
-
-              {/* SUBTLE SWITCH & RESPONSIVE INPUT FIELD */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto">
-                {/* Subtle Switch for Single Use */}
-                <div className="flex items-center justify-between sm:justify-start gap-2 bg-black/40 px-3 py-2 rounded-xl border border-white/10">
-                  <span className="text-xs text-muted font-medium">Single Use</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isSingleCycleMode}
-                    onClick={() => setIsSingleCycleMode(!isSingleCycleMode)}
-                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      isSingleCycleMode ? "bg-[var(--accent)]" : "bg-neutral-800"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                        isSingleCycleMode ? "translate-x-4" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Input Field based on Mode */}
-                {!isSingleCycleMode ? (
-                  <div className="flex items-center justify-between sm:justify-start gap-3 bg-black/50 p-2.5 rounded-xl border border-white/15">
-                    <label htmlFor="electricity-usage-kwh" className="text-xs text-muted font-medium whitespace-nowrap">
-                      Monthly Usage:
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        id="electricity-usage-kwh"
-                        type="number"
-                        min="0"
-                        max="10000"
-                        value={monthlyUsageKwh || ""}
-                        onChange={(e) => setMonthlyUsageKwh(Math.max(0, Number(e.target.value)))}
-                        placeholder="e.g. 600"
-                        className="w-28 bg-black/80 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none text-right"
-                        style={{
-                          borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
-                        }}
-                      />
-                      <span className="text-xs font-mono text-muted">kWh</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between sm:justify-start gap-3 bg-black/50 p-2.5 rounded-xl border border-white/15">
-                    <label htmlFor="single-usage-kwh" className="text-xs text-muted font-medium whitespace-nowrap">
-                      Appliance Usage:
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        id="single-usage-kwh"
-                        type="number"
-                        min="0"
-                        max="1000"
-                        value={singleUsageKwh || ""}
-                        onChange={(e) => setSingleUsageKwh(Math.max(0, Number(e.target.value)))}
-                        placeholder="e.g. 5"
-                        className="w-28 bg-black/80 border rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-white focus:outline-none text-right"
-                        style={{
-                          borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
-                        }}
-                      />
-                      <span className="text-xs font-mono text-muted">kWh</span>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* METRICS RESULTS: MONTHLY (WITH SAVINGS) OR SINGLE CYCLE (COST ONLY) */}
-            {!isSingleCycleMode ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 bg-black/40 border border-white/10 rounded-xl space-y-1">
-                  <p className="text-[10px] text-muted uppercase font-mono">Estimated Municipal Bill</p>
-                  <p className="text-2xl font-bold font-mono text-white mt-1">R{estimatedMunicipalBill}</p>
-                  <p className="text-[10px] text-muted">Based on your current {usageKwh} kWh monthly consumption</p>
+            <div className="space-y-3">
+              {deduplicatedPowerReports.length === 0 ? (
+                <div className="text-center py-8 text-muted text-xs">
+                  No active power outage reports logged in your area.
                 </div>
+              ) : (
+                deduplicatedPowerReports.map((report) => {
+                  const isResolved = report.status === "Resolved" || report.status === "Auto-Dispatched";
+                  const statusColor = isResolved ? "#10b981" : "#f59e0b";
 
-                <div 
-                  className="p-4 border rounded-xl space-y-1"
-                  style={{
-                    borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                    backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
-                  }}
-                >
-                  <p className="text-[10px] uppercase font-mono font-semibold flex items-center gap-1" style={{ color: "var(--accent)" }}>
-                    <TrendingDown className="w-3.5 h-3.5" /> Savings From Last Month
-                  </p>
-                  <p className="text-2xl font-bold font-mono mt-1" style={{ color: "var(--accent)" }}>
-                    R{estimatedSavingsFromLastMonth}
-                  </p>
-                  <p className="text-[10px] text-muted">Calculated variance based on your usage efficiency</p>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                <div className="p-4 bg-black/40 border border-white/10 rounded-xl space-y-1">
-                  <p className="text-[10px] text-muted uppercase font-mono">Appliance Run Cost ({singleUsageKwh} kWh)</p>
-                  <p className="text-2xl font-bold font-mono text-white mt-1">R{singleApplianceCost.toFixed(2)}</p>
-                  <p className="text-[10px] text-muted">Calculated using your current marginal electricity tariff tier</p>
-                </div>
-              </div>
-            )}
+                  return (
+                    <div
+                      key={report.id}
+                      className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all space-y-1.5 relative z-20 pointer-events-auto"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
+                          {report.id}
+                        </span>
+                        <span 
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                          style={{
+                            color: statusColor,
+                            backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
+                            borderColor: `color-mix(in srgb, ${statusColor} 25%, transparent)`,
+                          }}
+                        >
+                          {report.status}
+                        </span>
+                      </div>
 
-            {/* DYNAMIC USAGE TIP (MONTHLY ONLY) */}
-            {!isSingleCycleMode && (
-              <div className="p-3.5 bg-black/60 border border-white/10 rounded-xl flex items-start gap-2.5 text-xs text-white">
-                <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--accent)" }} />
-                <div>
-                  <strong className="block text-[11px] uppercase tracking-wider mb-0.5" style={{ color: "var(--accent)" }}>
-                    Smart Conservation Insight
-                  </strong>
-                  <span className="text-muted">{usageTip}</span>
-                </div>
-              </div>
-            )}
+                      <h3 className="text-xs sm:text-sm font-bold text-white">{report.title}</h3>
+                      <p className="text-[11px] text-muted leading-relaxed">{report.description}</p>
+
+                      <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-white/5 gap-2">
+                        <span className="flex items-center gap-1 font-mono truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
+                          <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> <span className="truncate">{report.locationAddress}</span>
+                        </span>
+                        <span className="shrink-0">{report.time}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </section>
         </div>
 

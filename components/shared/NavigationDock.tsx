@@ -64,7 +64,7 @@ export default function NavigationDock() {
     <nav className="floating-dock">
       <div className="floating-dock-inner overflow-x-auto no-scrollbar">
         {subDockOpen ? (
-          <div className="flex items-center gap-1.5 w-full px-1">
+          <div className="flex items-center justify-between gap-1.5 w-full px-1">
             {/* Back Arrow Button (Only Arrow, Restores Default Dock) */}
             <button
               type="button"
@@ -76,17 +76,11 @@ export default function NavigationDock() {
               <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={1.8} />
             </button>
 
-            {/* Features Label */}
-            <div className="dock-item shrink-0 font-semibold text-white pointer-events-none">
-              <Network className="h-[18px] w-[18px]" strokeWidth={1.8} />
-              <span>Features</span>
-            </div>
-
             {/* Vertical Line Divider */}
-            <div className="h-4 w-[1px] bg-white/20 mx-1 shrink-0" />
+            <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
 
             {/* Sub-Feature Items */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center justify-around gap-1 w-full overflow-x-auto no-scrollbar">
               {subFeatures.map((sub) => {
                 const SubIcon = sub.icon;
                 const subActive = pathname.startsWith(sub.href);

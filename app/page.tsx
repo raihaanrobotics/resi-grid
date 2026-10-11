@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
 import {
   Activity,
   Bell,
@@ -18,7 +17,31 @@ import {
   Store,
   UserRound,
   Zap,
+  X,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
+
+// Native Android Hardware & Push Notification Bridge Declaration
+declare global {
+  interface Window {
+    AndroidNotificationBridge?: {
+      postSystemNotification?: (title: string, message: string, category: string) => void;
+    };
+  }
+}
+
+export interface ResiGridNotification {
+  id: string;
+  title: string;
+  description: string;
+  time: string;
+  type: "warning" | "success" | "info" | "error";
+  category?: string;
+  read?: boolean;
+}
 
 const modules = [
   {
@@ -88,9 +111,80 @@ export default function HomePage() {
   const [waterStatus, setWaterStatus] = useState<string>("Normal");
   const [energyStatus, setEnergyStatus] = useState<string>("Normal");
   const [routesStatus, setRoutesStatus] = useState<string>("Clear");
-  const [summaryText, setSummaryText] = useState<string>("Water, power, and roads are looking good in your area today.");
+  const [summaryText, setSummaryText] = useState<string>(
+    "Water, power, and roads are looking good in your area today."
+  );
+
+  // Notification Feed State & Modal Controls
+  const [notifications, setNotifications] = useState<ResiGridNotification[]>([]);
+  const [isNotifModalOpen, setIsNotifModalOpen] = useState<boolean>(false);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
+
+  // Function to trigger system-level device notification (Ready for Capacitor & Android Studio)
+  const triggerNativeDeviceNotification = (title: string, message: string, category = "general") => {
+    // 1. Android Native Java/Kotlin Bridge Hook
+    if (window.AndroidNotificationBridge?.postSystemNotification) {
+      window.AndroidNotificationBridge.postSystemNotification(title, message, category);
+      return;
+    }
+
+    // 2. Standard Web Push Notification API Fallback for mobile browser wake-up
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "granted") {
+        new Notification(title, {
+          body: message,
+          icon: "/favicon.ico",
+        });
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((permission) => {
+          if (permission === "granted") {
+            new Notification(title, {
+              body: message,
+              icon: "/favicon.ico",
+            });
+          }
+        });
+      }
+    }
+  };
+
+  const loadGlobalNotifications = () => {
+    try {
+      const savedNotifs = localStorage.getItem("resigrid_global_notifications");
+      if (savedNotifs) {
+        const parsed: ResiGridNotification[] = JSON.parse(savedNotifs);
+        setNotifications(parsed);
+        setUnreadCount(parsed.filter((n) => !n.read).length);
+      } else {
+        // Initial welcome broadcast without emojis
+        const defaultNotifs: ResiGridNotification[] = [
+          {
+            id: "notif-init-1",
+            title: "Neighborhood Updates Active",
+            description: "Live alerts for water, power, and community services are enabled.",
+            time: "Just now",
+            type: "info",
+            category: "system",
+            read: false,
+          },
+        ];
+        setNotifications(defaultNotifs);
+        setUnreadCount(1);
+        localStorage.setItem("resigrid_global_notifications", JSON.stringify(defaultNotifs));
+      }
+    } catch (err) {
+      console.error("Error reading global notifications:", err);
+    }
+  };
 
   useEffect(() => {
+    // Request Browser Notification permissions on mount for background wake-up
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
+    loadGlobalNotifications();
+
     // 1. Bulletproof Theme Persistence on Mount & Refresh
     const applySavedTheme = () => {
       try {
@@ -181,6 +275,9 @@ export default function HomePage() {
         } else {
           setSummaryText("Water, power, and roads are looking good in your area today.");
         }
+
+        // Re-sync notifications when data changes
+        loadGlobalNotifications();
       } catch (e) {
         console.error("Error reading status data:", e);
       }
@@ -192,15 +289,23 @@ export default function HomePage() {
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
       broadcastChannel.onmessage = (event) => {
-        const { type } = event.data || {};
+        const { type, payload } = event.data || {};
         if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
           syncStatusFromData();
+
+          if (payload && payload.title) {
+            triggerNativeDeviceNotification(
+              payload.title,
+              payload.description || "New update reported in your area.",
+              payload.category || "general"
+            );
+          }
         }
       };
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports") {
+      if (e.key === "resigrid_active_reports" || e.key === "resigrid_global_notifications") {
         syncStatusFromData();
       }
     };
@@ -213,6 +318,36 @@ export default function HomePage() {
       window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
+
+  const handleOpenNotificationsModal = () => {
+    setIsNotifModalOpen(true);
+    // Mark all as read when opening
+    const updated = notifications.map((n) => ({ ...n, read: true }));
+    setNotifications(updated);
+    setUnreadCount(0);
+    localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
+  };
+
+  const handleClearNotifications = () => {
+    setNotifications([]);
+    setUnreadCount(0);
+    localStorage.removeItem("resigrid_global_notifications");
+  };
+
+  const handleDismissSingleNotification = (id: string) => {
+    const updated = notifications.filter((n) => n.id !== id);
+    setNotifications(updated);
+    setUnreadCount(updated.filter((n) => !n.read).length);
+    localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
+  };
+
+  // Group notifications by category/genre
+  const groupedNotifications = notifications.reduce((acc, notif) => {
+    const categoryKey = (notif.category || "General").toUpperCase();
+    if (!acc[categoryKey]) acc[categoryKey] = [];
+    acc[categoryKey].push(notif);
+    return acc;
+  }, {} as Record<string, ResiGridNotification[]>);
 
   return (
     <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-cyan-500/30 selection:text-cyan-200">
@@ -249,10 +384,17 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
+              onClick={handleOpenNotificationsModal}
               aria-label="Notifications"
-              className="glass-icon-button"
+              className="glass-icon-button relative cursor-pointer touch-manipulation"
             >
               <Bell className="h-[17px] w-[17px]" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent)] text-[9px] font-bold text-black shadow-sm">
+                  {unreadCount}
+                </span>
+              )}
             </button>
           </div>
         </header>
@@ -367,6 +509,109 @@ export default function HomePage() {
           </section>
         </div>
       </div>
+
+      {/* SLEEK, SEPARATE PILLS NOTIFICATION OVERLAY */}
+      {isNotifModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 pointer-events-auto transition-all">
+          <div className="w-full max-w-lg relative space-y-4 pointer-events-auto max-h-[85vh] sm:max-h-[80vh] flex flex-col justify-between">
+            {/* Direct Header Row (No Outer Container Panel & No Close Button Here) */}
+            <div className="flex items-center justify-between px-2 pb-1 relative z-20 shrink-0">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-[var(--accent)]" />
+                <h3 className="text-sm font-bold tracking-wider text-white uppercase text-[11px]">
+                  Notifications
+                </h3>
+              </div>
+            </div>
+
+            {/* Notification List Feed (Grouped into Floating Rounded Pills) */}
+            <div className="overflow-y-auto space-y-4 pr-1 relative z-20 flex-1 my-1 max-h-[65vh]">
+              {notifications.length === 0 ? (
+                <div className="glass-panel p-8 text-center text-muted text-xs rounded-2xl space-y-2 border border-white/10">
+                  <Bell className="h-6 w-6 mx-auto opacity-30 text-[var(--accent)]" />
+                  <p>All caught up. No active notifications.</p>
+                </div>
+              ) : (
+                Object.entries(groupedNotifications).map(([genre, notifs]) => (
+                  <div key={genre} className="space-y-2">
+                    <p className="text-[9px] font-mono font-bold tracking-widest text-[var(--accent)] uppercase px-2">
+                      {genre}
+                    </p>
+                    <div className="space-y-2">
+                      {notifs.map((notif) => {
+                        let NotifIcon = Info;
+                        let iconColorStyle = { color: "var(--accent)" };
+
+                        if (notif.type === "warning") {
+                          NotifIcon = AlertTriangle;
+                          iconColorStyle = { color: "#f59e0b" };
+                        } else if (notif.type === "success") {
+                          NotifIcon = CheckCircle2;
+                          iconColorStyle = { color: "#10b981" };
+                        }
+
+                        return (
+                          <div
+                            key={notif.id}
+                            className="glass-panel p-3.5 rounded-2xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-3 transition-all hover:border-white/20 shadow-lg"
+                          >
+                            <div className="flex items-start gap-3 min-w-0">
+                              <NotifIcon className="h-4 w-4 shrink-0 mt-0.5" style={iconColorStyle} />
+                              <div className="space-y-0.5 min-w-0">
+                                <h4 className="text-xs font-semibold text-white leading-snug truncate">
+                                  {notif.title}
+                                </h4>
+                                <p className="text-[11px] text-muted leading-relaxed">
+                                  {notif.description}
+                                </p>
+                                <span className="inline-block text-[9px] font-mono text-muted/70 pt-0.5">
+                                  {notif.time}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDismissSingleNotification(notif.id)}
+                              className="text-muted hover:text-white transition-colors p-1 shrink-0 cursor-pointer"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer with Clear Button (Bin Icon) & Close Button */}
+            <div className="pt-2 flex items-center justify-between relative z-20 shrink-0">
+              {notifications.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleClearNotifications}
+                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-2 px-3 rounded-xl bg-white/5 border border-white/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Clear All
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsNotifModalOpen(false)}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-semibold text-black transition-all cursor-pointer touch-manipulation hover:opacity-90 shadow-lg"
+                style={{ backgroundColor: "var(--accent)" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -388,7 +633,7 @@ function StatusItem({
 
       <p className="text-[10px] text-muted">{label}</p>
 
-      <p className="mt-0.5 text-[11px] font-medium opacity-80">{status}</p>
+      <p className="mt-0.5 text-[11px] font-medium opacity-85">{status}</p>
     </div>
   );
 }
@@ -421,7 +666,7 @@ function MiniMetric({
   value: string;
 }) {
   return (
-    <div className="mini-metric">
+    <div className="notifications-summary-metric">
       <p className="text-[9px] uppercase tracking-[0.08em] text-muted">
         {label}
       </p>

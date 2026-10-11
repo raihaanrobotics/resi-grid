@@ -11,7 +11,6 @@ import {
   ArrowLeft, 
   Droplets, 
   Zap, 
-  Navigation as NavIcon, 
   Shield 
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -37,7 +36,6 @@ const featureRoutes = [
 const subFeatures = [
   { label: "Water", href: "/hydromesh", icon: Droplets },
   { label: "Power", href: "/voltshield", icon: Zap },
-  { label: "Routes", href: "/routepulse", icon: NavIcon },
   { label: "Spaza", href: "/spazarescue", icon: Shield },
 ];
 

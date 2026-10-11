@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Store,
@@ -30,13 +30,16 @@ interface SpazaRescueShop {
   location: string;
   ward: string;
   isOperating: boolean;
-  hasDryStock: boolean; // Non-perishables
-  hasGasOrParaffin: boolean; // Gas refills or Paraffin
-  hasEmergencyCharging: boolean; // 12V Car battery / micro-charging
-  perishableClearanceAlert?: string; // Spoilage clearance deal
+  hasDryStock: boolean;
+  hasGasOrParaffin: boolean;
+  hasEmergencyCharging: boolean;
+  perishableClearanceAlert?: string;
   essentialStock: string[];
   contactPhone: string;
-  distanceKm: number;
+  latitude: number;
+  longitude: number;
+  distanceKm?: number;
+  formattedDistance?: string;
 }
 
 interface EmergencyReliefRequest {
@@ -48,7 +51,10 @@ interface EmergencyReliefRequest {
   urgency: "Critical" | "Moderate";
   description: string;
   contactPhone: string;
-  distanceKm: number;
+  latitude: number;
+  longitude: number;
+  distanceKm?: number;
+  formattedDistance?: string;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -74,7 +80,8 @@ const DEFAULT_CRISIS_SHOPS: SpazaRescueShop[] = [
     perishableClearanceAlert: "Fresh Milk & Bread 50% off - Buy before 2 PM power loss!",
     essentialStock: ["Maize Meal (10kg)", "LPG Gas 9kg", "Candles", "Canned Beans"],
     contactPhone: "27821234567",
-    distanceKm: 0.4,
+    latitude: -29.6006,
+    longitude: 30.3794,
   },
   {
     id: "SPAZA-102",
@@ -88,7 +95,8 @@ const DEFAULT_CRISIS_SHOPS: SpazaRescueShop[] = [
     hasEmergencyCharging: true,
     essentialStock: ["10-Min Phone Charging (12V)", "Dry Biscuits", "Matches", "Paraffin"],
     contactPhone: "27839876543",
-    distanceKm: 0.9,
+    latitude: -29.6100,
+    longitude: 30.3850,
   },
   {
     id: "SPAZA-103",
@@ -102,7 +110,8 @@ const DEFAULT_CRISIS_SHOPS: SpazaRescueShop[] = [
     hasEmergencyCharging: false,
     essentialStock: ["Paraffin (per Litre)", "25L Water Drums", "Candles", "Batteries"],
     contactPhone: "27815550192",
-    distanceKm: 2.1,
+    latitude: -29.5900,
+    longitude: 30.3600,
   },
 ];
 
@@ -116,7 +125,8 @@ const DEFAULT_RELIEF_REQUESTS: EmergencyReliefRequest[] = [
     urgency: "Critical",
     description: "Running completely out of maize meal and paraffin. Looking for wholesale distributor with transport heading to Section 4.",
     contactPhone: "27839876543",
-    distanceKm: 0.9,
+    latitude: -29.6100,
+    longitude: 30.3850,
   },
   {
     id: "RELIEF-502",
@@ -127,45 +137,27 @@ const DEFAULT_RELIEF_REQUESTS: EmergencyReliefRequest[] = [
     urgency: "Moderate",
     description: "Municipal water tanker is stationed here for the next 2 hours filling 25L drums for residents and shops.",
     contactPhone: "27821234567",
-    distanceKm: 0.4,
+    latitude: -29.6006,
+    longitude: 30.3794,
   },
 ];
 
 export default function SpazaRescuePage() {
-  const { streetAddress } = useGeo();
+  const { streetAddress, location, filterByRadius, refreshLocation, loading: geoLoading } = useGeo();
 
   // Navigation Tabs: 'shops' | 'relief'
   const [activeTab, setActiveTab] = useState<"shops" | "relief">("shops");
 
-  // Location State
-  const [isRefreshingGeo, setIsRefreshingGeo] = useState(false);
-  const [activeAddress, setActiveAddress] = useState<string>("Locating street...");
-  const hasInitializedGeo = useRef(false);
+  // Theme Accent Persistence
+  const [accentColor, setAccentColor] = useState<string>("#38bdf8");
 
-  useEffect(() => {
-    if (streetAddress && !hasInitializedGeo.current) {
-      setActiveAddress(streetAddress);
-      hasInitializedGeo.current = true;
-    }
-  }, [streetAddress]);
-
-  const handleManualRefreshLocation = () => {
-    setIsRefreshingGeo(true);
-    setTimeout(() => {
-      if (streetAddress) {
-        setActiveAddress(streetAddress);
-      }
-      setIsRefreshingGeo(false);
-    }, 600);
-  };
-
-  // Theme Persistence
   useEffect(() => {
     const applySavedTheme = () => {
       try {
         const savedAccent = localStorage.getItem("resigrid_accent_theme");
         if (savedAccent && ACCENT_HEX_MAP[savedAccent]) {
           const hex = ACCENT_HEX_MAP[savedAccent];
+          setAccentColor(hex);
           document.documentElement.style.setProperty("--feature-accent", hex);
           document.documentElement.style.setProperty("--accent", hex);
         }
@@ -179,8 +171,10 @@ export default function SpazaRescuePage() {
     const handleThemeEvent = (e: Event) => {
       const customEvent = e as CustomEvent<{ hex?: string }>;
       if (customEvent.detail?.hex) {
-        document.documentElement.style.setProperty("--feature-accent", customEvent.detail.hex);
-        document.documentElement.style.setProperty("--accent", customEvent.detail.hex);
+        const hex = customEvent.detail.hex;
+        setAccentColor(hex);
+        document.documentElement.style.setProperty("--feature-accent", hex);
+        document.documentElement.style.setProperty("--accent", hex);
       } else {
         applySavedTheme();
       }
@@ -222,12 +216,28 @@ export default function SpazaRescuePage() {
       const savedShops = localStorage.getItem("resigrid_spaza_crisis_shops");
       if (savedShops) {
         const parsed = JSON.parse(savedShops);
-        if (Array.isArray(parsed) && parsed.length > 0) setShops(parsed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setShops(
+            parsed.map((item: any) => ({
+              ...item,
+              latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
+              longitude: typeof item.longitude === "number" ? item.longitude : 30.3794,
+            }))
+          );
+        }
       }
       const savedRelief = localStorage.getItem("resigrid_spaza_relief_requests");
       if (savedRelief) {
         const parsed = JSON.parse(savedRelief);
-        if (Array.isArray(parsed) && parsed.length > 0) setReliefRequests(parsed);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setReliefRequests(
+            parsed.map((item: any) => ({
+              ...item,
+              latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
+              longitude: typeof item.longitude === "number" ? item.longitude : 30.3794,
+            }))
+          );
+        }
       }
     } catch (e) {
       console.error("Error loading local storage:", e);
@@ -242,7 +252,7 @@ export default function SpazaRescuePage() {
       id: `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`,
       shopName: shopName.trim(),
       owner: owner.trim(),
-      location: activeAddress !== "Locating street..." ? activeAddress : "Local Sector",
+      location: streetAddress,
       ward: "Ward 26",
       isOperating: true,
       hasDryStock: hasDry,
@@ -251,7 +261,8 @@ export default function SpazaRescuePage() {
       perishableClearanceAlert: clearanceText.trim() || undefined,
       essentialStock: stockInput ? stockInput.split(",").map((s) => s.trim()) : ["Maize", "Candles"],
       contactPhone: shopPhone.replace(/[^0-9]/g, "") || "27821234567",
-      distanceKm: 0.2,
+      latitude: location?.latitude ?? -29.6000,
+      longitude: location?.longitude ?? 30.3800,
     };
 
     const updated = [newShop, ...shops];
@@ -274,12 +285,13 @@ export default function SpazaRescuePage() {
       id: `RELIEF-${Math.floor(Math.random() * 8999 + 1000)}`,
       title: reliefTitle.trim(),
       type: reliefType,
-      location: activeAddress !== "Locating street..." ? activeAddress : "Local Sector",
+      location: streetAddress,
       postedBy: "Community Member / Spaza",
       urgency: "Critical",
       description: reliefDesc.trim(),
       contactPhone: reliefPhone.replace(/[^0-9]/g, "") || "27821234567",
-      distanceKm: 0.3,
+      latitude: location?.latitude ?? -29.6000,
+      longitude: location?.longitude ?? 30.3800,
     };
 
     const updated = [newRelief, ...reliefRequests];
@@ -298,7 +310,19 @@ export default function SpazaRescuePage() {
     window.open(`https://wa.me/${cleanNum}?text=${msg}`, "_blank");
   };
 
-  const filteredShops = shops.filter((s) => {
+  // Filter 10km radius using GeoContext
+  const nearbyShops = useMemo(() => {
+    return filterByRadius(shops, 10.0);
+  }, [filterByRadius, shops]);
+
+  const nearbyRelief = useMemo(() => {
+    return filterByRadius(reliefRequests, 10.0);
+  }, [filterByRadius, reliefRequests]);
+
+  const displayShops = nearbyShops.length > 0 ? nearbyShops : shops;
+  const displayRelief = nearbyRelief.length > 0 ? nearbyRelief : reliefRequests;
+
+  const filteredShops = displayShops.filter((s) => {
     const matchesSearch =
       s.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.essentialStock.some((item) => item.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -308,14 +332,14 @@ export default function SpazaRescuePage() {
     return matchesSearch && matchesGasPara && matchesClearance;
   });
 
-  const filteredRelief = reliefRequests.filter((r) =>
+  const filteredRelief = displayRelief.filter((r) =>
     r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
     r.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] pb-32 pt-5 px-4 sm:px-6 lg:px-8 max-w-[1500px] mx-auto space-y-6 selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
+    <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] pb-32 pt-4 px-3 sm:px-6 lg:px-10 max-w-[1920px] mx-auto space-y-5 selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
       
       {/* Ambient background */}
       <div className="ambient-background pointer-events-none" aria-hidden="true">
@@ -327,27 +351,27 @@ export default function SpazaRescuePage() {
 
       {/* HEADER & LOCATION */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between relative z-10">
-        <header className="glass-header p-4 sm:p-5 flex items-center gap-3">
-          <div className="feature-icon feature-food shrink-0" style={{ color: "var(--accent)" }}>
-            <Store className="w-5 h-5" style={{ color: "var(--accent)" }} />
+        <header className="glass-header p-3.5 sm:p-4 flex items-center gap-3">
+          <div className="feature-icon feature-food shrink-0" style={{ color: accentColor }}>
+            <Store className="w-5 h-5" style={{ color: accentColor }} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-sm font-semibold tracking-[0.18em] text-white sm:text-base">
+              <h1 className="text-xs sm:text-sm font-semibold tracking-[0.18em] text-white">
                 SPAZARESCUE™
               </h1>
               <span 
                 className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em]"
                 style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+                  color: accentColor,
+                  borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+                  backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
                 }}
               >
                 LOW-TECH OUTAGE & RELIEF HUB
               </span>
             </div>
-            <p className="mt-0.5 text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
+            <p className="mt-0.5 text-[9px] sm:text-[10px] tracking-[0.12em] text-muted">
               DRY-STOCK SHOPS, SPOILAGE CLEARANCE, MICRO-CHARGING & ROVING TANKER ALERTS
             </p>
           </div>
@@ -355,26 +379,26 @@ export default function SpazaRescuePage() {
 
         {/* Location Pill */}
         <div 
-          className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto"
+          className="glass-panel px-3 sm:px-4 py-2 flex items-center justify-between gap-3 pointer-events-auto min-w-0"
           style={{
-            borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-            backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+            borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+            backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
           }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+            <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
             <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-              {activeAddress}
+              {streetAddress}
             </span>
           </div>
           <button
             type="button"
-            onClick={handleManualRefreshLocation}
+            onClick={refreshLocation}
             title="Refresh Location"
             className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-            style={{ color: "var(--accent)" }}
+            style={{ color: accentColor }}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3 w-3 ${geoLoading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
@@ -385,6 +409,7 @@ export default function SpazaRescuePage() {
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <button
+            type="button"
             onClick={() => setActiveTab("shops")}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === "shops"
@@ -396,6 +421,7 @@ export default function SpazaRescuePage() {
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab("relief")}
             className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
               activeTab === "relief"
@@ -408,18 +434,19 @@ export default function SpazaRescuePage() {
         </div>
 
         <button
+          type="button"
           onClick={() => {
             if (activeTab === "shops") setIsShopModalOpen(true);
             else setIsReliefModalOpen(true);
           }}
-          className="px-4 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 ml-auto"
+          className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 ml-auto shrink-0"
           style={{
-            color: "var(--accent)",
-            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-            backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+            color: accentColor,
+            borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+            backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
           }}
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           {activeTab === "shops" ? "Register Shop Status" : "Post Relief / Tanker Alert"}
         </button>
       </div>
@@ -442,6 +469,7 @@ export default function SpazaRescuePage() {
         {activeTab === "shops" && (
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              type="button"
               onClick={() => setGasParaffinFilter(!gasParaffinFilter)}
               className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 gasParaffinFilter
@@ -454,6 +482,7 @@ export default function SpazaRescuePage() {
             </button>
 
             <button
+              type="button"
               onClick={() => setClearanceFilter(!clearanceFilter)}
               className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 clearanceFilter
@@ -473,7 +502,7 @@ export default function SpazaRescuePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 relative z-10">
           {filteredShops.length === 0 ? (
             <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
-              No off-grid spaza shops registered matching these criteria.
+              No off-grid spaza shops registered within 10km matching these criteria.
             </div>
           ) : (
             filteredShops.map((shop) => (
@@ -488,14 +517,16 @@ export default function SpazaRescuePage() {
                     <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
                       {shop.shopName}
                     </h3>
-                    <span className="text-xs font-mono text-muted">{shop.distanceKm} km away</span>
+                    <span className="text-xs font-mono" style={{ color: accentColor }}>
+                      {shop.formattedDistance ? `${shop.formattedDistance} away` : "Nearby"}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-muted mb-3">
+                  <div className="flex items-center gap-2 text-xs text-muted mb-3 flex-wrap">
                     <span>Owner: <strong className="text-white">{shop.owner}</strong></span>
                     <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {shop.location}
+                    <span className="flex items-center gap-1 truncate">
+                      <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{shop.location}</span>
                     </span>
                   </div>
 
@@ -548,16 +579,17 @@ export default function SpazaRescuePage() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
                   <span className="text-xs text-muted flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Community Verified
                   </span>
 
                   <button
+                    type="button"
                     onClick={() => handleContactWhatsApp(shop.contactPhone, shop.shopName)}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" /> WhatsApp Shop
+                    <MessageCircle className="w-3.5 h-3.5" style={{ color: accentColor }} /> WhatsApp Shop
                   </button>
                 </div>
               </div>
@@ -569,7 +601,7 @@ export default function SpazaRescuePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 relative z-10">
           {filteredRelief.length === 0 ? (
             <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
-              No active emergency relief or tanker alerts found.
+              No active emergency relief or tanker alerts found within 10km.
             </div>
           ) : (
             filteredRelief.map((req) => (
@@ -592,36 +624,39 @@ export default function SpazaRescuePage() {
                       {req.type === "bulk-need" ? "Spaza Bulk Restock Need" : "Roving Municipal Tanker"}
                     </span>
 
-                    <span className="text-xs font-mono text-muted">{req.distanceKm} km away</span>
+                    <span className="text-xs font-mono" style={{ color: accentColor }}>
+                      {req.formattedDistance ? `${req.formattedDistance} away` : "Nearby"}
+                    </span>
                   </div>
 
                   <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
                     {req.title}
                   </h3>
 
-                  <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-3">
+                  <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-3 flex-wrap">
                     <span>By: <strong className="text-white">{req.postedBy}</strong></span>
                     <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {req.location}
+                    <span className="flex items-center gap-1 truncate">
+                      <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{req.location}</span>
                     </span>
                   </div>
 
-                  <p className="text-xs text-white/80 bg-black/30 p-3 rounded-xl border border-white/5">
+                  <p className="text-xs text-white/80 bg-black/30 p-3 rounded-xl border border-white/5 leading-relaxed">
                     {req.description}
                   </p>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
                   <span className="text-xs text-rose-400 font-mono font-semibold flex items-center gap-1">
                     Urgency: {req.urgency}
                   </span>
 
                   <button
+                    type="button"
                     onClick={() => handleContactWhatsApp(req.contactPhone, req.title)}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" /> Coordinate via WhatsApp
+                    <MessageCircle className="w-3.5 h-3.5" style={{ color: accentColor }} /> Coordinate via WhatsApp
                   </button>
                 </div>
               </div>
@@ -635,13 +670,13 @@ export default function SpazaRescuePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
           <div
             className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+            style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Store className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Register Off-Grid Spaza Status
+                <Store className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Register Off-Grid Spaza Status
               </h3>
               <button
                 type="button"
@@ -756,9 +791,9 @@ export default function SpazaRescuePage() {
                 type="submit"
                 className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
                 style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                  color: accentColor,
+                  borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                  backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
                 }}
               >
                 Post Status to Community Grid
@@ -773,13 +808,13 @@ export default function SpazaRescuePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
           <div
             className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+            style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Megaphone className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Post Emergency Relief or Tanker Alert
+                <Megaphone className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Post Emergency Relief or Tanker Alert
               </h3>
               <button
                 type="button"
@@ -843,9 +878,9 @@ export default function SpazaRescuePage() {
                 type="submit"
                 className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
                 style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                  color: accentColor,
+                  borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                  backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
                 }}
               >
                 Broadcast Alert to Community

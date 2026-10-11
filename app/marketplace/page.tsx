@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   ShoppingBag,
@@ -29,9 +29,12 @@ interface ListingItem {
   seller: string;
   location: string;
   status: "Available" | "Pending" | "Fulfilled";
+  latitude: number;
+  longitude: number;
   contactPhone?: string;
   isUserCreated?: boolean;
   distanceKm?: number;
+  formattedDistance?: string;
 }
 
 const INITIAL_MARKETPLACE_LISTINGS: ListingItem[] = [
@@ -44,7 +47,8 @@ const INITIAL_MARKETPLACE_LISTINGS: ListingItem[] = [
     location: "Sector 4 - Sunset Ridge",
     status: "Available",
     contactPhone: "27821234567",
-    distanceKm: 0.4,
+    latitude: -29.6006,
+    longitude: 30.3794,
   },
   {
     id: "MKT-102",
@@ -55,7 +59,8 @@ const INITIAL_MARKETPLACE_LISTINGS: ListingItem[] = [
     location: "Ward 12 - Main Reservoir",
     status: "Available",
     contactPhone: "27839876543",
-    distanceKm: 1.2,
+    latitude: -29.6100,
+    longitude: 30.3850,
   },
   {
     id: "MKT-103",
@@ -66,7 +71,8 @@ const INITIAL_MARKETPLACE_LISTINGS: ListingItem[] = [
     location: "4th Avenue",
     status: "Available",
     contactPhone: "27815550192",
-    distanceKm: 3.5,
+    latitude: -29.5900,
+    longitude: 30.3600,
   },
   {
     id: "MKT-104",
@@ -77,7 +83,8 @@ const INITIAL_MARKETPLACE_LISTINGS: ListingItem[] = [
     location: "Zone 3",
     status: "Available",
     contactPhone: "27829990011",
-    distanceKm: 6.8,
+    latitude: -29.5800,
+    longitude: 30.3500,
   },
 ];
 
@@ -91,37 +98,18 @@ const ACCENT_HEX_MAP: Record<string, string> = {
 };
 
 export default function MarketplacePage() {
-  const { streetAddress } = useGeo();
+  const { streetAddress, location, filterByRadius, refreshLocation, loading: geoLoading } = useGeo();
 
-  // Location State: Automatically loads on mount once, locks in
-  const [isRefreshingGeo, setIsRefreshingGeo] = useState(false);
-  const [activeAddress, setActiveAddress] = useState<string>("Locating street...");
-  const hasInitializedGeo = useRef(false);
+  // Bulletproof Theme Persistence on Mount & Sync Feature Accent
+  const [accentColor, setAccentColor] = useState<string>("#38bdf8");
 
-  useEffect(() => {
-    if (streetAddress && !hasInitializedGeo.current) {
-      setActiveAddress(streetAddress);
-      hasInitializedGeo.current = true;
-    }
-  }, [streetAddress]);
-
-  const handleManualRefreshLocation = () => {
-    setIsRefreshingGeo(true);
-    setTimeout(() => {
-      if (streetAddress) {
-        setActiveAddress(streetAddress);
-      }
-      setIsRefreshingGeo(false);
-    }, 600);
-  };
-
-  // Bulletproof Theme Persistence on Mount
   useEffect(() => {
     const applySavedTheme = () => {
       try {
         const savedAccent = localStorage.getItem("resigrid_accent_theme");
         if (savedAccent && ACCENT_HEX_MAP[savedAccent]) {
           const hex = ACCENT_HEX_MAP[savedAccent];
+          setAccentColor(hex);
           document.documentElement.style.setProperty("--feature-accent", hex);
           document.documentElement.style.setProperty("--accent", hex);
         }
@@ -135,8 +123,10 @@ export default function MarketplacePage() {
     const handleThemeEvent = (e: Event) => {
       const customEvent = e as CustomEvent<{ hex?: string }>;
       if (customEvent.detail?.hex) {
-        document.documentElement.style.setProperty("--feature-accent", customEvent.detail.hex);
-        document.documentElement.style.setProperty("--accent", customEvent.detail.hex);
+        const hex = customEvent.detail.hex;
+        setAccentColor(hex);
+        document.documentElement.style.setProperty("--feature-accent", hex);
+        document.documentElement.style.setProperty("--accent", hex);
       } else {
         applySavedTheme();
       }
@@ -171,7 +161,11 @@ export default function MarketplacePage() {
       if (savedMarketListings) {
         const parsed = JSON.parse(savedMarketListings);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          baseListings = parsed;
+          baseListings = parsed.map((item: any) => ({
+            ...item,
+            latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
+            longitude: typeof item.longitude === "number" ? item.longitude : 30.3794,
+          }));
         }
       }
 
@@ -182,7 +176,7 @@ export default function MarketplacePage() {
       if (savedPowerNodes) {
         const parsedNodes = JSON.parse(savedPowerNodes);
         if (Array.isArray(parsedNodes)) {
-          aggregatedNodes = parsedNodes.map((node: any, index: number) => ({
+          aggregatedNodes = parsedNodes.map((node: any) => ({
             id: node.id || `PWR-${Math.floor(Math.random() * 8999 + 1000)}`,
             title: `${node.owner} (${node.type})`,
             category: "power" as const,
@@ -191,7 +185,8 @@ export default function MarketplacePage() {
             location: node.location || "Neighborhood",
             status: "Available" as const,
             contactPhone: node.whatsappPhone || "27821234567",
-            distanceKm: Number((0.2 + index * 0.4).toFixed(1)),
+            latitude: typeof node.latitude === "number" ? node.latitude : -29.6006,
+            longitude: typeof node.longitude === "number" ? node.longitude : 30.3794,
           }));
         }
       }
@@ -235,7 +230,8 @@ export default function MarketplacePage() {
       status: "Available",
       contactPhone: newPhone.replace(/[^0-9]/g, "") || "27821234567",
       isUserCreated: true,
-      distanceKm: 0.1,
+      latitude: location?.latitude ?? -29.6000,
+      longitude: location?.longitude ?? 30.3800,
     };
 
     const updated = [newListingItem, ...listings];
@@ -258,15 +254,20 @@ export default function MarketplacePage() {
     window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
   };
 
-  // Filter listings by category, search query, and within 10km radius
-  const filteredListings = listings.filter((item) => {
+  // Filter listings within 10km radius using GeoContext filterByRadius engine
+  const nearbyListings = useMemo(() => {
+    return filterByRadius(listings, 10.0);
+  }, [filterByRadius, listings]);
+
+  const displayListings = nearbyListings.length > 0 ? nearbyListings : listings;
+
+  const filteredListings = displayListings.filter((item) => {
     const matchesCategory = activeCategory === "all" || item.category === activeCategory;
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.seller.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const within10Km = (item.distanceKm ?? 5) <= 10;
-    return matchesCategory && matchesSearch && within10Km;
+    return matchesCategory && matchesSearch;
   });
 
   return (
@@ -279,13 +280,13 @@ export default function MarketplacePage() {
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1500px] space-y-6 px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
+      <div className="relative z-10 mx-auto w-full max-w-[1920px] px-3 pb-32 pt-4 sm:px-6 sm:space-y-6 lg:px-10 lg:pb-12 lg:pt-7 space-y-5">
         
         {/* TOP NAVIGATION & LOCATION PILL ROW */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <header className="glass-header flex items-center gap-3 p-3.5 sm:p-4">
-            <div className="feature-icon feature-energy shrink-0" style={{ color: "var(--accent)" }}>
-              <ShoppingBag className="w-5 h-5" style={{ color: "var(--accent)" }} />
+            <div className="feature-icon feature-energy shrink-0" style={{ color: accentColor }}>
+              <ShoppingBag className="w-5 h-5" style={{ color: accentColor }} />
             </div>
             <div className="min-w-0">
               <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
@@ -300,40 +301,40 @@ export default function MarketplacePage() {
           <div className="flex items-center gap-2">
             {/* Independent Location Pill */}
             <div 
-              className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto flex-1 sm:flex-initial"
+              className="glass-panel px-3 sm:px-4 py-2 flex items-center justify-between gap-3 pointer-events-auto flex-1 sm:flex-initial min-w-0"
               style={{
-                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-                backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
+                borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
               }}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+                <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
                 <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                  {activeAddress}
+                  {streetAddress}
                 </span>
               </div>
               <button
                 type="button"
-                onClick={handleManualRefreshLocation}
+                onClick={refreshLocation}
                 title="Refresh Location"
                 className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-                style={{ color: "var(--accent)" }}
+                style={{ color: accentColor }}
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-3 w-3 ${geoLoading ? "animate-spin" : ""}`} />
               </button>
             </div>
 
-            {/* Post Listing Badge Pill Next to Location Pill */}
+            {/* Slimmer Post Listing Badge Pill Matching Location Pill Height */}
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="glass-panel px-3.5 py-2.5 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
+              className="glass-panel px-3 py-2 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
               style={{
-                borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
               }}
             >
-              <Plus className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} />
+              <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
               <span className="inline">Post Listing</span>
             </button>
           </div>
@@ -361,9 +362,9 @@ export default function MarketplacePage() {
             onClick={() => setIsFilterModalOpen(true)}
             className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
             style={{
-              color: "var(--accent)",
-              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-              backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+              color: accentColor,
+              borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
             }}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -371,7 +372,7 @@ export default function MarketplacePage() {
           </button>
         </div>
 
-        {/* LISTINGS GRID */}
+        {/* LISTINGS GRID (WITHIN 10KM RADIUS) */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
           {filteredListings.length === 0 ? (
             <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
@@ -405,8 +406,8 @@ export default function MarketplacePage() {
                       {item.category.toUpperCase()}
                     </span>
 
-                    <span className="text-xs font-mono text-muted">
-                      {item.distanceKm !== undefined ? `${item.distanceKm} km away` : item.id}
+                    <span className="text-xs font-mono" style={{ color: accentColor }}>
+                      {item.formattedDistance ? `${item.formattedDistance} away` : "Nearby"}
                     </span>
                   </div>
 
@@ -421,27 +422,28 @@ export default function MarketplacePage() {
                       By <strong className="text-white">{item.seller}</strong>
                     </span>
                     <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" /> {item.location}
+                    <span className="flex items-center gap-1 truncate">
+                      <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{item.location}</span>
                     </span>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between">
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
                   <div>
                     <span className="text-[10px] uppercase text-muted tracking-wider block">
                       Asking Rate
                     </span>
-                    <span className="text-lg font-extrabold" style={{ color: "var(--accent)" }}>
+                    <span className="text-lg font-extrabold font-mono" style={{ color: accentColor }}>
                       {item.price}
                     </span>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => handleTradeContact(item)}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" /> Contact Seller
+                    <MessageCircle className="w-3.5 h-3.5" style={{ color: accentColor }} /> Contact Seller
                   </button>
                 </div>
               </div>
@@ -456,13 +458,13 @@ export default function MarketplacePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
           <div
             className="glass-panel w-full max-w-sm p-5 sm:p-6 relative space-y-4 pointer-events-auto"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+            style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <SlidersHorizontal className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Filter Listings By Category
+                <SlidersHorizontal className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Filter Listings By Category
               </h3>
               <button
                 type="button"
@@ -476,6 +478,7 @@ export default function MarketplacePage() {
             <div className="space-y-2 relative z-25 py-2">
               {(["all", "power", "water", "goods", "services"] as const).map((cat) => (
                 <button
+                  type="button"
                   key={cat}
                   onClick={() => {
                     setActiveCategory(cat);
@@ -500,13 +503,13 @@ export default function MarketplacePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
           <div
             className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)" }}
+            style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <ShoppingBag className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} /> Post Marketplace Offer
+                <ShoppingBag className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Post Marketplace Offer
               </h3>
               <button
                 type="button"
@@ -600,9 +603,9 @@ export default function MarketplacePage() {
                 type="submit"
                 className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
                 style={{
-                  color: "var(--accent)",
-                  borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                  backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                  color: accentColor,
+                  borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                  backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
                 }}
               >
                 Publish Offer to ResiMarket

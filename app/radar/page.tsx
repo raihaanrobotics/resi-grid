@@ -264,11 +264,11 @@ export default function RadarPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6">
           
           {/* RADAR MAP VIEW */}
-          <div className="lg:col-span-2 glass-panel p-5 sm:p-6 flex flex-col justify-between relative overflow-hidden">
+          <div className="lg:col-span-2 glass-panel p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden">
             <div className="panel-reflection" />
 
             {/* Map Header / Filters */}
-            <div className="flex items-center justify-between mb-3 z-20 flex-wrap gap-2">
+            <div className="flex items-center justify-between mb-2 sm:mb-3 z-20 flex-wrap gap-2">
               <div />
 
               {/* Layer Filters with Eye Toggle on Left */}
@@ -327,7 +327,7 @@ export default function RadarPage() {
             </div>
 
             {/* RADAR CANVAS */}
-            <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-2">
+            <div className="relative w-full aspect-square sm:aspect-[16/10] bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-1 sm:my-2">
               
               {/* Dynamic Theme Grid dots */}
               <div 
@@ -394,7 +394,7 @@ export default function RadarPage() {
             </div>
 
             {/* Map Footer GPS */}
-            <div className="flex items-center justify-between text-xs text-muted mt-2">
+            <div className="flex items-center justify-between text-xs text-muted mt-1 sm:mt-2">
               <span className="flex items-center gap-1.5 truncate">
                 <Navigation className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} />
                 <span className="font-mono text-[11px] text-white truncate">

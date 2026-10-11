@@ -875,18 +875,16 @@ export default function HydroMeshPage() {
         {/* WATER FAULTS & REAL-TIME INCIDENT REPORTS SECTION */}
         <div className="space-y-6 pt-4">
           <div className="w-full h-px bg-white/25 my-8 sm:my-10" />
+
+          <div className="mb-4">
+            <p className="eyebrow" style={{ color: "var(--accent)" }}>AREA REPORTS</p>
+            <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
+              Water Faults Nearby
+            </h2>
+          </div>
           
           <section className="glass-panel p-4 sm:p-6 relative pointer-events-auto">
             <div className="panel-reflection pointer-events-none" />
-            
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
-              <div>
-                <p className="eyebrow" style={{ color: "var(--accent)" }}>AREA REPORTS</p>
-                <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
-                  Water Faults Nearby
-                </h2>
-              </div>
-            </div>
 
             <div className="space-y-3">
               {deduplicatedWaterReports.length === 0 ? (

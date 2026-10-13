@@ -24,95 +24,165 @@ const ACCENT_PALETTES = [
   { id: "emerald", name: "Eco Green", hex: "#10b981", border: "border-emerald-500", bg: "bg-emerald-500" },
 ];
 
-const SOUTH_AFRICAN_CITIES_WARDS: Record<string, string[]> = {
-  "Pietermaritzburg (Msunduzi)": [
-    "Ward 1: Phayiphini, Laduma, Komkhulu, Mbutshane, Ntokozweni, Kwamafindo, Mbuncwane, and Mpumuza",
-    "Ward 2: KwaMbanjwa, Mkangala, Zayeka, Nadi, and Sweetwaters/Mbubu",
-    "Ward 3: Gezubuso, Inadi, and parts of Sweetwaters",
-    "Ward 4: KwaNxamalala, Mbubu, Taylor’s Halt, and surrounding rural communities",
-    "Ward 5: Smero, Henley-on-Klip, and parts of Edendale",
-    "Ward 6: Caluza, Mpumuza, and surrounding sectors of Edendale",
-    "Ward 7: Willowfontein East, Khanya Village, and surrounding hillsides",
-    "Ward 8: Machibisa, Dambuza, and central Edendale zones",
-    "Ward 9: Harewood, Willowfontein West, and parts of the greater Edendale area",
-    "Ward 10: Azalea, Imbali Unit 1, and Imbali Unit 2",
-    "Ward 11: Imbali Unit 13, Unit 14, and Unit 15",
-    "Ward 12: Imbali Stage 2, Unit 3, and Unit 4",
-    "Ward 13: Imbali Unit BB, Unit CC, and parts of Unit J",
-    "Ward 14: Imbali Unit 18, Unit 19, and Tindi Village",
-    "Ward 15: Imbali Unit 14, Slangspruit, and surrounding informal settlements",
-    "Ward 16: Ashdown, Buffer, and parts of Edendale",
-    "Ward 17: France township, Ridge Park, and Unit H (Imbali)",
-    "Ward 18: Grange, Westgate, Ridge Park, and Bisley Heights",
-    "Ward 19: Pelham, Scottsville (West), Oribi, and the University of KwaZulu-Natal (UKZN) campus",
-    "Ward 20: Camperdown side boundaries, Ashburton, Lynnfield Park, and Cleland",
-    "Ward 21: Epworth, Hayfields, Lincoln Meade, and Bellevue",
-    "Ward 22: Pietermaritzburg Central Business District (CBD Central), and central loops",
-    "Ward 23: Signal Hill, Richmond Crest, and parts of the western CBD",
-    "Ward 24: Napierville, Prestbury, Clarendon, and Wembley",
-    "Ward 25: Montrose, Chase Valley, Woodlands, Oak Park, and Town Bush Valley",
-    "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands",
-    "Ward 27: Allandale, Raisethorpe, and Newholme",
-    "Ward 28: Northdale (Sections including Bombay Heights, Springfields)",
-    "Ward 29: Copesville, Swapo, and Jadeite sections",
-    "Ward 30: Haniville, Claridge rural margins, and portions of upper Copesville",
-    "Ward 31: Northdale (Lower blocks), Truro, and Dunveria",
-    "Ward 32: Woodlands (Main extension), Glenwood, and mountain rises",
-    "Ward 33: Manor, Sobantu (West), and the KwaJika Joe informal settlement",
-    "Ward 34: Mountain Rise Industrial Area, Willowton, and parts of the inner city fringes",
-    "Ward 35: Sobantu Township (Central and East), and adjacent community zones",
-    "Ward 36: Imbali Unit 14 (Upper limits) and parts of greater Dambuza",
-    "Ward 37: Greater Edendale Hospital areas and Georgetown",
-    "Ward 38: Esigodini and upper regions of the Edendale valley corridor",
-    "Ward 39: Plessisslaer, Imbali Unit AA, and lower Westgate buffers",
-    "Ward 40: Whispers, Thembalihle, and newly expanded settlement nodes near the outer city boundary",
-    "Ward 41: Khobonina, Vulindlela fringes, and deep traditional authorities flanking the western municipality rim",
-  ],
-  "Johannesburg (City of Joburg)": [
-    "Ward 23 (Auckland Park / Melville / Westdene)",
-    "Ward 64 (Braamfontein / Newtown / Marshalltown)",
-    "Ward 90 (Sandton / Rosebank / Hyde Park)",
-    "Ward 117 (Randburg / Ferndale / Blairgowrie)",
-    "Ward 126 (Roodepoort / Constantia Kloof)",
-    "Ward 54 (Soweto / Diepkloof)",
-    "Ward 29 (Soweto / Orlando West)",
-  ],
-  "Cape Town (City of Cape Town)": [
-    "Ward 54 (Cape Town CBD / Green Point / Waterfront)",
-    "Ward 115 (Sea Point / Camps Bay / Hout Bay)",
-    "Ward 59 (Claremont / Rondebosch / Newlands)",
-    "Ward 71 (Mitchells Plain / Strandfontein)",
-    "Ward 108 (Khayelitsha / Harare)",
-    "Ward 16 (Bellville / Durbanville)",
-  ],
-  "Durban (eThekwini)": [
-    "Ward 26 (Durban CBD / South Beach / North Beach)",
-    "Ward 31 (Morningside / Glenwood / Musgrave)",
-    "Ward 33 (Umhlanga / Durban North)",
-    "Ward 73 (Phoenix / Verulam)",
-    "Ward 75 (Chatsworth / Umlazi)",
-  ],
-  "Pretoria (Tshwane)": [
-    "Ward 59 (Pretoria CBD / Arcadia / Sunnyside)",
-    "Ward 57 (Hatfield / Brooklyn / Lynnwood)",
-    "Ward 44 (Centurion / Lyttelton)",
-    "Ward 16 (Pretoria North / Akasia)",
-  ],
-  "Gqeberha (Nelson Mandela Bay)": [
-    "Ward 5 (Central / Richmond Hill / Humewood)",
-    "Ward 6 (Walmer / Springfield)",
-    "Ward 8 (Summerstrand / Humewood)",
-    "Ward 31 (Motherwell / New Brighton)",
-  ],
-  "Bloemfontein (Mangaung)": [
-    "Ward 21 (Bloemfontein CBD / Westdene)",
-    "Ward 15 (Universitas / Brandwag)",
-    "Ward 48 (Botshabelo)",
-    "Ward 40 (Thaba Nchu)",
-  ],
+const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string[]>> = {
+  "KwaZulu-Natal": {
+    "Pietermaritzburg (Msunduzi)": [
+      "Ward 1: Phayiphini, Laduma, Komkhulu, Mbutshane, Ntokozweni, Kwamafindo, Mbuncwane, and Mpumuza",
+      "Ward 2: KwaMbanjwa, Mkangala, Zayeka, Nadi, and Sweetwaters/Mbubu",
+      "Ward 3: Gezubuso, Inadi, and parts of Sweetwaters",
+      "Ward 4: KwaNxamalala, Mbubu, Taylor’s Halt, and surrounding rural communities",
+      "Ward 5: Smero, Henley-on-Klip, and parts of Edendale",
+      "Ward 6: Caluza, Mpumuza, and surrounding sectors of Edendale",
+      "Ward 7: Willowfontein East, Khanya Village, and surrounding hillsides",
+      "Ward 8: Machibisa, Dambuza, and central Edendale zones",
+      "Ward 9: Harewood, Willowfontein West, and parts of the greater Edendale area",
+      "Ward 10: Azalea, Imbali Unit 1, and Imbali Unit 2",
+      "Ward 11: Imbali Unit 13, Unit 14, and Unit 15",
+      "Ward 12: Imbali Stage 2, Unit 3, and Unit 4",
+      "Ward 13: Imbali Unit BB, Unit CC, and parts of Unit J",
+      "Ward 14: Imbali Unit 18, Unit 19, and Tindi Village",
+      "Ward 15: Imbali Unit 14, Slangspruit, and surrounding informal settlements",
+      "Ward 16: Ashdown, Buffer, and parts of Edendale",
+      "Ward 17: France township, Ridge Park, and Unit H (Imbali)",
+      "Ward 18: Grange, Westgate, Ridge Park, and Bisley Heights",
+      "Ward 19: Pelham, Scottsville (West), Oribi, and the University of KwaZulu-Natal (UKZN) campus",
+      "Ward 20: Camperdown side boundaries, Ashburton, Lynnfield Park, and Cleland",
+      "Ward 21: Epworth, Hayfields, Lincoln Meade, and Bellevue",
+      "Ward 22: Pietermaritzburg Central Business District (CBD Central), and central loops",
+      "Ward 23: Signal Hill, Richmond Crest, and parts of the western CBD",
+      "Ward 24: Napierville, Prestbury, Clarendon, and Wembley",
+      "Ward 25: Montrose, Chase Valley, Woodlands, Oak Park, and Town Bush Valley",
+      "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands",
+      "Ward 27: Allandale, Raisethorpe, and Newholme",
+      "Ward 28: Northdale (Sections including Bombay Heights, Springfields)",
+      "Ward 29: Copesville, Swapo, and Jadeite sections",
+      "Ward 30: Haniville, Claridge rural margins, and portions of upper Copesville",
+      "Ward 31: Northdale (Lower blocks), Truro, and Dunveria",
+      "Ward 32: Woodlands (Main extension), Glenwood, and mountain rises",
+      "Ward 33: Manor, Sobantu (West), and the KwaJika Joe informal settlement",
+      "Ward 34: Mountain Rise Industrial Area, Willowton, and parts of the inner city fringes",
+      "Ward 35: Sobantu Township (Central and East), and adjacent community zones",
+      "Ward 36: Imbali Unit 14 (Upper limits) and parts of greater Dambuza",
+      "Ward 37: Greater Edendale Hospital areas and Georgetown",
+      "Ward 38: Esigodini and upper regions of the Edendale valley corridor",
+      "Ward 39: Plessisslaer, Imbali Unit AA, and lower Westgate buffers",
+      "Ward 40: Whispers, Thembalihle, and newly expanded settlement nodes near the outer city boundary",
+      "Ward 41: Khobonina, Vulindlela fringes, and deep traditional authorities flanking the western municipality rim",
+    ],
+    "Durban (eThekwini)": [
+      "Ward 26 (Durban CBD / South Beach / North Beach)",
+      "Ward 31 (Morningside / Glenwood / Musgrave)",
+      "Ward 33 (Umhlanga / Durban North)",
+      "Ward 73 (Phoenix / Verulam)",
+      "Ward 75 (Chatsworth / Umlazi)",
+    ],
+    "Richards Bay (uMhlathuze)": [
+      "Ward 1 (Arboretum / Meerensee)",
+      "Ward 2 (CBD / Veldenvlei)",
+      "Ward 4 (Brackenham)",
+      "Ward 23 (Esikhaleni)",
+    ],
+  },
+  "Gauteng": {
+    "Johannesburg (City of Joburg)": [
+      "Ward 23 (Auckland Park / Melville / Westdene)",
+      "Ward 64 (Braamfontein / Newtown / Marshalltown)",
+      "Ward 90 (Sandton / Rosebank / Hyde Park)",
+      "Ward 117 (Randburg / Ferndale / Blairgowrie)",
+      "Ward 126 (Roodepoort / Constantia Kloof)",
+      "Ward 54 (Soweto / Diepkloof)",
+      "Ward 29 (Soweto / Orlando West)",
+    ],
+    "Pretoria (Tshwane)": [
+      "Ward 59 (Pretoria CBD / Arcadia / Sunnyside)",
+      "Ward 57 (Hatfield / Brooklyn / Lynnwood)",
+      "Ward 44 (Centurion / Lyttelton)",
+      "Ward 16 (Pretoria North / Akasia)",
+    ],
+    "Ekurhuleni (East Rand)": [
+      "Ward 20 (Kempton Park Central)",
+      "Ward 32 (Benoni CBD)",
+      "Ward 73 (Boksburg West)",
+      "Ward 37 (Germiston Central)",
+    ],
+  },
+  "Western Cape": {
+    "Cape Town (City of Cape Town)": [
+      "Ward 54 (Cape Town CBD / Green Point / Waterfront)",
+      "Ward 115 (Sea Point / Camps Bay / Hout Bay)",
+      "Ward 59 (Claremont / Rondebosch / Newlands)",
+      "Ward 71 (Mitchells Plain / Strandfontein)",
+      "Ward 108 (Khayelitsha / Harare)",
+      "Ward 16 (Bellville / Durbanville)",
+    ],
+    "Stellenbosch": [
+      "Ward 1 (Stellenbosch Central / Idas Valley)",
+      "Ward 2 (Kayamandi)",
+      "Ward 4 (Franschhoek)",
+    ],
+    "George": [
+      "Ward 14 (George Central / Pacaltsdorp)",
+      "Ward 16 (Heatherlands / Blanco)",
+    ],
+  },
+  "Eastern Cape": {
+    "Gqeberha (Nelson Mandela Bay)": [
+      "Ward 5 (Central / Richmond Hill / Humewood)",
+      "Ward 6 (Walmer / Springfield)",
+      "Ward 8 (Summerstrand / Humewood)",
+      "Ward 31 (Motherwell / New Brighton)",
+    ],
+    "East London (Buffalo City)": [
+      "Ward 1 (Quigney / CBD)",
+      "Ward 2 (Berea / Vincent)",
+      "Ward 4 (Mdantsane)",
+    ],
+  },
+  "Free State": {
+    "Bloemfontein (Mangaung)": [
+      "Ward 21 (Bloemfontein CBD / Westdene)",
+      "Ward 15 (Universitas / Brandwag)",
+      "Ward 48 (Botshabelo)",
+      "Ward 40 (Thaba Nchu)",
+    ],
+  },
+  "Mpumalanga": {
+    "Nelspruit (Mbombela)": [
+      "Ward 14 (Nelspruit CBD / West Acres)",
+      "Ward 16 (Sonpark / Nelspruit Ext)",
+      "Ward 30 (White River)",
+    ],
+    "Witbank (Emalahleni)": [
+      "Ward 21 (Witbank Central / Tasbet Park)",
+      "Ward 23 (Klarinet)",
+    ],
+  },
+  "Limpopo": {
+    "Polokwane": [
+      "Ward 20 (Polokwane Central / Annadale)",
+      "Ward 21 (Bendor / Fauna Park)",
+      "Ward 10 (Seshego)",
+    ],
+  },
+  "North West": {
+    "Rustenburg": [
+      "Ward 18 (Rustenburg CBD / Cashan)",
+      "Ward 19 (Tlhabane)",
+    ],
+    "Mahikeng": [
+      "Ward 12 (Mahikeng Central / Mmabatho)",
+    ],
+  },
+  "Northern Cape": {
+    "Kimberley (Sol Plaatje)": [
+      "Ward 1 (Kimberley CBD / Belgravia)",
+      "Ward 15 (Ritchie / Galeshewe)",
+    ],
+  },
 };
 
 export default function ProfilePage() {
+  const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
   const [selectedAccent, setSelectedAccent] = useState<string>("teal");
   const [stagedAccent, setStagedAccent] = useState<string>("teal");
@@ -151,6 +221,7 @@ export default function ProfilePage() {
         if (parsed.fullName) setFullName(parsed.fullName);
         if (parsed.email) setEmail(parsed.email);
         if (parsed.phone) setPhone(parsed.phone);
+        if (parsed.selectedProvince) setSelectedProvince(parsed.selectedProvince);
         if (parsed.selectedCity) setSelectedCity(parsed.selectedCity);
         if (parsed.selectedWard) setSelectedWard(parsed.selectedWard);
         if (parsed.streetAddress) setStreetAddress(parsed.streetAddress);
@@ -162,11 +233,24 @@ export default function ProfilePage() {
     }
   }, []);
 
+  // Handle Province Change to update available cities and wards
+  const handleProvinceChange = (province: string) => {
+    setSelectedProvince(province);
+    const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[province] || {};
+    const firstCity = Object.keys(citiesInProv)[0] || "";
+    setSelectedCity(firstCity);
+    const wards = citiesInProv[firstCity] || [];
+    if (wards.length > 0) {
+      setSelectedWard(wards[0]);
+    }
+  };
+
   // Handle City Change to update available wards
   const handleCityChange = (city: string) => {
     setSelectedCity(city);
-    const wards = SOUTH_AFRICAN_CITIES_WARDS[city];
-    if (wards && wards.length > 0) {
+    const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
+    const wards = citiesInProv[city] || [];
+    if (wards.length > 0) {
       setSelectedWard(wards[0]);
     }
   };
@@ -195,6 +279,7 @@ export default function ProfilePage() {
       fullName,
       email,
       phone,
+      selectedProvince,
       selectedCity,
       selectedWard,
       streetAddress,
@@ -231,7 +316,8 @@ export default function ProfilePage() {
     }
   };
 
-  const currentWards = SOUTH_AFRICAN_CITIES_WARDS[selectedCity] || [];
+  const currentCities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
+  const currentWards = currentCities[selectedCity] || [];
   const wardNumberOnly = selectedWard ? selectedWard.split(":")[0] : selectedWard;
 
   return (
@@ -295,7 +381,7 @@ export default function ProfilePage() {
               <p className="text-xs text-muted truncate mt-0.5">{email}</p>
               <div className="flex items-center gap-2 mt-1.5 text-[10px] sm:text-[11px] text-muted flex-wrap">
                 <span className="flex items-center gap-1 text-accent-dynamic">
-                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {wardNumberOnly}
+                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity}, {selectedProvince} • {wardNumberOnly}
                 </span>
               </div>
             </div>
@@ -389,7 +475,7 @@ export default function ProfilePage() {
                 <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Personal & Municipal Details
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Update contact information, select your South African city, and choose your municipal ward.
+                Update contact information, select your South African province, city, and municipal ward.
               </p>
             </div>
 
@@ -428,13 +514,28 @@ export default function ProfilePage() {
               </div>
 
               <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Province</label>
+                <select
+                  value={selectedProvince}
+                  onChange={(e) => handleProvinceChange(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                >
+                  {Object.keys(SOUTH_AFRICAN_PROVINCES_CITIES_WARDS).map((prov) => (
+                    <option key={prov} value={prov} className="bg-neutral-900 text-white">
+                      {prov}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">City / Municipality</label>
                 <select
                   value={selectedCity}
                   onChange={(e) => handleCityChange(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
-                  {Object.keys(SOUTH_AFRICAN_CITIES_WARDS).map((city) => (
+                  {Object.keys(currentCities).map((city) => (
                     <option key={city} value={city} className="bg-neutral-900 text-white">
                       {city}
                     </option>

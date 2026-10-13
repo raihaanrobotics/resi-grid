@@ -60,6 +60,9 @@ const ACCENT_HEX_MAP: Record<string, string> = {
 export default function WeatherClimatePage() {
   const { streetAddress, location, refreshLocation, loading: geoLoading } = useGeo();
 
+  // Province State Loaded from User Profile
+  const [userProvince, setUserProvince] = useState<string>("KwaZulu-Natal");
+
   // Comprehensive Weather & Meteorological Data States
   const [temperature, setTemperature] = useState<number | null>(null);
   const [apparentTemp, setApparentTemp] = useState<number | null>(null);
@@ -78,45 +81,48 @@ export default function WeatherClimatePage() {
 
   const [weatherCondition, setWeatherCondition] = useState<string>("Synchronizing atmospheric telemetry...");
   const [isAlertActive, setIsAlertActive] = useState<boolean>(false);
-  const [alertHeadline, setAlertHeadline] = useState<string>("Provincial Meteorological Status & Regional Advisories");
+  const [alertHeadline, setAlertHeadline] = useState<string>("Meteorological Status & Regional Advisories");
   const [alertDetails, setAlertDetails] = useState<string>("Continuously tracking regional weather patterns, atmospheric stability, and active advisories across your sector.");
   const [lastCheckTimestamp, setLastCheckTimestamp] = useState<string>("Not synchronized");
 
-  // Notification Feed State & Modal Controls
-  const [notifications, setNotifications] = useState<ResiGridNotification[]>([]);
-  const [isNotifModalOpen, setIsNotifModalOpen] = useState<boolean>(false);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
-
-  const loadGlobalNotifications = () => {
+  // Push notification helper to broadcast weather alerts directly to global local storage (Home / Notifications feed)
+  const pushGlobalNotification = (title: string, description: string, type: "warning" | "success" | "info" | "error") => {
     try {
-      const savedNotifs = localStorage.getItem("resigrid_global_notifications");
-      if (savedNotifs) {
-        const parsed: ResiGridNotification[] = JSON.parse(savedNotifs);
-        setNotifications(parsed);
-        setUnreadCount(parsed.filter((n) => !n.read).length);
-      } else {
-        const defaultNotifs: ResiGridNotification[] = [
-          {
-            id: "weather-init-1",
-            title: "Climate Monitor Active",
-            description: "Official meteorological telemetry feed connected successfully.",
-            time: "Just now",
-            type: "info",
-            category: "climate",
-            read: false,
-          },
-        ];
-        setNotifications(defaultNotifs);
-        setUnreadCount(1);
-        localStorage.setItem("resigrid_global_notifications", JSON.stringify(defaultNotifs));
+      const existing = localStorage.getItem("resigrid_global_notifications");
+      let notifs: ResiGridNotification[] = existing ? JSON.parse(existing) : [];
+      
+      // Prevent duplicate identical alerts flooding storage
+      const exists = notifs.some((n) => n.title === title && n.description === description);
+      if (!exists) {
+        const newNotif: ResiGridNotification = {
+          id: `weather-alert-${Date.now()}`,
+          title,
+          description,
+          time: "Just now",
+          type,
+          category: "climate",
+          read: false,
+        };
+        notifs = [newNotif, ...notifs];
+        localStorage.setItem("resigrid_global_notifications", JSON.stringify(notifs));
       }
     } catch (err) {
-      console.error("Error reading notifications:", err);
+      console.error("Error writing global weather notification:", err);
     }
   };
 
   useEffect(() => {
-    loadGlobalNotifications();
+    try {
+      const savedProfile = localStorage.getItem("resigrid_user_profile");
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed.selectedProvince) {
+          setUserProvince(parsed.selectedProvince);
+        }
+      }
+    } catch (e) {
+      console.error("Error reading user profile province:", e);
+    }
 
     const applySavedTheme = () => {
       try {
@@ -149,7 +155,7 @@ export default function WeatherClimatePage() {
     };
   }, []);
 
-  // Fetch Comprehensive Open-Meteo Weather Data & Provincial Warnings
+  // Fetch Comprehensive Open-Meteo Weather Data & Province-Specific Warnings
   useEffect(() => {
     const fetchWeatherForLocation = async () => {
       try {
@@ -205,23 +211,29 @@ export default function WeatherClimatePage() {
           if (code >= 95) {
             setWeatherCondition("Severe Thunderstorm Warning");
             setIsAlertActive(true);
-            setAlertHeadline("Provincial Severe Weather & Lightning Alert");
-            setAlertDetails("Official weather service advisory: High risk of localized thunderstorms, lightning strikes, and flash flooding in the region. Unplug sensitive appliances and avoid open areas.");
+            setAlertHeadline(`${userProvince} Severe Weather & Lightning Alert`);
+            const desc = `Official weather service advisory for ${userProvince}: High risk of localized thunderstorms, lightning strikes, and flash flooding in the region. Unplug sensitive appliances and avoid open areas.`;
+            setAlertDetails(desc);
+            pushGlobalNotification(`${userProvince} Severe Weather Warning`, desc, "warning");
           } else if (code >= 51 && code <= 67) {
             setWeatherCondition("Steady Rainfall & Precipitation Advisory");
             setIsAlertActive(false);
-            setAlertHeadline("Regional Rainfall & Catchment Advisory");
-            setAlertDetails("Continuous precipitation across local catchments. Monitor property drainage and collect rainwater for household or garden use.");
+            setAlertHeadline(`${userProvince} Rainfall & Catchment Advisory`);
+            const desc = `Continuous precipitation across ${userProvince} catchments. Monitor property drainage and collect rainwater for household or garden use.`;
+            setAlertDetails(desc);
+            pushGlobalNotification(`${userProvince} Rainfall Advisory`, desc, "info");
           } else if (wind > 35 || gusts > 50) {
             setWeatherCondition("Gale Force Wind Advisory");
             setIsAlertActive(true);
-            setAlertHeadline("High Wind Velocity & Gust Warning");
-            setAlertDetails("Strong winds and high gusts detected (>35 km/h). Elevated risk of outdoor items shifting and intermittent line instability.");
+            setAlertHeadline(`${userProvince} High Wind Velocity & Gust Warning`);
+            const desc = `Strong winds and high gusts detected across ${userProvince} (>35 km/h). Elevated risk of outdoor items shifting and intermittent line instability.`;
+            setAlertDetails(desc);
+            pushGlobalNotification(`${userProvince} High Wind Warning`, desc, "warning");
           } else {
             setWeatherCondition("Stable Meteorological Conditions");
             setIsAlertActive(false);
-            setAlertHeadline("Regional Atmospheric Status Stable");
-            setAlertDetails("No severe weather warnings issued. Barometric pressure and atmospheric stability are well within optimal baseline ranges.");
+            setAlertHeadline(`${userProvince} Regional Atmospheric Status Stable`);
+            setAlertDetails(`No severe weather warnings issued for ${userProvince}. Barometric pressure and atmospheric stability are well within optimal baseline ranges.`);
           }
         } else {
           setWeatherCondition("Stable Conditions");
@@ -263,35 +275,7 @@ export default function WeatherClimatePage() {
     };
 
     fetchWeatherForLocation();
-  }, [location]);
-
-  const handleOpenNotificationsModal = () => {
-    setIsNotifModalOpen(true);
-    const updated = notifications.map((n) => ({ ...n, read: true }));
-    setNotifications(updated);
-    setUnreadCount(0);
-    localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
-  };
-
-  const handleClearNotifications = () => {
-    setNotifications([]);
-    setUnreadCount(0);
-    localStorage.removeItem("resigrid_global_notifications");
-  };
-
-  const handleDismissSingleNotification = (id: string) => {
-    const updated = notifications.filter((n) => n.id !== id);
-    setNotifications(updated);
-    setUnreadCount(updated.filter((n) => !n.read).length);
-    localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
-  };
-
-  const groupedNotifications = notifications.reduce((acc, notif) => {
-    const categoryKey = (notif.category || "General").toUpperCase();
-    if (!acc[categoryKey]) acc[categoryKey] = [];
-    acc[categoryKey].push(notif);
-    return acc;
-  }, {} as Record<string, ResiGridNotification[]>);
+  }, [location, userProvince]);
 
   // Helper for wind direction degrees to compass rose
   const getWindDirectionLabel = (degrees: number | null) => {
@@ -326,24 +310,10 @@ export default function WeatherClimatePage() {
                   WEATHER &amp; CLIMATE
                 </h1>
                 <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                  PROVINCIAL ALERTS &amp; ATMOSPHERIC TELEMETRY
+                  {userProvince.toUpperCase()} ALERTS &amp; ATMOSPHERIC TELEMETRY
                 </p>
               </div>
             </Link>
-
-            <button
-              type="button"
-              onClick={handleOpenNotificationsModal}
-              aria-label="Notifications"
-              className="glass-icon-button relative cursor-pointer touch-manipulation"
-            >
-              <Bell className="h-[17px] w-[17px]" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent)] text-[9px] font-bold text-black shadow-sm">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
           </header>
         </div>
 
@@ -359,7 +329,7 @@ export default function WeatherClimatePage() {
             <div className="flex items-center gap-2 min-w-0">
               <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
               <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                {streetAddress}
+                {streetAddress} ({userProvince})
               </span>
             </div>
             <button
@@ -374,10 +344,10 @@ export default function WeatherClimatePage() {
           </div>
         </div>
 
-        {/* MAIN DESIGN LAYOUT: COMPREHENSIVE METEOROLOGICAL TELEMETRY & PROVINCIAL ALERTS */}
+        {/* MAIN DESIGN LAYOUT: COMPREHENSIVE METEOROLOGICAL TELEMETRY & PROVINCE ALERTS */}
         <div className="space-y-5">
           
-          {/* OFFICIAL PROVINCIAL / DISTRICT WARNING BANNER */}
+          {/* OFFICIAL PROVINCE WARNING BANNER */}
           <section className="glass-panel p-5 sm:p-7 relative overflow-hidden pointer-events-auto border"
             style={{
               borderColor: isAlertActive ? "rgba(245, 158, 11, 0.4)" : "color-mix(in srgb, var(--accent) 30%, transparent)",
@@ -401,15 +371,6 @@ export default function WeatherClimatePage() {
 
                 <div className="space-y-2 min-w-0 flex-1">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[9px] font-mono uppercase tracking-widest px-2.5 py-0.5 rounded-full border"
-                      style={{
-                        color: isAlertActive ? "#f59e0b" : "var(--accent)",
-                        borderColor: isAlertActive ? "rgba(245, 158, 11, 0.3)" : "color-mix(in srgb, var(--accent) 30%, transparent)",
-                        backgroundColor: isAlertActive ? "rgba(245, 158, 11, 0.1)" : "color-mix(in srgb, var(--accent) 10%, transparent)",
-                      }}
-                    >
-                      {isAlertActive ? "Active Weather Warning" : "District Status Secure"}
-                    </span>
                     <span className="text-[10px] font-mono text-muted">Synchronized: {lastCheckTimestamp}</span>
                   </div>
 
@@ -677,106 +638,6 @@ export default function WeatherClimatePage() {
         </div>
 
       </div>
-
-      {/* NOTIFICATION MODAL OVERLAY */}
-      {isNotifModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 pointer-events-auto transition-all">
-          <div className="w-full max-w-lg relative space-y-4 pointer-events-auto max-h-[85vh] sm:max-h-[80vh] flex flex-col justify-between">
-            <div className="flex items-center justify-between px-2 pb-1 relative z-20 shrink-0">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-[var(--accent)]" />
-                <h3 className="text-sm font-bold tracking-wider text-white uppercase text-[11px]">
-                  Notifications
-                </h3>
-              </div>
-            </div>
-
-            <div className="overflow-y-auto space-y-4 pr-1 relative z-20 flex-1 my-1 max-h-[65vh]">
-              {notifications.length === 0 ? (
-                <div className="glass-panel p-8 text-center text-muted text-xs rounded-2xl space-y-2 border border-white/10">
-                  <Bell className="h-6 w-6 mx-auto opacity-30 text-[var(--accent)]" />
-                  <p>All caught up. No active notifications.</p>
-                </div>
-              ) : (
-                Object.entries(groupedNotifications).map(([genre, notifs]) => (
-                  <div key={genre} className="space-y-2">
-                    <p className="text-[9px] font-mono font-bold tracking-widest text-[var(--accent)] uppercase px-2">
-                      {genre}
-                    </p>
-                    <div className="space-y-2">
-                      {notifs.map((notif) => {
-                        let NotifIcon = Info;
-                        let iconColorStyle = { color: "var(--accent)" };
-
-                        if (notif.type === "warning") {
-                          NotifIcon = AlertTriangle;
-                          iconColorStyle = { color: "#f59e0b" };
-                        } else if (notif.type === "success") {
-                          NotifIcon = CheckCircle2;
-                          iconColorStyle = { color: "#10b981" };
-                        }
-
-                        return (
-                          <div
-                            key={notif.id}
-                            className="glass-panel p-3.5 rounded-2xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-3 transition-all hover:border-white/20 shadow-lg"
-                          >
-                            <div className="flex items-start gap-3 min-w-0">
-                              <NotifIcon className="h-4 w-4 shrink-0 mt-0.5" style={iconColorStyle} />
-                              <div className="space-y-0.5 min-w-0">
-                                <h4 className="text-xs font-semibold text-white leading-snug truncate">
-                                  {notif.title}
-                                </h4>
-                                <p className="text-[11px] text-muted leading-relaxed">
-                                  {notif.description}
-                                </p>
-                                <span className="inline-block text-[9px] font-mono text-muted/70 pt-0.5">
-                                  {notif.time}
-                                </span>
-                              </div>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => handleDismissSingleNotification(notif.id)}
-                              className="text-muted hover:text-white transition-colors p-1 shrink-0 cursor-pointer"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="pt-2 flex items-center justify-between relative z-20 shrink-0">
-              {notifications.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={handleClearNotifications}
-                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-2 px-3 rounded-xl bg-white/5 border border-white/10"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Clear All
-                </button>
-              ) : (
-                <div />
-              )}
-
-              <button
-                type="button"
-                onClick={() => setIsNotifModalOpen(false)}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-semibold text-black transition-all cursor-pointer touch-manipulation hover:opacity-90 shadow-lg"
-                style={{ backgroundColor: "var(--accent)" }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

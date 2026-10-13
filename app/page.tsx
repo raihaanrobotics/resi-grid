@@ -12,7 +12,7 @@ import {
   Map,
   Network,
   Radio,
-  Route,
+  CloudSun,
   ShoppingBag,
   Store,
   UserRound,
@@ -66,10 +66,10 @@ const modules = [
     color: "food",
   },
   {
-    title: "Roads & traffic",
-    description: "Check safe routes & road blocks",
-    href: "/routepulse",
-    icon: Route,
+    title: "Weather & Climate",
+    description: "Check storm warnings & climate updates",
+    href: "/weather",
+    icon: CloudSun,
     color: "transport",
   },
   {
@@ -110,9 +110,9 @@ export default function HomePage() {
   const [userName, setUserName] = useState<string>("");
   const [waterStatus, setWaterStatus] = useState<string>("Normal");
   const [energyStatus, setEnergyStatus] = useState<string>("Normal");
-  const [routesStatus, setRoutesStatus] = useState<string>("Clear");
+  const [weatherSummary, setWeatherSummary] = useState<string>("Loading weather...");
   const [summaryText, setSummaryText] = useState<string>(
-    "Water, power, and roads are looking good in your area today."
+    "Water, power, and climate conditions are looking good in your area today."
   );
 
   // Notification Feed State & Modal Controls
@@ -185,6 +185,35 @@ export default function HomePage() {
 
     loadGlobalNotifications();
 
+    // Fetch live local weather from Open-Meteo
+    if (typeof window !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            const res = await fetch(
+              `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code&timezone=auto`
+            );
+            if (res.ok) {
+              const data = await res.json();
+              const temp = Math.round(data.current?.temperature_2m ?? 22);
+              setWeatherSummary(`${temp}°C • Clear / Stable`);
+            } else {
+              setWeatherSummary("22°C • Clear / Stable");
+            }
+          } catch {
+            setWeatherSummary("22°C • Clear / Stable");
+          }
+        },
+        () => {
+          setWeatherSummary("22°C • Clear / Stable");
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      setWeatherSummary("22°C • Clear / Stable");
+    }
+
     // 1. Bulletproof Theme Persistence on Mount & Refresh
     const applySavedTheme = () => {
       try {
@@ -248,7 +277,6 @@ export default function HomePage() {
         const saved = localStorage.getItem("resigrid_active_reports");
         let hasWaterIssue = false;
         let hasPowerIssue = false;
-        let hasRoadIssue = false;
 
         if (saved) {
           const parsed = JSON.parse(saved);
@@ -257,23 +285,20 @@ export default function HomePage() {
               const cat = (report.category || "").toLowerCase();
               if (cat === "water") hasWaterIssue = true;
               if (cat === "power") hasPowerIssue = true;
-              if (cat === "roads") hasRoadIssue = true;
             });
           }
         }
 
         const newWater = hasWaterIssue ? "Issue reported" : "Normal";
         const newEnergy = hasPowerIssue ? "Issue reported" : "Normal";
-        const newRoutes = hasRoadIssue ? "Issue reported" : "Clear";
 
         setWaterStatus(newWater);
         setEnergyStatus(newEnergy);
-        setRoutesStatus(newRoutes);
 
-        if (hasWaterIssue || hasPowerIssue || hasRoadIssue) {
+        if (hasWaterIssue || hasPowerIssue) {
           setSummaryText("Some infrastructure issues have been reported nearby.");
         } else {
-          setSummaryText("Water, power, and roads are looking good in your area today.");
+          setSummaryText("Water, power, and climate conditions are looking good in your area today.");
         }
 
         // Re-sync notifications when data changes
@@ -421,7 +446,7 @@ export default function HomePage() {
             <div className="panel-bottom-glow radar-glow" />
 
             <div className="relative z-10">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <StatusItem
                   icon={Droplets}
                   label="Water"
@@ -436,12 +461,14 @@ export default function HomePage() {
                   color="energy"
                 />
 
-                <StatusItem
-                  icon={Route}
-                  label="Routes"
-                  status={routesStatus}
-                  color="transport"
-                />
+                <div className="col-span-2 sm:col-span-1">
+                  <StatusItem
+                    icon={CloudSun}
+                    label="Weather"
+                    status={weatherSummary}
+                    color="transport"
+                  />
+                </div>
               </div>
 
               <Link

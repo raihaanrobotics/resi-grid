@@ -41,6 +41,7 @@ export interface ResiGridNotification {
   type: "warning" | "success" | "info" | "error";
   category?: string;
   read?: boolean;
+  timestamp?: number;
 }
 
 const modules = [
@@ -88,14 +89,6 @@ const modules = [
   },
 ];
 
-const navItems = [
-  { label: "Home", href: "/", icon: Home },
-  { label: "Radar", href: "/radar", icon: Radio },
-  { label: "Market", href: "/marketplace", icon: ShoppingBag },
-  { label: "Features", href: "/features", icon: Network },
-  { label: "Profile", href: "/profile", icon: UserRound },
-];
-
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
   navy: "#1e3a8a",
@@ -120,15 +113,27 @@ export default function HomePage() {
   const [isNotifModalOpen, setIsNotifModalOpen] = useState<boolean>(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  // Function to trigger system-level device notification (Ready for Capacitor & Android Studio)
+  // Helper to calculate accurate real-time relative timestamps
+  const getRelativeTimeString = (timestamp?: number) => {
+    if (!timestamp) return "Just now";
+    const diffMs = Date.now() - timestamp;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  // Function to trigger system-level device notification
   const triggerNativeDeviceNotification = (title: string, message: string, category = "general") => {
-    // 1. Android Native Java/Kotlin Bridge Hook
     if (window.AndroidNotificationBridge?.postSystemNotification) {
       window.AndroidNotificationBridge.postSystemNotification(title, message, category);
       return;
     }
 
-    // 2. Standard Web Push Notification API Fallback for mobile browser wake-up
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === "granted") {
         new Notification(title, {
@@ -153,10 +158,14 @@ export default function HomePage() {
       const savedNotifs = localStorage.getItem("resigrid_global_notifications");
       if (savedNotifs) {
         const parsed: ResiGridNotification[] = JSON.parse(savedNotifs);
-        setNotifications(parsed);
-        setUnreadCount(parsed.filter((n) => !n.read).length);
+        const updatedTimes = parsed.map((n) => ({
+          ...n,
+          time: getRelativeTimeString(n.timestamp),
+        }));
+        setNotifications(updatedTimes);
+        setUnreadCount(updatedTimes.filter((n) => !n.read).length);
       } else {
-        // Initial welcome broadcast without emojis
+        const now = Date.now();
         const defaultNotifs: ResiGridNotification[] = [
           {
             id: "notif-init-1",
@@ -166,6 +175,7 @@ export default function HomePage() {
             type: "info",
             category: "system",
             read: false,
+            timestamp: now,
           },
         ];
         setNotifications(defaultNotifs);
@@ -178,12 +188,21 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    // Request Browser Notification permissions on mount for background wake-up
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
 
     loadGlobalNotifications();
+
+    // Live relative timestamp updater ticker every 30 seconds
+    const tickerInterval = setInterval(() => {
+      setNotifications((prev) =>
+        prev.map((n) => ({
+          ...n,
+          time: getRelativeTimeString(n.timestamp),
+        }))
+      );
+    }, 30000);
 
     // Fetch live local weather from Open-Meteo
     if (typeof window !== "undefined" && navigator.geolocation) {
@@ -214,7 +233,7 @@ export default function HomePage() {
       setWeatherSummary("22°C • Clear / Stable");
     }
 
-    // 1. Bulletproof Theme Persistence on Mount & Refresh
+    // Theme Persistence
     const applySavedTheme = () => {
       try {
         const savedAccent = localStorage.getItem("resigrid_accent_theme");
@@ -230,7 +249,6 @@ export default function HomePage() {
 
     applySavedTheme();
 
-    // Event listener for real-time updates when modified on profile page
     const handleThemeEvent = (e: Event) => {
       const customEvent = e as CustomEvent<{ hex?: string }>;
       if (customEvent.detail?.hex) {
@@ -243,7 +261,7 @@ export default function HomePage() {
 
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
 
-    // 2. Greeting & User Name Handler
+    // Greeting & User Name Handler
     const hour = new Date().getHours();
     let timeOfDayGreeting = "Good morning";
 
@@ -271,7 +289,7 @@ export default function HomePage() {
     setGreetingPrefix(timeOfDayGreeting);
     setUserName(savedName);
 
-    // 3. Real-time Status Sync from localStorage & BroadcastChannel
+    // Real-time Status Sync from localStorage
     const syncStatusFromData = () => {
       try {
         const saved = localStorage.getItem("resigrid_active_reports");
@@ -295,13 +313,16 @@ export default function HomePage() {
         setWaterStatus(newWater);
         setEnergyStatus(newEnergy);
 
-        if (hasWaterIssue || hasPowerIssue) {
-          setSummaryText("Some infrastructure issues have been reported nearby.");
+        if (hasWaterIssue && hasPowerIssue) {
+          setSummaryText("Active water and power service disruptions reported in your sector.");
+        } else if (hasWaterIssue) {
+          setSummaryText("A water service issue has been reported nearby. Monitoring municipal response.");
+        } else if (hasPowerIssue) {
+          setSummaryText("A power grid fault has been reported nearby. Check backup availability.");
         } else {
           setSummaryText("Water, power, and climate conditions are looking good in your area today.");
         }
 
-        // Re-sync notifications when data changes
         loadGlobalNotifications();
       } catch (e) {
         console.error("Error reading status data:", e);
@@ -341,12 +362,12 @@ export default function HomePage() {
       window.removeEventListener("resigrid_theme_change", handleThemeEvent);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
+      clearInterval(tickerInterval);
     };
   }, []);
 
   const handleOpenNotificationsModal = () => {
     setIsNotifModalOpen(true);
-    // Mark all as read when opening
     const updated = notifications.map((n) => ({ ...n, read: true }));
     setNotifications(updated);
     setUnreadCount(0);
@@ -366,7 +387,6 @@ export default function HomePage() {
     localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
   };
 
-  // Group notifications by category/genre
   const groupedNotifications = notifications.reduce((acc, notif) => {
     const categoryKey = (notif.category || "General").toUpperCase();
     if (!acc[categoryKey]) acc[categoryKey] = [];
@@ -402,7 +422,7 @@ export default function HomePage() {
               </div>
 
               <p className="mt-0.5 block text-[9px] tracking-[0.15em] text-muted">
-                YOUR LOCAL NEIGHBORHOOD HUB
+                YOUR NEIGHBORHOOD HUB
               </p>
             </div>
           </Link>
@@ -514,7 +534,7 @@ export default function HomePage() {
                   >
                     <div className="module-inner-glow" />
 
-                    <div className="relative z-10">
+                    <div className="relative z-15">
                       <div className="mb-6 flex items-start justify-between sm:mb-8">
                         <div className="module-icon">
                           <Icon className="h-[18px] w-[18px]" />
@@ -537,31 +557,40 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* SLEEK, SEPARATE PILLS NOTIFICATION OVERLAY */}
+      {/* MOBILE-RESPONSIVE, SCROLLABLE NOTIFICATION MODAL OVERLAY */}
       {isNotifModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 pointer-events-auto transition-all">
-          <div className="w-full max-w-lg relative space-y-4 pointer-events-auto max-h-[85vh] sm:max-h-[80vh] flex flex-col justify-between">
-            {/* Direct Header Row (No Outer Container Panel & No Close Button Here) */}
-            <div className="flex items-center justify-between px-2 pb-1 relative z-20 shrink-0">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 pb-20 sm:pb-6 pointer-events-auto transition-all">
+          <div className="w-full max-w-lg glass-panel p-4 sm:p-6 relative space-y-4 pointer-events-auto max-h-[80vh] sm:max-h-[75vh] flex flex-col justify-between border border-white/20 shadow-2xl rounded-3xl">
+            
+            {/* Header with Title and X Close Button */}
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 relative z-20 shrink-0">
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4 text-[var(--accent)]" />
-                <h3 className="text-sm font-bold tracking-wider text-white uppercase text-[11px]">
+                <h3 className="text-xs sm:text-sm font-bold tracking-wider text-white uppercase">
                   Notifications
                 </h3>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsNotifModalOpen(false)}
+                className="text-muted hover:text-white transition-colors p-1.5 rounded-2xl bg-white/5 border border-white/10 cursor-pointer touch-manipulation"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            {/* Notification List Feed (Grouped into Floating Rounded Pills) */}
-            <div className="overflow-y-auto space-y-4 pr-1 relative z-20 flex-1 my-1 max-h-[65vh]">
+            {/* Scrollable Notification Feed with Hidden Scrollbar */}
+            <div className="overflow-y-auto space-y-4 pr-1 relative z-20 flex-1 my-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {notifications.length === 0 ? (
-                <div className="glass-panel p-8 text-center text-muted text-xs rounded-2xl space-y-2 border border-white/10">
+                <div className="p-8 text-center text-muted text-xs rounded-3xl space-y-2">
                   <Bell className="h-6 w-6 mx-auto opacity-30 text-[var(--accent)]" />
                   <p>All caught up. No active notifications.</p>
                 </div>
               ) : (
                 Object.entries(groupedNotifications).map(([genre, notifs]) => (
                   <div key={genre} className="space-y-2">
-                    <p className="text-[9px] font-mono font-bold tracking-widest text-[var(--accent)] uppercase px-2">
+                    <p className="text-[9px] font-mono font-bold tracking-widest text-[var(--accent)] uppercase px-1">
                       {genre}
                     </p>
                     <div className="space-y-2">
@@ -580,7 +609,7 @@ export default function HomePage() {
                         return (
                           <div
                             key={notif.id}
-                            className="glass-panel p-3.5 rounded-2xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-3 transition-all hover:border-white/20 shadow-lg"
+                            className="p-3.5 rounded-2xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-3 transition-all hover:border-white/20 shadow-md"
                           >
                             <div className="flex items-start gap-3 min-w-0">
                               <NotifIcon className="h-4 w-4 shrink-0 mt-0.5" style={iconColorStyle} />
@@ -613,29 +642,19 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Footer with Clear Button (Bin Icon) & Close Button */}
-            <div className="pt-2 flex items-center justify-between relative z-20 shrink-0">
-              {notifications.length > 0 ? (
+            {/* Footer with Clear All Button moved to the right */}
+            <div className="pt-3 border-t border-white/10 flex items-center justify-end relative z-20 shrink-0">
+              {notifications.length > 0 && (
                 <button
                   type="button"
                   onClick={handleClearNotifications}
-                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-2 px-3 rounded-xl bg-white/5 border border-white/10"
+                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-2 px-4 rounded-2xl bg-white/5 border border-white/10 touch-manipulation"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Clear All
                 </button>
-              ) : (
-                <div />
               )}
-
-              <button
-                type="button"
-                onClick={() => setIsNotifModalOpen(false)}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs font-semibold text-black transition-all cursor-pointer touch-manipulation hover:opacity-90 shadow-lg"
-                style={{ backgroundColor: "var(--accent)" }}
-              >
-                Close
-              </button>
             </div>
+
           </div>
         </div>
       )}
@@ -661,44 +680,6 @@ function StatusItem({
       <p className="text-[10px] text-muted">{label}</p>
 
       <p className="mt-0.5 text-[11px] font-medium opacity-85">{status}</p>
-    </div>
-  );
-}
-
-function Stat({
-  value,
-  label,
-}: {
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="px-3 text-center first:pl-0 last:pr-0">
-      <p className="text-xl font-medium tracking-[-0.04em] sm:text-2xl">
-        {value}
-      </p>
-
-      <p className="mt-1 text-[9px] uppercase tracking-[0.12em] text-muted">
-        {label}
-      </p>
-    </div>
-  );
-}
-
-function MiniMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="notifications-summary-metric">
-      <p className="text-[9px] uppercase tracking-[0.08em] text-muted">
-        {label}
-      </p>
-
-      <p className="mt-1 text-sm font-medium">{value}</p>
     </div>
   );
 }

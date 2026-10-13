@@ -3,19 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  Bell,
   CloudRain,
   CloudSun,
   Droplets,
   Wind,
   Thermometer,
   ShieldAlert,
-  X,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  Clock,
   ShieldCheck,
   Navigation,
   RefreshCw,
@@ -29,15 +22,6 @@ import {
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
-// Native Android Hardware & Push Notification Bridge Declaration
-declare global {
-  interface Window {
-    AndroidNotificationBridge?: {
-      postSystemNotification?: (title: string, message: string, category: string) => void;
-    };
-  }
-}
-
 export interface ResiGridNotification {
   id: string;
   title: string;
@@ -46,6 +30,7 @@ export interface ResiGridNotification {
   type: "warning" | "success" | "info" | "error";
   category?: string;
   read?: boolean;
+  timestamp?: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -85,7 +70,21 @@ export default function WeatherClimatePage() {
   const [alertDetails, setAlertDetails] = useState<string>("Continuously tracking regional weather patterns, atmospheric stability, and active advisories across your sector.");
   const [lastCheckTimestamp, setLastCheckTimestamp] = useState<string>("Not synchronized");
 
-  // Push notification helper to broadcast weather alerts directly to global local storage (Home / Notifications feed)
+  // Helper to calculate accurate real-time relative timestamps
+  const getRelativeTimeString = (timestamp?: number) => {
+    if (!timestamp) return "Just now";
+    const diffMs = Date.now() - timestamp;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  // Push notification helper to broadcast province weather alerts directly to global local storage (Home / Notifications feed)
   const pushGlobalNotification = (title: string, description: string, type: "warning" | "success" | "info" | "error") => {
     try {
       const existing = localStorage.getItem("resigrid_global_notifications");
@@ -94,14 +93,16 @@ export default function WeatherClimatePage() {
       // Prevent duplicate identical alerts flooding storage
       const exists = notifs.some((n) => n.title === title && n.description === description);
       if (!exists) {
+        const now = Date.now();
         const newNotif: ResiGridNotification = {
-          id: `weather-alert-${Date.now()}`,
+          id: `weather-alert-${now}`,
           title,
           description,
-          time: "Just now",
+          time: getRelativeTimeString(now),
           type,
           category: "climate",
           read: false,
+          timestamp: now,
         };
         notifs = [newNotif, ...notifs];
         localStorage.setItem("resigrid_global_notifications", JSON.stringify(notifs));

@@ -91,8 +91,8 @@ export default function NavigationDock() {
   };
 
   return (
-    <nav className="floating-dock w-[92%] max-w-md mx-auto">
-      <div className="floating-dock-inner overflow-x-auto no-scrollbar px-1 sm:px-2 py-1.5 flex items-center justify-between">
+    <nav className="floating-dock w-[96%] max-w-xl mx-auto">
+      <div className="floating-dock-inner overflow-x-auto no-scrollbar px-2 sm:px-3 py-2 flex items-center justify-between">
         {activeDockView === "sub1" ? (
           <div className="flex items-center justify-between gap-1 w-full">
             {/* Left Arrow: Returns to Main Navigation */}
@@ -249,7 +249,7 @@ export default function NavigationDock() {
                     setActiveDockView("sub1");
                   }
                 }}
-                className={`dock-item shrink-0 px-2 sm:px-3 py-1 text-[10px] sm:text-xs flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 ${active ? "dock-active" : ""}`}
+                className={`dock-item shrink-0 px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 ${active ? "dock-active" : ""}`}
               >
                 <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px] shrink-0" strokeWidth={1.8} />
                 <span className="truncate">{item.label}</span>

@@ -15,6 +15,9 @@ import {
   User,
   Phone,
   Building,
+  ShieldAlert,
+  Hash,
+  Home,
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 
@@ -36,12 +39,14 @@ export default function CivicAIPage() {
   const [customAddress, setCustomAddress] = useState<string>("");
   const [isRefreshingGeo, setIsRefreshingGeo] = useState<boolean>(false);
 
-  // Full Municipal Fields Form State
+  // Full Municipal Real Logging Form State (Detailed Municipality Requirements)
   const [reportTitle, setReportTitle] = useState("");
-  const [category, setCategory] = useState<"water" | "power" | "roads" | "other">("water");
+  const [category, setCategory] = useState<"water" | "power" | "other">("water");
   const [description, setDescription] = useState("");
   const [reporterName, setReporterName] = useState("");
   const [reporterPhone, setReporterPhone] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [standNumber, setStandNumber] = useState("");
   const [selectedWard, setSelectedWard] = useState("Ward 26 (CBD / Central)");
   const [priority] = useState<"High" | "Medium" | "Low" | "Critical">("High");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,7 +81,7 @@ export default function CivicAIPage() {
 
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
 
-    // Auto-fill profile data if available
+    // Auto-fill profile data & municipal account details if available
     try {
       const savedProfile = localStorage.getItem("resigrid_user_profile");
       if (savedProfile) {
@@ -84,6 +89,8 @@ export default function CivicAIPage() {
         if (parsed.fullName) setReporterName(parsed.fullName);
         if (parsed.phone) setReporterPhone(parsed.phone);
         if (parsed.selectedWard) setSelectedWard(parsed.selectedWard);
+        if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
+        if (parsed.standNumber) setStandNumber(parsed.standNumber);
         if (parsed.streetAddress) {
           setCustomAddress(parsed.streetAddress);
         }
@@ -149,7 +156,7 @@ export default function CivicAIPage() {
   };
 
   // Category Toggle Action
-  const handleCategorySelect = (cat: "water" | "power" | "roads" | "other", e: React.SyntheticEvent) => {
+  const handleCategorySelect = (cat: "water" | "power" | "other", e: React.SyntheticEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setCategory(cat);
@@ -192,6 +199,8 @@ export default function CivicAIPage() {
       time: `Today, ${timestamp} SAST`,
       reporterName: reporterName.trim(),
       reporterPhone: reporterPhone.trim(),
+      accountNumber: accountNumber.trim(),
+      standNumber: standNumber.trim(),
       assignedDepotUnit: "Depot Rapid Response Queue",
       estimatedFixTime: "Pending Triage",
       coords: location ? { lat: location.latitude, lng: location.longitude } : undefined,
@@ -295,12 +304,9 @@ export default function CivicAIPage() {
           </div>
         )}
 
-        {/* EXPLANATORY INTRO TEXT BEFORE CATEGORIES */}
-        <div className="glass-panel p-4 sm:p-5 relative z-20 w-full">
-          <div className="panel-reflection pointer-events-none" />
-          <p className="text-xs sm:text-sm text-muted leading-relaxed">
-            Use this secure municipal interface to report infrastructure faults, water line breaks, power grid outages, and road hazards directly to your assigned municipal ward and emergency response teams. Fill in the details below to trigger automated dispatching.
-          </p>
+        {/* STANDALONE INTRO TEXT */}
+        <div className="px-1 text-xs sm:text-sm text-muted leading-relaxed relative z-20">
+          Use this secure municipal interface to log official fault reference tickets with your municipal account and stand details.
         </div>
 
         {/* MAIN FORM CONTAINER */}
@@ -310,8 +316,8 @@ export default function CivicAIPage() {
           <div className="glass-panel p-4 sm:p-6 space-y-2.5 w-full">
             <div className="panel-reflection pointer-events-none" />
             <label className="text-[11px] sm:text-xs font-medium text-muted block">Select Incident Category</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {(["water", "power", "roads", "other"] as const).map((cat) => (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {(["water", "power", "other"] as const).map((cat) => (
                 <button
                   key={cat}
                   type="button"
@@ -334,7 +340,6 @@ export default function CivicAIPage() {
                 >
                   {cat === "water" && <Droplet className="h-4 w-4 shrink-0 pointer-events-none" />}
                   {cat === "power" && <Zap className="h-4 w-4 shrink-0 pointer-events-none" />}
-                  {cat === "roads" && <AlertTriangle className="h-4 w-4 shrink-0 pointer-events-none" />}
                   {cat === "other" && <FileText className="h-4 w-4 shrink-0 pointer-events-none" />}
                   <span className="pointer-events-none">{cat}</span>
                 </button>
@@ -357,7 +362,7 @@ export default function CivicAIPage() {
                   value={reporterName}
                   onChange={(e) => setReporterName(e.target.value)}
                   placeholder="e.g. John Doe"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
                 />
               </div>
 
@@ -371,7 +376,7 @@ export default function CivicAIPage() {
                   value={reporterPhone}
                   onChange={(e) => setReporterPhone(e.target.value)}
                   placeholder="e.g. +27 82 123 4567"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
                 />
               </div>
 
@@ -382,13 +387,46 @@ export default function CivicAIPage() {
                 <select
                   value={selectedWard}
                   onChange={(e) => setSelectedWard(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors cursor-pointer pointer-events-auto"
                 >
                   <option value="Ward 26 (CBD / Central)" className="bg-neutral-900 text-white">Ward 26 (CBD / Central)</option>
                   <option value="Ward 28 (Raisethorpe / Newholme)" className="bg-neutral-900 text-white">Ward 28 (Raisethorpe / Newholme)</option>
                   <option value="Ward 30 (Northdale / Woodlands)" className="bg-neutral-900 text-white">Ward 30 (Northdale / Woodlands)</option>
                   <option value="Ward 33 (Scottsville / University)" className="bg-neutral-900 text-white">Ward 33 (Scottsville / University)</option>
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Official Municipal Account & Property Details Tile */}
+          <div className="glass-panel p-4 sm:p-6 space-y-4 w-full">
+            <div className="panel-reflection pointer-events-none" />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Hash className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Account Number
+                </label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="e.g. 800459201"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Home className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Stand / Erf Number
+                </label>
+                <input
+                  type="text"
+                  value={standNumber}
+                  onChange={(e) => setStandNumber(e.target.value)}
+                  placeholder="e.g. Erf 1452 Scottsville"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
+                />
               </div>
             </div>
           </div>
@@ -405,7 +443,7 @@ export default function CivicAIPage() {
                 value={reportTitle}
                 onChange={(e) => setReportTitle(e.target.value)}
                 placeholder="e.g. Burst Water Pipe, Substation Outage..."
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
               />
             </div>
 
@@ -417,7 +455,7 @@ export default function CivicAIPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Provide additional details regarding the incident..."
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors resize-none pointer-events-auto"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/35 transition-colors resize-none pointer-events-auto"
               />
             </div>
           </div>
@@ -447,7 +485,7 @@ export default function CivicAIPage() {
                 value={customAddress}
                 onChange={(e) => setCustomAddress(e.target.value)}
                 placeholder="e.g. 142 Chief Albert Luthuli St, Scottsville..."
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors pointer-events-auto"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
               />
             ) : (
               <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">

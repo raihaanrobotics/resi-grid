@@ -603,6 +603,9 @@ export default function VoltShieldPage() {
           </div>
         </div>
 
+        {/* BREATHING ROOM DIVIDER LINE */}
+        <div className="w-full h-px bg-white/15 my-2" />
+
         {/* MAIN DASHBOARD LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6 relative z-20">
           

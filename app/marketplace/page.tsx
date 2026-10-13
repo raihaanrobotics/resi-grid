@@ -340,36 +340,42 @@ export default function MarketplacePage() {
           </div>
         </div>
 
-        {/* SEARCH & FILTER ICON BAR */}
-        <div className="glass-panel p-4 flex items-center gap-3 relative pointer-events-auto">
-          <div className="panel-reflection pointer-events-none" />
+        {/* BREATHING ROOM DIVIDER LINE */}
+        <div className="w-full h-px bg-white/15 my-2" />
 
-          {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search power, water reserves, equipment, or local services..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
-            />
+        {/* EXTRA SPACING CONTAINER BETWEEN DIVIDER AND SEARCH BAR */}
+        <div className="pt-2 sm:pt-4">
+          {/* SEARCH & FILTER ICON BAR */}
+          <div className="glass-panel p-4 flex items-center gap-3 relative pointer-events-auto">
+            <div className="panel-reflection pointer-events-none" />
+
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search power, water reserves, equipment, or local services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+              />
+            </div>
+
+            {/* Filter Modal Trigger Button */}
+            <button
+              type="button"
+              onClick={() => setIsFilterModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
+              style={{
+                color: accentColor,
+                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+              }}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
+            </button>
           </div>
-
-          {/* Filter Modal Trigger Button */}
-          <button
-            type="button"
-            onClick={() => setIsFilterModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
-            style={{
-              color: accentColor,
-              borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-              backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
-            }}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
-          </button>
         </div>
 
         {/* LISTINGS GRID (WITHIN 10KM RADIUS) */}

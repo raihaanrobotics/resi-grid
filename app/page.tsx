@@ -7,15 +7,11 @@ import {
   Bell,
   ChevronRight,
   Droplets,
-  Home,
   Landmark,
-  Map,
   Network,
   Radio,
   CloudSun,
-  ShoppingBag,
   Store,
-  UserRound,
   Zap,
   X,
   Trash2,
@@ -41,7 +37,7 @@ export interface ResiGridNotification {
   type: "warning" | "success" | "info" | "error";
   category?: string;
   read?: boolean;
-  timestamp?: number;
+  timestamp: number; // Required for reliable relative timestamp calculations
 }
 
 const modules = [
@@ -105,7 +101,7 @@ export default function HomePage() {
   const [energyStatus, setEnergyStatus] = useState<string>("Normal");
   const [weatherSummary, setWeatherSummary] = useState<string>("Loading weather...");
   const [summaryText, setSummaryText] = useState<string>(
-    "Water, power, and climate conditions are looking good in your area today."
+    "No reports. Water, power, and climate conditions are looking good in your area today."
   );
 
   // Notification Feed State & Modal Controls
@@ -113,15 +109,28 @@ export default function HomePage() {
   const [isNotifModalOpen, setIsNotifModalOpen] = useState<boolean>(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  // Helper to calculate accurate real-time relative timestamps
+  // Lock body scroll and handle mobile viewport when notification modal is active
+  useEffect(() => {
+    if (isNotifModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [isNotifModalOpen]);
+
+  // Robust helper to calculate accurate real-time relative timestamps from epoch milliseconds
   const getRelativeTimeString = (timestamp?: number) => {
-    if (!timestamp) return "Just now";
+    if (!timestamp || isNaN(timestamp)) return "Just now";
     const diffMs = Date.now() - timestamp;
-    const diffMins = Math.floor(diffMs / 60000);
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffMins < 1) return "Just now";
+    if (diffSecs < 45) return "Just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${diffDays}d ago`;
@@ -156,16 +165,17 @@ export default function HomePage() {
   const loadGlobalNotifications = () => {
     try {
       const savedNotifs = localStorage.getItem("resigrid_global_notifications");
+      const now = Date.now();
       if (savedNotifs) {
         const parsed: ResiGridNotification[] = JSON.parse(savedNotifs);
         const updatedTimes = parsed.map((n) => ({
           ...n,
-          time: getRelativeTimeString(n.timestamp),
+          timestamp: n.timestamp || now, // fallback if legacy item lacked timestamp
+          time: getRelativeTimeString(n.timestamp || now),
         }));
         setNotifications(updatedTimes);
         setUnreadCount(updatedTimes.filter((n) => !n.read).length);
       } else {
-        const now = Date.now();
         const defaultNotifs: ResiGridNotification[] = [
           {
             id: "notif-init-1",
@@ -194,15 +204,16 @@ export default function HomePage() {
 
     loadGlobalNotifications();
 
-    // Live relative timestamp updater ticker every 30 seconds
+    // Live relative timestamp updater ticker every 5 seconds for instant updates
     const tickerInterval = setInterval(() => {
+      syncStatusFromData();
       setNotifications((prev) =>
         prev.map((n) => ({
           ...n,
           time: getRelativeTimeString(n.timestamp),
         }))
       );
-    }, 30000);
+    }, 5000);
 
     // Fetch live local weather from Open-Meteo
     if (typeof window !== "undefined" && navigator.geolocation) {
@@ -298,12 +309,15 @@ export default function HomePage() {
 
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             parsed.forEach((report: any) => {
               const cat = (report.category || "").toLowerCase();
-              if (cat === "water") hasWaterIssue = true;
-              if (cat === "power") hasPowerIssue = true;
+              if (cat === "water" || cat.includes("water")) hasWaterIssue = true;
+              if (cat === "power" || cat.includes("power") || cat.includes("electricity")) hasPowerIssue = true;
             });
+            if (!hasWaterIssue && !hasPowerIssue && parsed.length > 0) {
+              hasWaterIssue = true;
+            }
           }
         }
 
@@ -313,14 +327,10 @@ export default function HomePage() {
         setWaterStatus(newWater);
         setEnergyStatus(newEnergy);
 
-        if (hasWaterIssue && hasPowerIssue) {
-          setSummaryText("Active water and power service disruptions reported in your sector.");
-        } else if (hasWaterIssue) {
-          setSummaryText("A water service issue has been reported nearby. Monitoring municipal response.");
-        } else if (hasPowerIssue) {
-          setSummaryText("A power grid fault has been reported nearby. Check backup availability.");
+        if (hasWaterIssue || hasPowerIssue || (saved && JSON.parse(saved).length > 0)) {
+          setSummaryText("Issues have been reported in your area.");
         } else {
-          setSummaryText("Water, power, and climate conditions are looking good in your area today.");
+          setSummaryText("No issues reported in your area today.");
         }
 
         loadGlobalNotifications();
@@ -357,11 +367,13 @@ export default function HomePage() {
     };
 
     window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("focus", syncStatusFromData);
 
     return () => {
       window.removeEventListener("resigrid_theme_change", handleThemeEvent);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", syncStatusFromData);
       clearInterval(tickerInterval);
     };
   }, []);
@@ -395,7 +407,7 @@ export default function HomePage() {
   }, {} as Record<string, ResiGridNotification[]>);
 
   return (
-    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-cyan-500/30 selection:text-cyan-200">
+    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-cyan-500/30 selection:text-cyan-200 relative">
       {/* Ambient environment */}
       <div className="ambient-background" aria-hidden="true">
         <div className="ambient-orb orb-one" />
@@ -557,43 +569,44 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* MOBILE-RESPONSIVE, SCROLLABLE NOTIFICATION MODAL OVERLAY */}
+      {/* FULL-SCREEN IMMERSIVE MOBILE-RESPONSIVE NOTIFICATION MODAL OVERLAY */}
       {isNotifModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 pb-20 sm:pb-6 pointer-events-auto transition-all">
-          <div className="w-full max-w-lg glass-panel p-4 sm:p-6 relative space-y-4 pointer-events-auto max-h-[80vh] sm:max-h-[75vh] flex flex-col justify-between border border-white/20 shadow-2xl rounded-3xl">
+        <div className="fixed inset-0 z-[99999] flex flex-col bg-black/98 backdrop-blur-2xl pointer-events-auto transition-all overflow-hidden h-[100dvh] w-[100vw]">
+          <div className="w-full h-full max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-between relative z-20 overflow-hidden">
             
             {/* Header with Title and X Close Button */}
-            <div className="flex items-center justify-between pb-2 border-b border-white/10 relative z-20 shrink-0">
-              <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-[var(--accent)]" />
-                <h3 className="text-xs sm:text-sm font-bold tracking-wider text-white uppercase">
-                  Notifications
+            <div className="flex items-center justify-between pb-4 border-b border-white/10 shrink-0 pt-2 sm:pt-0">
+              <div className="flex items-center gap-2.5">
+                <Bell className="h-5 w-5 text-[var(--accent)]" />
+                <h3 className="text-xs sm:text-base font-bold tracking-wider text-white uppercase">
+                  Notifications &amp; Advisories
                 </h3>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsNotifModalOpen(false)}
-                className="text-muted hover:text-white transition-colors p-1.5 rounded-2xl bg-white/5 border border-white/10 cursor-pointer touch-manipulation"
+                aria-label="Close notifications"
+                className="text-muted hover:text-white transition-colors p-2.5 rounded-2xl bg-white/5 border border-white/10 cursor-pointer touch-manipulation"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Scrollable Notification Feed with Hidden Scrollbar */}
-            <div className="overflow-y-auto space-y-4 pr-1 relative z-20 flex-1 my-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="overflow-y-auto space-y-6 py-4 flex-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden min-h-0">
               {notifications.length === 0 ? (
-                <div className="p-8 text-center text-muted text-xs rounded-3xl space-y-2">
-                  <Bell className="h-6 w-6 mx-auto opacity-30 text-[var(--accent)]" />
+                <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted text-xs space-y-3">
+                  <Bell className="h-10 w-10 opacity-30 text-[var(--accent)]" />
                   <p>All caught up. No active notifications.</p>
                 </div>
               ) : (
                 Object.entries(groupedNotifications).map(([genre, notifs]) => (
-                  <div key={genre} className="space-y-2">
-                    <p className="text-[9px] font-mono font-bold tracking-widest text-[var(--accent)] uppercase px-1">
+                  <div key={genre} className="space-y-3">
+                    <p className="text-[10px] font-mono font-bold tracking-widest text-[var(--accent)] uppercase px-1">
                       {genre}
                     </p>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {notifs.map((notif) => {
                         let NotifIcon = Info;
                         let iconColorStyle = { color: "var(--accent)" };
@@ -609,18 +622,18 @@ export default function HomePage() {
                         return (
                           <div
                             key={notif.id}
-                            className="p-3.5 rounded-2xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-3 transition-all hover:border-white/20 shadow-md"
+                            className="p-4 sm:p-5 rounded-3xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-4 transition-all hover:border-white/20 shadow-lg"
                           >
-                            <div className="flex items-start gap-3 min-w-0">
-                              <NotifIcon className="h-4 w-4 shrink-0 mt-0.5" style={iconColorStyle} />
-                              <div className="space-y-0.5 min-w-0">
-                                <h4 className="text-xs font-semibold text-white leading-snug truncate">
+                            <div className="flex items-start gap-3.5 min-w-0">
+                              <NotifIcon className="h-5 w-5 shrink-0 mt-0.5" style={iconColorStyle} />
+                              <div className="space-y-1 min-w-0">
+                                <h4 className="text-xs sm:text-sm font-semibold text-white leading-snug">
                                   {notif.title}
                                 </h4>
-                                <p className="text-[11px] text-muted leading-relaxed">
+                                <p className="text-xs text-muted leading-relaxed">
                                   {notif.description}
                                 </p>
-                                <span className="inline-block text-[9px] font-mono text-muted/70 pt-0.5">
+                                <span className="inline-block text-[10px] font-mono text-muted/70 pt-0.5">
                                   {notif.time}
                                 </span>
                               </div>
@@ -629,9 +642,10 @@ export default function HomePage() {
                             <button
                               type="button"
                               onClick={() => handleDismissSingleNotification(notif.id)}
-                              className="text-muted hover:text-white transition-colors p-1 shrink-0 cursor-pointer"
+                              aria-label="Dismiss notification"
+                              className="text-muted hover:text-white transition-colors p-2 shrink-0 cursor-pointer rounded-xl bg-white/5 border border-white/10 touch-manipulation"
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <X className="h-4 w-4" />
                             </button>
                           </div>
                         );
@@ -642,15 +656,15 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Footer with Clear All Button moved to the right */}
-            <div className="pt-3 border-t border-white/10 flex items-center justify-end relative z-20 shrink-0">
+            {/* Footer with Clear All Button */}
+            <div className="pt-4 border-t border-white/10 flex items-center justify-end shrink-0 pb-safe">
               {notifications.length > 0 && (
                 <button
                   type="button"
                   onClick={handleClearNotifications}
-                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-2 px-4 rounded-2xl bg-white/5 border border-white/10 touch-manipulation"
+                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-3 px-5 rounded-2xl bg-white/5 border border-white/10 touch-manipulation"
                 >
-                  <Trash2 className="h-3.5 w-3.5" /> Clear All
+                  <Trash2 className="h-4 w-4" /> Clear All Notifications
                 </button>
               )}
             </div>

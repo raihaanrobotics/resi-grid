@@ -22,7 +22,6 @@ import {
   Activity,
   Gauge,
   Clock,
-  TestTube,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
@@ -648,6 +647,9 @@ export default function HydroMeshPage() {
           </div>
         </div>
 
+        {/* BREATHING ROOM DIVIDER LINE */}
+        <div className="w-full h-px bg-white/15 my-2" />
+
         {/* MAIN DASHBOARD LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6 relative z-20">
           
@@ -665,16 +667,6 @@ export default function HydroMeshPage() {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="eyebrow text-[10px]" style={{ color: accentColor }}>TAP PRESSURE SENSOR</p>
-                      <span 
-                        className="px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold border flex items-center gap-1.5"
-                        style={{
-                          color: accentColor,
-                          backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
-                          borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
-                        }}
-                      >
-                        <TestTube className="w-3 h-3" /> Experimental Telemetry
-                      </span>
                     </div>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
                       Test Your Tap Flow

@@ -9,9 +9,12 @@ import {
   Network, 
   UserRound, 
   ArrowLeft, 
+  ArrowRight,
   Droplets, 
   Zap, 
-  Shield 
+  Shield, 
+  CloudSun, 
+  Landmark 
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -31,65 +34,133 @@ const featureRoutes = [
   "/spazarescue",
   "/routepulse",
   "/civic",
+  "/weather",
 ];
 
-const subFeatures = [
+const subFeaturesGroup1 = [
   { label: "Water", href: "/hydromesh", icon: Droplets },
   { label: "Power", href: "/voltshield", icon: Zap },
   { label: "Spaza", href: "/spazarescue", icon: Shield },
+];
+
+const subFeaturesGroup2 = [
+  { label: "Weather", href: "/weather", icon: CloudSun },
+  { label: "Report", href: "/civic", icon: Landmark },
 ];
 
 export default function NavigationDock() {
   const pathname = usePathname();
 
   const isFeatureActive = featureRoutes.some((route) => pathname.startsWith(route));
-  const [subDockOpen, setSubDockOpen] = useState(false);
+  
+  // Dock state: "main" | "sub1" (Water/Power/Spaza) | "sub2" (Weather/Report)
+  const [activeDockView, setActiveDockView] = useState<"main" | "sub1" | "sub2">("main");
 
-  // Automatically open sub-dock when navigating to any feature page, close when leaving
+  // Automatically open sub-dock group 1 when navigating to feature pages, close when leaving
   useEffect(() => {
     if (isFeatureActive) {
-      setSubDockOpen(true);
+      if (pathname.startsWith("/weather") || pathname.startsWith("/civic")) {
+        setActiveDockView("sub2");
+      } else {
+        setActiveDockView("sub1");
+      }
     } else {
-      setSubDockOpen(false);
+      setActiveDockView("main");
     }
-  }, [isFeatureActive]);
+  }, [isFeatureActive, pathname]);
 
-  const handleCloseSubDock = () => {
-    setSubDockOpen(false);
+  const handleReturnToMain = () => {
+    setActiveDockView("main");
+  };
+
+  const handleSwitchToGroup2 = () => {
+    setActiveDockView("sub2");
+  };
+
+  const handleSwitchToGroup1 = () => {
+    setActiveDockView("sub1");
   };
 
   return (
-    <nav className="floating-dock">
-      <div className="floating-dock-inner overflow-x-auto no-scrollbar">
-        {subDockOpen ? (
-          <div className="flex items-center justify-between gap-1.5 w-full px-1">
-            {/* Back Arrow Button (Only Arrow, Restores Default Dock) */}
+    <nav className="floating-dock w-[92%] max-w-md mx-auto">
+      <div className="floating-dock-inner overflow-x-auto no-scrollbar px-1 sm:px-2 py-1.5 flex items-center justify-between">
+        {activeDockView === "sub1" ? (
+          <div className="flex items-center justify-between gap-1 w-full">
+            {/* Left Arrow: Returns to Main Navigation */}
             <button
               type="button"
-              onClick={handleCloseSubDock}
-              className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-2"
-              title="Close sub-dock"
+              onClick={handleReturnToMain}
+              className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
+              title="Back to main navigation"
               aria-label="Back to main navigation"
             >
-              <ArrowLeft className="h-[18px] w-[18px]" strokeWidth={1.8} />
+              <ArrowLeft className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
             </button>
 
             {/* Vertical Line Divider */}
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
 
-            {/* Sub-Feature Items */}
-            <div className="flex items-center justify-around gap-1 w-full overflow-x-auto no-scrollbar">
-              {subFeatures.map((sub) => {
+            {/* Sub-Feature Items Group 1 */}
+            <div className="flex items-center justify-around gap-0.5 sm:gap-1 w-full overflow-x-auto no-scrollbar">
+              {subFeaturesGroup1.map((sub) => {
                 const SubIcon = sub.icon;
                 const subActive = pathname.startsWith(sub.href);
                 return (
                   <Link
                     key={sub.label}
                     href={sub.href}
-                    className={`dock-item shrink-0 ${subActive ? "dock-active" : ""}`}
+                    className={`dock-item shrink-0 px-2 py-1 text-[11px] sm:text-xs flex items-center gap-1 ${subActive ? "dock-active" : ""}`}
                   >
-                    <SubIcon className="h-[16px] w-[16px]" strokeWidth={1.8} />
-                    <span>{sub.label}</span>
+                    <SubIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />
+                    <span className="truncate">{sub.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Vertical Line Divider */}
+            <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
+
+            {/* Right Arrow: Switches to Sub-Feature Group 2 (Weather & Report) */}
+            <button
+              type="button"
+              onClick={handleSwitchToGroup2}
+              className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
+              title="Next sub-dock"
+              aria-label="Switch to Weather and Report"
+            >
+              <ArrowRight className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
+            </button>
+          </div>
+        ) : activeDockView === "sub2" ? (
+          <div className="flex items-center justify-between gap-1 w-full">
+            {/* Left Arrow: Switches back to Sub-Feature Group 1 */}
+            <button
+              type="button"
+              onClick={handleSwitchToGroup1}
+              className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
+              title="Previous sub-dock"
+              aria-label="Switch to Water, Power and Spaza"
+            >
+              <ArrowLeft className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
+            </button>
+
+            {/* Vertical Line Divider */}
+            <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
+
+            {/* Sub-Feature Items Group 2 (Weather & Report) */}
+            <div className="flex items-center justify-around gap-1 sm:gap-2 w-full overflow-x-auto no-scrollbar">
+              {subFeaturesGroup2.map((sub) => {
+                const SubIcon = sub.icon;
+                const subActive = pathname.startsWith(sub.href);
+                return (
+                  <Link
+                    key={sub.label}
+                    href={sub.href}
+                    className={`dock-item shrink-0 px-3 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${subActive ? "dock-active" : ""}`}
+                  >
+                    <SubIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />
+                    <span className="truncate">{sub.label}</span>
                   </Link>
                 );
               })}
@@ -112,15 +183,16 @@ export default function NavigationDock() {
               <Link
                 key={item.label}
                 href={item.href}
-                onClick={() => {
+                onClick={(e) => {
                   if (item.label === "Features") {
-                    setSubDockOpen(true);
+                    e.preventDefault();
+                    setActiveDockView("sub1");
                   }
                 }}
-                className={`dock-item ${active ? "dock-active" : ""}`}
+                className={`dock-item shrink-0 px-2 sm:px-3 py-1 text-[10px] sm:text-xs flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 ${active ? "dock-active" : ""}`}
               >
-                <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} />
-                <span>{item.label}</span>
+                <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px] shrink-0" strokeWidth={1.8} />
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })

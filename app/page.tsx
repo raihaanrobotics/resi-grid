@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Droplets,
   Landmark,
-  Network,
   Radio,
   CloudSun,
   Store,
@@ -75,13 +74,6 @@ const modules = [
     href: "/civic",
     icon: Landmark,
     color: "civic",
-  },
-  {
-    title: "Community",
-    description: "Chat with your street or neighborhood",
-    href: "/kasi-mesh",
-    icon: Network,
-    color: "mesh",
   },
 ];
 
@@ -531,7 +523,7 @@ export default function HomePage() {
                 </h2>
               </div>
 
-              <span className="text-[10px] text-muted">06 SYSTEMS</span>
+              <span className="text-[10px] text-muted">05 SYSTEMS</span>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

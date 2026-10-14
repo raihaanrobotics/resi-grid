@@ -267,7 +267,7 @@ export default function VoltShieldPage() {
         const newNotif = {
           id: alertId,
           title: "Power voltage sag detected",
-          description: `A voltage sag/ripple drop was recorded near you at ${streetAddress}. Tap your line to test your stability as well.`,
+          description: `A voltage sag/ripple drop was recorded near you at ${streetAddress}. Tap your phone while charging to test your stability as well.`,
           time: "Just now",
           type: "warning",
           category: "power"
@@ -295,7 +295,7 @@ export default function VoltShieldPage() {
             const promptNotif = {
               id: "outage-prompt-nearby-power",
               title: "Power outage reported nearby",
-              description: "A power outage was reported within 10km of your location. Test your line stability now as you could be affected next.",
+              description: "A power outage was reported within 10km of your location. Plug in your phone and test line stability now as you could be affected next.",
               time: "Just now",
               type: "warning",
               category: "power"
@@ -441,7 +441,7 @@ export default function VoltShieldPage() {
     };
   }, [stopShuntScan]);
 
-  // Industrial Battery Shunt & Charging Ripple Diagnostic Scan (Pulling Accurate Bridge Data)
+  // Phone Charging Shunt & Power Noise Diagnostic Scan
   const startShuntScan = async () => {
     setErrorMessage(null);
     setScanProgress(0);
@@ -533,6 +533,14 @@ export default function VoltShieldPage() {
     localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
   };
 
+  // Determine Outage Risk Level from Grid Stability Score
+  let outageRiskLabel = "Low Risk";
+  if (gridStabilityScore < 85) {
+    outageRiskLabel = "High Risk";
+  } else if (gridStabilityScore < 95) {
+    outageRiskLabel = "Medium Risk";
+  }
+
   return (
     <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
       {/* Ambient environment */}
@@ -557,7 +565,7 @@ export default function VoltShieldPage() {
                 VOLTSHIELD
               </h1>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                SURGE ARMOR & POWER QUALITY TELEMETRY
+                POWER QUALITY
               </p>
             </div>
           </header>
@@ -609,10 +617,10 @@ export default function VoltShieldPage() {
         {/* MAIN DASHBOARD LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6 relative z-20">
           
-          {/* LEFT COLUMN: HARDWARE SHUNT SCANNER & STATS */}
+          {/* LEFT COLUMN: PHONE CHARGING TEST & STATS */}
           <div className="lg:col-span-2 space-y-5">
             
-            {/* HARDWARE SHUNT SCANNER INTERFACE */}
+            {/* PHONE CHARGING TEST INTERFACE */}
             <section
               onClick={isScanning ? stopShuntScan : startShuntScan}
               className="relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5"
@@ -620,12 +628,12 @@ export default function VoltShieldPage() {
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>HARDWARE SHUNT & RIPPLE SENSOR</p>
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>POWER TEST</p>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
-                      Live Charging Current & Outage Pre-Warning
+                      Measure Power While Your Phone Charges
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Tap anywhere below to sample device charging shunt current ({shuntCurrentMa} mA) and DC bus ripple voltage ({dcRippleMv} mV). Sudden ripple spikes detect upstream substation instability before load-shedding occurs.
+                      Plug your phone into a charger and tap anywhere below. This test measures the electrical current and noise coming through your charger to detect if local power instability or a blackout is on the way.
                     </p>
                   </div>
                 </div>
@@ -645,9 +653,9 @@ export default function VoltShieldPage() {
                       >
                         <Gauge className="h-6 w-6" />
                       </div>
-                      <p className="text-xs sm:text-sm font-semibold text-white">Tap to Run Shunt Ripple Diagnostic</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Tap to Test While Charging</p>
                       <p className="mt-1 text-[11px]" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>
-                        Analyzes charging current fluctuations &amp; AC line sag
+                        Measures charging current &amp; line noise
                       </p>
                     </div>
                   )}
@@ -672,7 +680,7 @@ export default function VoltShieldPage() {
                       <div className="flex items-center justify-center gap-2">
                         <Activity className="h-4 w-4 animate-pulse shrink-0" style={{ color: "var(--accent)" }} />
                         <p className="text-xs font-semibold truncate" style={{ color: "var(--accent)" }}>
-                          Shunt Current Sampling ({scanProgress}%) • {shuntCurrentMa} mA • {dcRippleMv} mV Ripple
+                          Measuring Power ({scanProgress}%) • {shuntCurrentMa} mA • {dcRippleMv} mV Noise
                         </p>
                       </div>
                     </div>
@@ -692,10 +700,10 @@ export default function VoltShieldPage() {
                         <CheckCircle2 className="h-6 w-6" />
                       </div>
                       <h3 className="text-sm sm:text-lg font-semibold" style={{ color: "var(--accent)" }}>
-                        {gridStabilityScore}% Stability — Shunt Telemetry Nominal
+                        {gridStabilityScore}% Stability — Test Complete
                       </h3>
                       <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
-                        No upstream voltage sag detected. Tap again to re-sample.
+                        Test is finished. Tap again to re-test.
                       </p>
                     </div>
                   )}
@@ -719,12 +727,12 @@ export default function VoltShieldPage() {
                     <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--accent)" }} />
                     <div className="space-y-1">
                       <strong className="block text-[11px] uppercase tracking-wider" style={{ color: "var(--accent)" }}>
-                        Status Check Summary
+                        Test Results Summary
                       </strong>
                       <p className="text-muted leading-relaxed">
                         {gridStabilityScore < 85 || dcRippleMv > 25
-                          ? "Voltage sag or instability detected! Neighbors nearby have been notified. Prepare backup power systems."
-                          : "Power grid stability is stable and normal in your area."}
+                          ? "Warning: Voltage drop or high electrical noise detected while charging! Neighbors nearby have been alerted. Get your backup power ready."
+                          : "Your charging power is stable and running normally."}
                       </p>
                     </div>
                   </div>
@@ -743,9 +751,11 @@ export default function VoltShieldPage() {
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto space-y-1">
                 <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.08em] text-muted">
-                  <ShieldCheck className="w-3 h-3" style={{ color: "var(--accent)" }} /> SPD Health
+                  <ShieldCheck className="w-3 h-3" style={{ color: "var(--accent)" }} /> Outage Risk
                 </div>
-                <p className="text-xs sm:text-sm font-semibold text-white">98.4% (Optimal)</p>
+                <p className="text-xs sm:text-sm font-semibold text-white">
+                  {outageRiskLabel}
+                </p>
               </div>
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto space-y-1">
@@ -785,10 +795,10 @@ export default function VoltShieldPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Calculator className="w-4 h-4" style={{ color: "var(--accent)" }} />
-                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>EXACT MUNICIPAL ELECTRICITY TARIFF ENGINE</p>
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>TARIFF CALCULATOR</p>
                   </div>
                   <h2 className="text-base sm:text-lg font-semibold text-white">
-                    Tariff Calculator
+                    Municipal Bill & Savings Calculator
                   </h2>
                 </div>
 

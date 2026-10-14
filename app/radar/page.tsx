@@ -272,7 +272,7 @@ export default function RadarPage() {
                 RADAR
               </h1>
               <p className="text-[9px] sm:text-[10px] tracking-wider text-muted mt-0.5 truncate">
-                10KM AREA 
+                10KM AREA RADIUS
               </p>
             </div>
           </div>

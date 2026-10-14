@@ -290,10 +290,10 @@ export default function MarketplacePage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                RESIMARKET™
+                RESIMARKET
               </h1>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                NEIGHBORHOOD POWER, WATER & SERVICE TRADING
+                POWER, WATER & SERVICE TRADING
               </p>
             </div>
           </header>

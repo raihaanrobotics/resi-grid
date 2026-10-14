@@ -13,6 +13,8 @@ import {
   Smartphone,
   LogOut,
   Trash2,
+  Hash,
+  Home,
 } from "lucide-react";
 
 const ACCENT_PALETTES = [
@@ -195,6 +197,8 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("+27 82 123 4567");
   const [selectedWard, setSelectedWard] = useState("Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
   const [streetAddress, setStreetAddress] = useState("142 Chief Albert Luthuli St, Pietermaritzburg");
+  const [accountNumber, setAccountNumber] = useState("800459201");
+  const [standNumber, setStandNumber] = useState("Erf 1452 Scottsville");
 
   // App Preference Toggles
   const [emergencyAlerts, setEmergencyAlerts] = useState(true);
@@ -225,6 +229,8 @@ export default function ProfilePage() {
         if (parsed.selectedCity) setSelectedCity(parsed.selectedCity);
         if (parsed.selectedWard) setSelectedWard(parsed.selectedWard);
         if (parsed.streetAddress) setStreetAddress(parsed.streetAddress);
+        if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
+        if (parsed.standNumber) setStandNumber(parsed.standNumber);
         if (parsed.emergencyAlerts !== undefined) setEmergencyAlerts(parsed.emergencyAlerts);
         if (parsed.communityBroadcasts !== undefined) setCommunityBroadcasts(parsed.communityBroadcasts);
       }
@@ -283,6 +289,8 @@ export default function ProfilePage() {
       selectedCity,
       selectedWard,
       streetAddress,
+      accountNumber,
+      standNumber,
       emergencyAlerts,
       communityBroadcasts,
     };
@@ -341,7 +349,7 @@ export default function ProfilePage() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                  USER PROFILE & THEME
+                  PROFILE
                 </h1>
                 <span 
                   className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-accent-dynamic shrink-0 transition-all"
@@ -354,7 +362,7 @@ export default function ProfilePage() {
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                MANAGE PERSONAL CREDENTIALS, MUNICIPAL LOCATION & FEATURE ACCENT COLORS
+                MANAGE PERSONAL CREDENTIALS
               </p>
             </div>
           </div>
@@ -381,7 +389,7 @@ export default function ProfilePage() {
               <p className="text-xs text-muted truncate mt-0.5">{email}</p>
               <div className="flex items-center gap-2 mt-1.5 text-[10px] sm:text-[11px] text-muted flex-wrap">
                 <span className="flex items-center gap-1 text-accent-dynamic">
-                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity}, {selectedProvince} • {wardNumberOnly}
+                  <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {wardNumberOnly}
                 </span>
               </div>
             </div>
@@ -407,10 +415,10 @@ export default function ProfilePage() {
 
             <div className="border-b border-white/10 pb-3">
               <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                <Palette className="w-4 h-4 text-accent-dynamic shrink-0" /> System Accent Theme (Features Pages)
+                <Palette className="w-4 h-4 text-accent-dynamic shrink-0" /> System Theme
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Select your primary accent color. This customizes all feature pages and navigation while keeping the home landing page untouched.
+                Select your primary accent color.
               </p>
             </div>
 
@@ -475,7 +483,7 @@ export default function ProfilePage() {
                 <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Personal & Municipal Details
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Update contact information, select your South African province, city, and municipal ward.
+                Update your information.
               </p>
             </div>
 
@@ -556,6 +564,32 @@ export default function ProfilePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Hash className="h-3 w-3 text-accent-dynamic shrink-0" /> Municipal Account Number
+                </label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="e.g. 800459201"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Home className="h-3 w-3 text-accent-dynamic shrink-0" /> Stand / Erf Number
+                </label>
+                <input
+                  type="text"
+                  value={standNumber}
+                  onChange={(e) => setStandNumber(e.target.value)}
+                  placeholder="e.g. Erf 1452 Scottsville"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
+                />
               </div>
 
               <div className="sm:col-span-2">

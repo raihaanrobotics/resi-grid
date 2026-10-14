@@ -14,6 +14,7 @@ import {
   Eye,
   EyeOff,
   Navigation,
+  Plus,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
@@ -268,10 +269,10 @@ export default function RadarPage() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-white truncate">
-                COMMUNITY RADAR
+                RADAR
               </h1>
               <p className="text-[9px] sm:text-[10px] tracking-wider text-muted mt-0.5 truncate">
-                10KM AREA HAZARD FEED
+                10KM AREA 
               </p>
             </div>
           </div>
@@ -286,7 +287,18 @@ export default function RadarPage() {
 
             {/* Map Header / Filters */}
             <div className="flex items-center justify-between mb-2 sm:mb-3 z-20 flex-wrap gap-2">
-              <div />
+              {/* Report Button Pill with Plus Icon */}
+              <Link
+                href="/civic"
+                className="glass-panel px-3 py-2 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
+                style={{
+                  borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                  backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
+                <span className="inline">Report</span>
+              </Link>
 
               {/* Layer Filters Toolbar */}
               <div className="flex items-center gap-1.5 sm:gap-2 bg-black/40 p-1 rounded-xl border border-white/10">
@@ -429,7 +441,7 @@ export default function RadarPage() {
           <div className="glass-panel p-4 sm:p-6 flex flex-col justify-between relative pointer-events-auto">
             <div className="panel-reflection pointer-events-none" />
 
-            <div>
+            <div className="w-full">
               <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
                 <h2 className="text-xs font-semibold text-white tracking-wider">ALL INCIDENT DETAILS</h2>
                 <span className="text-[10px] font-mono text-muted">{displayIncidents.length} Active</span>
@@ -491,18 +503,6 @@ export default function RadarPage() {
                 )}
               </div>
             </div>
-
-            <Link 
-              href="/civic" 
-              className="w-full mt-4 py-2.5 rounded-xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
-              style={{
-                color: accentColor,
-                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`
-              }}
-            >
-              Report New Hazard <ChevronRight className="w-4 h-4" />
-            </Link>
           </div>
 
         </div>

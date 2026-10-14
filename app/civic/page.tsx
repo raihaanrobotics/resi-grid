@@ -261,7 +261,7 @@ export default function CivicAIPage() {
                 INCIDENT REPORTING
               </h1>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                DIRECT MUNICIPAL & NEIGHBORHOOD FAULT BROADCAST
+                DIRECT MUNICIPAL ISSUE LOGGING
               </p>
             </div>
           </header>
@@ -306,7 +306,7 @@ export default function CivicAIPage() {
 
         {/* STANDALONE INTRO TEXT */}
         <div className="px-1 text-xs sm:text-sm text-muted leading-relaxed relative z-20">
-          Use this secure municipal interface to log official fault reference tickets with your municipal account and stand details.
+          Complete the form to log official fault reference tickets with your municipal account and stand details.
         </div>
 
         {/* MAIN FORM CONTAINER */}

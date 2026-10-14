@@ -554,7 +554,7 @@ export default function VoltShieldPage() {
 
             <div className="min-w-0">
               <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                VOLTSHIELD™
+                VOLTSHIELD
               </h1>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
                 SURGE ARMOR & POWER QUALITY TELEMETRY
@@ -788,7 +788,7 @@ export default function VoltShieldPage() {
                     <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>EXACT MUNICIPAL ELECTRICITY TARIFF ENGINE</p>
                   </div>
                   <h2 className="text-base sm:text-lg font-semibold text-white">
-                    Electricity Bill &amp; Savings Calculator
+                    Tariff Calculator
                   </h2>
                 </div>
 
@@ -919,7 +919,7 @@ export default function VoltShieldPage() {
           <div className="w-full h-px bg-white/25 my-8 sm:my-10" />
 
           <div className="mb-4">
-            <p className="eyebrow" style={{ color: "var(--accent)" }}>AREA REPORTS (WITHIN 10KM)</p>
+            <p className="eyebrow" style={{ color: "var(--accent)" }}>AREA REPORTS</p>
             <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
               Power Outages Nearby
             </h2>
@@ -983,7 +983,7 @@ export default function VoltShieldPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-center sm:text-left mb-6 sm:mb-8">
             <div className="mx-auto sm:mx-0">
               <h2 className="mt-1 text-base sm:text-lg font-medium text-white text-center sm:text-left">
-                Neighborhood Backup Power Sharing Nodes (Within 10km)
+                Neighborhood Backup Power Sharing
               </h2>
             </div>
 

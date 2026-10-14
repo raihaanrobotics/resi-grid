@@ -601,7 +601,7 @@ export default function HydroMeshPage() {
                 HYDROMESH™
               </h1>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                WATER FLOW & TAP PRESSURE TELEMETRY
+                WATER FLOW & TAP PRESSURE
               </p>
             </div>
           </header>
@@ -666,13 +666,13 @@ export default function HydroMeshPage() {
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="eyebrow text-[10px]" style={{ color: accentColor }}>TAP PRESSURE SENSOR</p>
+                      <p className="eyebrow text-[10px]" style={{ color: accentColor }}>TAP PRESSURE</p>
                     </div>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
                       Test Your Tap Flow
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Tap anywhere below and hold your phone near your tap to test water line pressure.
+                      Hold your phone microphone on your tap spout to test water line pressure.
                     </p>
                   </div>
                 </div>
@@ -967,7 +967,7 @@ export default function HydroMeshPage() {
           <div className="w-full h-px bg-white/25 my-8 sm:my-10" />
 
           <div className="mb-4">
-            <p className="eyebrow" style={{ color: accentColor }}>AREA REPORTS (WITHIN 10KM)</p>
+            <p className="eyebrow" style={{ color: accentColor }}>AREA REPORTS</p>
             <h2 className="mt-1 text-sm sm:text-base font-semibold text-white">
               Water Faults Nearby
             </h2>
@@ -1031,7 +1031,7 @@ export default function HydroMeshPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-center sm:text-left mb-6 sm:mb-8">
             <div className="mx-auto sm:mx-0">
               <h2 className="mt-1 text-base sm:text-lg font-medium text-white text-center sm:text-left">
-                Neighborhood Water Sharing Nodes (Within 10km)
+                Neighborhood Water Sharing
               </h2>
             </div>
 

@@ -311,7 +311,7 @@ export default function WeatherClimatePage() {
                   WEATHER &amp; CLIMATE
                 </h1>
                 <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                  {userProvince.toUpperCase()} ALERTS &amp; ATMOSPHERIC TELEMETRY
+                  {userProvince.toUpperCase()} ALERTS
                 </p>
               </div>
             </Link>
@@ -372,7 +372,7 @@ export default function WeatherClimatePage() {
 
                 <div className="space-y-2 min-w-0 flex-1">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[10px] font-mono text-muted">Synchronized: {lastCheckTimestamp}</span>
+                    <span className="text-[10px] font-mono text-muted">Refreshed: {lastCheckTimestamp}</span>
                   </div>
 
                   <h2 className="text-base sm:text-xl font-bold text-white">
@@ -439,7 +439,7 @@ export default function WeatherClimatePage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Wind className="h-4 w-4 text-sky-400" />
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Wind Velocity</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Wind Speed</span>
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">

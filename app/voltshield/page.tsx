@@ -171,6 +171,8 @@ export default function VoltShieldPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [newOwner, setNewOwner] = useState("");
   const [newType, setNewType] = useState("5kW Hybrid Inverter");
+  const [customSupplyType, setCustomSupplyType] = useState("");
+  const [isOtherType, setIsOtherType] = useState(false);
   const [newCapacity, setNewCapacity] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newPhone, setNewPhone] = useState("");
@@ -499,12 +501,13 @@ export default function VoltShieldPage() {
 
   const handleAddNode = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOwner || !newCapacity || !newPrice || !newPhone) return;
+    const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Power Node") : newType;
+    if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
 
     const newNode: PowerNode = {
       id: `power-${Date.now()}`,
       owner: newOwner.trim(),
-      type: newType,
+      type: resolvedType,
       capacity: newCapacity.trim(),
       price: newPrice.trim(),
       latitude: location?.latitude || -29.6000,
@@ -521,6 +524,9 @@ export default function VoltShieldPage() {
 
     setIsShareModalOpen(false);
     setNewOwner("");
+    setNewType("5kW Hybrid Inverter");
+    setCustomSupplyType("");
+    setIsOtherType(false);
     setNewCapacity("");
     setNewPrice("");
     setNewPhone("");
@@ -1144,16 +1150,39 @@ export default function VoltShieldPage() {
               <div>
                 <label className="text-[11px] sm:text-xs text-muted block mb-1">Power Source Type</label>
                 <select
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
+                  value={isOtherType ? "Other" : newType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "Other") {
+                      setIsOtherType(true);
+                    } else {
+                      setIsOtherType(false);
+                      setNewType(val);
+                    }
+                  }}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
                   <option value="5kW Hybrid Inverter" className="bg-neutral-900 text-white">5kW Hybrid Inverter</option>
                   <option value="10kVA Diesel Generator" className="bg-neutral-900 text-white">10kVA Diesel Generator</option>
                   <option value="Pure Sine UPS" className="bg-neutral-900 text-white">Pure Sine UPS</option>
                   <option value="Solar Battery Bank" className="bg-neutral-900 text-white">Solar Battery Bank</option>
+                  <option value="Other" className="bg-neutral-900 text-white">Other (Custom)</option>
                 </select>
               </div>
+
+              {isOtherType && (
+                <div>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Custom Power Source Type</label>
+                  <input
+                    type="text"
+                    required={isOtherType}
+                    value={customSupplyType}
+                    onChange={(e) => setCustomSupplyType(e.target.value)}
+                    placeholder="e.g. Portable Power Station"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -1195,7 +1224,7 @@ export default function VoltShieldPage() {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer touch-manipulation relative z-30 pointer-events-auto hover:opacity-90"
+                className="w-full py-3 rounded-full border text-xs font-semibold transition-all mt-2 cursor-pointer touch-manipulation relative z-30 pointer-events-auto hover:opacity-95"
                 style={{
                   color: ENERGY_YELLOW,
                   borderColor: "color-mix(in srgb, #f59e0b 40%, transparent)",

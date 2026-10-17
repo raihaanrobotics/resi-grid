@@ -4,8 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Store,
-  Zap,
-  Droplets,
+  Utensils,
   PackageCheck,
   Search,
   Plus,
@@ -15,26 +14,25 @@ import {
   MessageCircle,
   X,
   ShieldCheck,
-  Flame,
   AlertTriangle,
-  BatteryCharging,
-  Truck,
-  Megaphone,
+  HeartHandshake,
+  Tag,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
-interface SpazaRescueShop {
+interface SpazaFoodStore {
   id: string;
   shopName: string;
-  owner: string;
+  ownerName: string;
+  tradingPermitId: string;
   location: string;
   ward: string;
   isOperating: boolean;
   hasDryStock: boolean;
-  hasGasOrParaffin: boolean;
-  hasEmergencyCharging: boolean;
-  perishableClearanceAlert?: string;
-  essentialStock: string[];
+  spoilageClearanceAlert?: string;
+  foodEssentials: string[];
   contactPhone: string;
   latitude: number;
   longitude: number;
@@ -42,14 +40,14 @@ interface SpazaRescueShop {
   formattedDistance?: string;
 }
 
-interface EmergencyReliefRequest {
+interface CommunityFoodAid {
   id: string;
   title: string;
-  type: "bulk-need" | "tanker-alert";
+  aidType: "soup-kitchen" | "community-pantry" | "bulk-food-drop";
   location: string;
-  postedBy: string;
-  urgency: "Critical" | "Moderate";
+  coordinator: string;
   description: string;
+  operatingHours: string;
   contactPhone: string;
   latitude: number;
   longitude: number;
@@ -66,87 +64,85 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
-const DEFAULT_CRISIS_SHOPS: SpazaRescueShop[] = [
+const DEFAULT_FOOD_STORES: SpazaFoodStore[] = [
   {
-    id: "SPAZA-101",
-    shopName: "Mam' Rose Spaza & Dry Goods",
-    owner: "Rose Dlamini",
-    location: "144 Victoria Road",
+    id: "SPAZA-FOOD-1",
+    shopName: "Mam' Rose Dry Goods & Maize Depot",
+    ownerName: "Rose Dlamini",
+    tradingPermitId: "TRD-2026-MS221",
+    location: "144 Victoria Road, PMB",
     ward: "Ward 26",
     isOperating: true,
     hasDryStock: true,
-    hasGasOrParaffin: true,
-    hasEmergencyCharging: false,
-    perishableClearanceAlert: "Fresh Milk & Bread 50% off - Buy before 2 PM power loss!",
-    essentialStock: ["Maize Meal (10kg)", "LPG Gas 9kg", "Candles", "Canned Beans"],
+    spoilageClearanceAlert: "Fresh bread & milk 50% off before 3 PM power outage window!",
+    foodEssentials: ["Maize Meal (10kg/25kg)", "Samp & Beans", "Canned Pilchards", "Long-life Milk", "Fresh Bread"],
     contactPhone: "27821234567",
     latitude: -29.6006,
     longitude: 30.3794,
   },
   {
-    id: "SPAZA-102",
-    shopName: "Sipho's Corner Shop",
-    owner: "Sipho Khumalo",
-    location: "Block C, Section 4",
+    id: "SPAZA-FOOD-2",
+    shopName: "Sipho's Community Groceries",
+    ownerName: "Sipho Khumalo",
+    tradingPermitId: "TRD-2025-SK984",
+    location: "Block C, Section 4, Edendale",
     ward: "Ward 22",
     isOperating: true,
     hasDryStock: true,
-    hasGasOrParaffin: false,
-    hasEmergencyCharging: true,
-    essentialStock: ["10-Min Phone Charging (12V)", "Dry Biscuits", "Matches", "Paraffin"],
+    foodEssentials: ["Rice (5kg)", "Cooking Oil 2L", "Sugar & Tea", "Canned Baked Beans", "Soup Mix"],
     contactPhone: "27839876543",
     latitude: -29.6100,
     longitude: 30.3850,
   },
   {
-    id: "SPAZA-103",
-    shopName: "Edendale Community Supply & Paraffin",
-    owner: "David Naidoo",
+    id: "SPAZA-FOOD-3",
+    shopName: "Edendale Essential Pantry",
+    ownerName: "David Naidoo",
+    tradingPermitId: "TRD-2026-EN412",
     location: "Main Road, Edendale",
     ward: "Ward 8",
     isOperating: true,
     hasDryStock: true,
-    hasGasOrParaffin: true,
-    hasEmergencyCharging: false,
-    essentialStock: ["Paraffin (per Litre)", "25L Water Drums", "Candles", "Batteries"],
+    spoilageClearanceAlert: "Surplus fresh vegetables discounted for immediate household use.",
+    foodEssentials: ["Mealie Meal", "Dry Lentils", "Porridge", "Salt & Spices", "Fresh Tomatoes"],
     contactPhone: "27815550192",
     latitude: -29.5900,
     longitude: 30.3600,
   },
 ];
 
-const DEFAULT_RELIEF_REQUESTS: EmergencyReliefRequest[] = [
+const DEFAULT_FOOD_AID: CommunityFoodAid[] = [
   {
-    id: "RELIEF-501",
-    title: "Ward 22 Spaza Bulk Restock Needed",
-    type: "bulk-need",
-    location: "Block C Community Centre",
-    postedBy: "Sipho Khumalo (Spaza Owner)",
-    urgency: "Critical",
-    description: "Running completely out of maize meal and paraffin. Looking for wholesale distributor with transport heading to Section 4.",
-    contactPhone: "27839876543",
-    latitude: -29.6100,
-    longitude: 30.3850,
-  },
-  {
-    id: "RELIEF-502",
-    title: "Roving Municipal Water Tanker Parked",
-    type: "tanker-alert",
-    location: "Main Road & Victoria Intersection",
-    postedBy: "Community Wardens",
-    urgency: "Moderate",
-    description: "Municipal water tanker is stationed here for the next 2 hours filling 25L drums for residents and shops.",
+    id: "AID-801",
+    title: "Sunset Ridge Community Soup Kitchen",
+    aidType: "soup-kitchen",
+    location: "Sector 4 Community Hall",
+    coordinator: "Pastor Thabo Mokoena",
+    description: "Providing warm nutritious meals daily from 12 PM to 2 PM for families affected by utility disruptions.",
+    operatingHours: "Daily: 12:00 PM - 2:00 PM",
     contactPhone: "27821234567",
     latitude: -29.6006,
     longitude: 30.3794,
+  },
+  {
+    id: "AID-802",
+    title: "Edendale Emergency Food Pantry",
+    aidType: "community-pantry",
+    location: "Main Road Resource Centre",
+    coordinator: "Zinhle Dube",
+    description: "Emergency dry food parcels (maize, beans, cooking oil) available for vulnerable households.",
+    operatingHours: "Mon-Fri: 9:00 AM - 4:00 PM",
+    contactPhone: "27839876543",
+    latitude: -29.5950,
+    longitude: 30.3700,
   },
 ];
 
 export default function SpazaRescuePage() {
   const { streetAddress, location, filterByRadius, refreshLocation, loading: geoLoading } = useGeo();
 
-  // Navigation Tabs: 'shops' | 'relief'
-  const [activeTab, setActiveTab] = useState<"shops" | "relief">("shops");
+  // Navigation Tabs: 'stores' | 'aid'
+  const [activeTab, setActiveTab] = useState<"stores" | "aid">("stores");
 
   // Theme Accent Persistence
   const [accentColor, setAccentColor] = useState<string>("#38bdf8");
@@ -186,38 +182,38 @@ export default function SpazaRescuePage() {
     };
   }, []);
 
-  const [shops, setShops] = useState<SpazaRescueShop[]>(DEFAULT_CRISIS_SHOPS);
-  const [reliefRequests, setReliefRequests] = useState<EmergencyReliefRequest[]>(DEFAULT_RELIEF_REQUESTS);
+  const [stores, setStores] = useState<SpazaFoodStore[]>(DEFAULT_FOOD_STORES);
+  const [foodAidList, setFoodAidList] = useState<CommunityFoodAid[]>(DEFAULT_FOOD_AID);
   const [searchQuery, setSearchQuery] = useState("");
-  const [gasParaffinFilter, setGasParaffinFilter] = useState(false);
   const [clearanceFilter, setClearanceFilter] = useState(false);
 
-  // Modal State for Shops
-  const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  // Modal State for Registering Spaza Store
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [shopName, setShopName] = useState("");
-  const [owner, setOwner] = useState("");
-  const [hasDry, setHasDry] = useState(true);
-  const [hasGasPara, setHasGasPara] = useState(true);
-  const [hasCharging, setHasCharging] = useState(false);
-  const [clearanceText, setClearanceText] = useState("");
-  const [stockInput, setStockInput] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [tradingPermitId, setTradingPermitId] = useState("");
+  const [ward, setWard] = useState("Ward 26");
+  const [spoilageAlert, setSpoilageAlert] = useState("");
+  const [essentialsInput, setEssentialsInput] = useState("");
   const [shopPhone, setShopPhone] = useState("");
 
-  // Modal State for Relief / Tanker Requests
-  const [isReliefModalOpen, setIsReliefModalOpen] = useState(false);
-  const [reliefTitle, setReliefTitle] = useState("");
-  const [reliefType, setReliefType] = useState<"bulk-need" | "tanker-alert">("bulk-need");
-  const [reliefDesc, setReliefDesc] = useState("");
-  const [reliefPhone, setReliefPhone] = useState("");
+  // Modal State for Posting Food Aid / Soup Kitchen
+  const [isAidModalOpen, setIsAidModalOpen] = useState(false);
+  const [aidTitle, setAidTitle] = useState("");
+  const [aidType, setAidType] = useState<"soup-kitchen" | "community-pantry" | "bulk-food-drop">("soup-kitchen");
+  const [aidCoordinator, setAidCoordinator] = useState("");
+  const [aidHours, setAidHours] = useState("");
+  const [aidDesc, setAidDesc] = useState("");
+  const [aidPhone, setAidPhone] = useState("");
 
   // Storage sync
   useEffect(() => {
     try {
-      const savedShops = localStorage.getItem("resigrid_spaza_crisis_shops");
-      if (savedShops) {
-        const parsed = JSON.parse(savedShops);
+      const savedStores = localStorage.getItem("resigrid_spaza_food_stores");
+      if (savedStores) {
+        const parsed = JSON.parse(savedStores);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setShops(
+          setStores(
             parsed.map((item: any) => ({
               ...item,
               latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
@@ -226,11 +222,11 @@ export default function SpazaRescuePage() {
           );
         }
       }
-      const savedRelief = localStorage.getItem("resigrid_spaza_relief_requests");
-      if (savedRelief) {
-        const parsed = JSON.parse(savedRelief);
+      const savedAid = localStorage.getItem("resigrid_community_food_aid");
+      if (savedAid) {
+        const parsed = JSON.parse(savedAid);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setReliefRequests(
+          setFoodAidList(
             parsed.map((item: any) => ({
               ...item,
               latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
@@ -244,98 +240,101 @@ export default function SpazaRescuePage() {
     }
   }, []);
 
-  const handleRegisterShop = (e: React.FormEvent) => {
+  const handleRegisterStore = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopName || !owner) return;
+    if (!shopName || !ownerName || !tradingPermitId) return;
 
-    const newShop: SpazaRescueShop = {
+    const newStore: SpazaFoodStore = {
       id: `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`,
       shopName: shopName.trim(),
-      owner: owner.trim(),
+      ownerName: ownerName.trim(),
+      tradingPermitId: tradingPermitId.trim(),
       location: streetAddress,
-      ward: "Ward 26",
+      ward: ward.trim() || "Ward 26",
       isOperating: true,
-      hasDryStock: hasDry,
-      hasGasOrParaffin: hasGasPara,
-      hasEmergencyCharging: hasCharging,
-      perishableClearanceAlert: clearanceText.trim() || undefined,
-      essentialStock: stockInput ? stockInput.split(",").map((s) => s.trim()) : ["Maize", "Candles"],
+      hasDryStock: true,
+      spoilageClearanceAlert: spoilageAlert.trim() || undefined,
+      foodEssentials: essentialsInput ? essentialsInput.split(",").map((s) => s.trim()) : ["Maize Meal", "Canned Goods", "Bread"],
       contactPhone: shopPhone.replace(/[^0-9]/g, "") || "27821234567",
       latitude: location?.latitude ?? -29.6000,
       longitude: location?.longitude ?? 30.3800,
     };
 
-    const updated = [newShop, ...shops];
-    setShops(updated);
-    localStorage.setItem("resigrid_spaza_crisis_shops", JSON.stringify(updated));
+    const updated = [newStore, ...stores];
+    setStores(updated);
+    localStorage.setItem("resigrid_spaza_food_stores", JSON.stringify(updated));
 
-    setIsShopModalOpen(false);
+    setIsStoreModalOpen(false);
     setShopName("");
-    setOwner("");
-    setStockInput("");
-    setClearanceText("");
+    setOwnerName("");
+    setTradingPermitId("");
+    setSpoilageAlert("");
+    setEssentialsInput("");
     setShopPhone("");
   };
 
-  const handlePostRelief = (e: React.FormEvent) => {
+  const handlePostAid = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reliefTitle || !reliefDesc) return;
+    if (!aidTitle || !aidCoordinator || !aidDesc) return;
 
-    const newRelief: EmergencyReliefRequest = {
-      id: `RELIEF-${Math.floor(Math.random() * 8999 + 1000)}`,
-      title: reliefTitle.trim(),
-      type: reliefType,
+    const newAid: CommunityFoodAid = {
+      id: `AID-${Math.floor(Math.random() * 8999 + 1000)}`,
+      title: aidTitle.trim(),
+      aidType,
       location: streetAddress,
-      postedBy: "Community Member / Spaza",
-      urgency: "Critical",
-      description: reliefDesc.trim(),
-      contactPhone: reliefPhone.replace(/[^0-9]/g, "") || "27821234567",
+      coordinator: aidCoordinator.trim(),
+      description: aidDesc.trim(),
+      operatingHours: aidHours.trim() || "Daily: 9:00 AM - 3:00 PM",
+      contactPhone: aidPhone.replace(/[^0-9]/g, "") || "27821234567",
       latitude: location?.latitude ?? -29.6000,
       longitude: location?.longitude ?? 30.3800,
     };
 
-    const updated = [newRelief, ...reliefRequests];
-    setReliefRequests(updated);
-    localStorage.setItem("resigrid_spaza_relief_requests", JSON.stringify(updated));
+    const updated = [newAid, ...foodAidList];
+    setFoodAidList(updated);
+    localStorage.setItem("resigrid_community_food_aid", JSON.stringify(updated));
 
-    setIsReliefModalOpen(false);
-    setReliefTitle("");
-    setReliefDesc("");
-    setReliefPhone("");
+    setIsAidModalOpen(false);
+    setAidTitle("");
+    setAidCoordinator("");
+    setAidHours("");
+    setAidDesc("");
+    setAidPhone("");
   };
 
-  const handleContactWhatsApp = (targetPhone: string, msgText: string) => {
+  const handleContactWhatsApp = (targetPhone: string, storeName: string) => {
     const cleanNum = targetPhone || "27821234567";
-    const msg = encodeURIComponent(`Hello, contacting via SpazaRescue regarding: "${msgText}". Is this available/active?`);
+    const msg = encodeURIComponent(`Hello, I am contacting via SpazaRescue regarding food stock & clearance at "${storeName}". Is this available?`);
     window.open(`https://wa.me/${cleanNum}?text=${msg}`, "_blank");
   };
 
-  // Filter 10km radius using GeoContext
-  const nearbyShops = useMemo(() => {
-    return filterByRadius(shops, 10.0);
-  }, [filterByRadius, shops]);
+  // Filter within 10km radius using GeoContext
+  const nearbyStores = useMemo(() => {
+    return filterByRadius(stores, 10.0);
+  }, [filterByRadius, stores]);
 
-  const nearbyRelief = useMemo(() => {
-    return filterByRadius(reliefRequests, 10.0);
-  }, [filterByRadius, reliefRequests]);
+  const nearbyAid = useMemo(() => {
+    return filterByRadius(foodAidList, 10.0);
+  }, [filterByRadius, foodAidList]);
 
-  const displayShops = nearbyShops.length > 0 ? nearbyShops : shops;
-  const displayRelief = nearbyRelief.length > 0 ? nearbyRelief : reliefRequests;
+  const displayStores = nearbyStores.length > 0 ? nearbyStores : stores;
+  const displayAid = nearbyAid.length > 0 ? nearbyAid : foodAidList;
 
-  const filteredShops = displayShops.filter((s) => {
+  const filteredStores = displayStores.filter((s) => {
     const matchesSearch =
       s.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.essentialStock.some((item) => item.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      s.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGasPara = !gasParaffinFilter || s.hasGasOrParaffin;
-    const matchesClearance = !clearanceFilter || !!s.perishableClearanceAlert;
-    return matchesSearch && matchesGasPara && matchesClearance;
+      s.foodEssentials.some((item) => item.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      s.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.ward.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesClearance = !clearanceFilter || !!s.spoilageClearanceAlert;
+    return matchesSearch && matchesClearance;
   });
 
-  const filteredRelief = displayRelief.filter((r) =>
-    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.location.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredAid = displayAid.filter((a) =>
+    a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.coordinator.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -371,7 +370,7 @@ export default function SpazaRescuePage() {
                 SPAZARESCUE™
               </h1>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                DRY-STOCK SHOPS, SPOILAGE CLEARANCE, MICRO-CHARGING & ROVING TANKER ALERTS
+                FOOD SECURITY, DRY-STOCK SPASAS, SPOILAGE CLEARANCE & COMMUNITY SOUP KITCHENS
               </p>
             </div>
           </Link>
@@ -412,36 +411,36 @@ export default function SpazaRescuePage() {
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
           <button
             type="button"
-            onClick={() => setActiveTab("shops")}
+            onClick={() => setActiveTab("stores")}
             className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === "shops"
+              activeTab === "stores"
                 ? "bg-white/20 text-white border border-white/30"
                 : "bg-white/5 border border-white/10 text-muted hover:text-white"
             }`}
           >
-            <Store className="w-3.5 h-3.5 shrink-0" /> Off-Grid Spazas & Clearance
+            <Store className="w-3.5 h-3.5 shrink-0" /> Spaza Food Stores & Clearance
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab("relief")}
+            onClick={() => setActiveTab("aid")}
             className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              activeTab === "relief"
+              activeTab === "aid"
                 ? "bg-white/20 text-white border border-white/30"
                 : "bg-white/5 border border-white/10 text-muted hover:text-white"
             }`}
           >
-            <Megaphone className="w-3.5 h-3.5 shrink-0" /> Emergency Relief & Tankers
+            <HeartHandshake className="w-3.5 h-3.5 shrink-0" /> Soup Kitchens & Food Aid
           </button>
         </div>
 
         <button
           type="button"
           onClick={() => {
-            if (activeTab === "shops") setIsShopModalOpen(true);
-            else setIsReliefModalOpen(true);
+            if (activeTab === "stores") setIsStoreModalOpen(true);
+            else setIsAidModalOpen(true);
           }}
-          className="px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 w-full sm:w-auto shrink-0"
+          className="px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-95 active:scale-95 w-full sm:w-auto shrink-0 shadow-lg"
           style={{
             color: accentColor,
             borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
@@ -449,11 +448,11 @@ export default function SpazaRescuePage() {
           }}
         >
           <Plus className="w-3.5 h-3.5 shrink-0" />
-          <span>{activeTab === "shops" ? "Register Shop Status" : "Post Relief / Tanker Alert"}</span>
+          <span>{activeTab === "stores" ? "Register Spaza Store" : "Post Food Aid / Kitchen"}</span>
         </button>
       </div>
 
-      {/* SEARCH & FILTERS */}
+      {/* SEARCH & FILTERS BAR */}
       <div className="glass-panel p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 relative pointer-events-auto z-10">
         <div className="panel-reflection pointer-events-none" />
 
@@ -461,119 +460,92 @@ export default function SpazaRescuePage() {
           <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder={activeTab === "shops" ? "Search maize, paraffin, gas, micro-charging..." : "Search bulk needs, municipal tankers..."}
+            placeholder={activeTab === "stores" ? "Search maize meal, bread, tinned goods, ward..." : "Search soup kitchens, community pantries..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
           />
         </div>
 
-        {activeTab === "shops" && (
-          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => setGasParaffinFilter(!gasParaffinFilter)}
-              className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                gasParaffinFilter
-                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                  : "bg-white/5 border-white/10 text-muted hover:text-white"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5 shrink-0" />
-              <span>{gasParaffinFilter ? "Gas / Paraffin Only" : "Filter Fuel"}</span>
-            </button>
-
+        {activeTab === "stores" && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setClearanceFilter(!clearanceFilter)}
-              className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                 clearanceFilter
                   ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
                   : "bg-white/5 border-white/10 text-muted hover:text-white"
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span>{clearanceFilter ? "Spoilage Clearance Only" : "Food Clearance Deals"}</span>
+              <span>{clearanceFilter ? "Showing Clearance Deals" : "Spoilage Clearance Only"}</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* CONTENT GRID */}
-      {activeTab === "shops" ? (
+      {/* CONTENT LISTINGS */}
+      {activeTab === "stores" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 relative z-10">
-          {filteredShops.length === 0 ? (
+          {filteredStores.length === 0 ? (
             <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
-              No off-grid spaza shops registered within 10km matching these criteria.
+              No registered spaza food stores found within 10km matching your search.
             </div>
           ) : (
-            filteredShops.map((shop) => (
+            filteredStores.map((store) => (
               <div
-                key={shop.id}
-                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+                key={store.id}
+                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto rounded-2xl"
               >
                 <div className="panel-reflection pointer-events-none" />
 
                 <div>
                   <div className="flex items-start sm:items-center justify-between gap-2 mb-3">
                     <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-amber-300 transition-colors leading-snug">
-                      {shop.shopName}
+                      {store.shopName}
                     </h3>
                     <span className="text-[11px] sm:text-xs font-mono shrink-0" style={{ color: accentColor }}>
-                      {shop.formattedDistance ? `${shop.formattedDistance} away` : "Nearby"}
+                      {store.formattedDistance ? `${store.formattedDistance} away` : "Nearby"}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-2 text-xs text-muted mb-3 flex-wrap">
-                    <span>Owner: <strong className="text-white">{shop.owner}</strong></span>
+                    <span>Owner: <strong className="text-white">{store.ownerName}</strong></span>
                     <span>•</span>
-                    <span className="flex items-center gap-1 truncate max-w-full">
-                      <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{shop.location}</span>
+                    <span className="font-mono text-[10px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-white/90">
+                      Permit: {store.tradingPermitId}
                     </span>
+                    <span>•</span>
+                    <span className="text-white/90">{store.ward}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs text-muted mb-4 truncate">
+                    <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> 
+                    <span className="truncate">{store.location}</span>
                   </div>
 
                   {/* Spoilage Clearance Banner */}
-                  {shop.perishableClearanceAlert && (
-                    <div className="mb-4 p-2.5 bg-rose-500/15 border border-rose-500/30 rounded-xl text-xs text-rose-200 flex items-start gap-2">
+                  {store.spoilageClearanceAlert && (
+                    <div className="mb-4 p-3 bg-rose-500/15 border border-rose-500/30 rounded-xl text-xs text-rose-200 flex items-start gap-2.5">
                       <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                       <div>
-                        <strong className="block text-white text-[11px] uppercase tracking-wider">
-                          Daily Fresh Spoilage Clearance
+                        <strong className="block text-white text-[11px] uppercase tracking-wider mb-0.5">
+                          Daily Spoilage Clearance Deal
                         </strong>
-                        <span>{shop.perishableClearanceAlert}</span>
+                        <span>{store.spoilageClearanceAlert}</span>
                       </div>
                     </div>
                   )}
 
-                  {/* Low-Tech Status Badges */}
-                  <div className="flex flex-wrap items-center gap-2 mb-4">
-                    {shop.hasDryStock && (
-                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1">
-                        🕯️ Dry-Stock Active Only
-                      </span>
-                    )}
-
-                    {shop.hasGasOrParaffin && (
-                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
-                        <Flame className="w-3 h-3 shrink-0" /> Gas / Paraffin
-                      </span>
-                    )}
-
-                    {shop.hasEmergencyCharging && (
-                      <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-cyan-500/10 text-cyan-400 border-cyan-500/30 flex items-center gap-1">
-                        <BatteryCharging className="w-3 h-3 shrink-0" /> 12V Micro-Charging
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Stock Tags */}
+                  {/* Food Essentials Badges */}
                   <div>
-                    <span className="text-[10px] uppercase text-muted tracking-wider block mb-1">
-                      Available Outage Staples:
+                    <span className="text-[10px] uppercase text-muted tracking-wider block mb-1.5">
+                      Available Food Essentials &amp; Dry-Stock:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {shop.essentialStock.map((item, idx) => (
-                        <span key={idx} className="text-[10px] bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-white">
+                      {store.foodEssentials.map((item, idx) => (
+                        <span key={idx} className="text-[10px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-white font-medium">
                           {item}
                         </span>
                       ))}
@@ -583,15 +555,15 @@ export default function SpazaRescuePage() {
 
                 <div className="mt-6 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <span className="text-xs text-muted flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Community Verified
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Verified Retailer
                   </span>
 
                   <button
                     type="button"
-                    onClick={() => handleContactWhatsApp(shop.contactPhone, shop.shopName)}
+                    onClick={() => handleContactWhatsApp(store.contactPhone, store.shopName)}
                     className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>WhatsApp Shop</span>
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>WhatsApp Store</span>
                   </button>
                 </div>
               </div>
@@ -599,63 +571,62 @@ export default function SpazaRescuePage() {
           )}
         </div>
       ) : (
-        /* RELIEF & TANKER ALERTS TAB */
+        /* SOUP KITCHENS & FOOD AID TAB */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 relative z-10">
-          {filteredRelief.length === 0 ? (
+          {filteredAid.length === 0 ? (
             <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
-              No active emergency relief or tanker alerts found within 10km.
+              No soup kitchens or food aid centres registered within 10km.
             </div>
           ) : (
-            filteredRelief.map((req) => (
+            filteredAid.map((aid) => (
               <div
-                key={req.id}
-                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+                key={aid.id}
+                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto rounded-2xl"
               >
                 <div className="panel-reflection pointer-events-none" />
 
                 <div>
                   <div className="flex items-start sm:items-center justify-between gap-2 mb-3 flex-wrap">
-                    <span
-                      className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
-                        req.type === "bulk-need"
-                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                          : "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
-                      }`}
-                    >
-                      {req.type === "bulk-need" ? <Megaphone className="w-3 h-3 shrink-0" /> : <Droplets className="w-3 h-3 shrink-0" />}
-                      <span>{req.type === "bulk-need" ? "Spaza Emergency Bulk Need" : "Roving Municipal Tanker"}</span>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 flex items-center gap-1.5">
+                      <Utensils className="w-3 h-3 shrink-0" />
+                      <span>{aid.aidType === "soup-kitchen" ? "Community Soup Kitchen" : "Community Food Pantry"}</span>
                     </span>
 
                     <span className="text-[11px] sm:text-xs font-mono shrink-0" style={{ color: accentColor }}>
-                      {req.formattedDistance ? `${req.formattedDistance} away` : "Nearby"}
+                      {aid.formattedDistance ? `${aid.formattedDistance} away` : "Nearby"}
                     </span>
                   </div>
 
                   <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-amber-300 transition-colors leading-snug">
-                    {req.title}
+                    {aid.title}
                   </h3>
 
-                  <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-3 flex-wrap">
-                    <span>By: <strong className="text-white">{req.postedBy}</strong></span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 truncate max-w-full">
-                      <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{req.location}</span>
-                    </span>
+                  <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-2 flex-wrap">
+                    <span>Coordinator: <strong className="text-white">{aid.coordinator}</strong></span>
                   </div>
 
-                  <p className="text-xs text-white/80 bg-black/30 p-3 rounded-xl border border-white/5 leading-relaxed">
-                    {req.description}
+                  <div className="flex items-center gap-1 text-xs text-muted mb-3 truncate">
+                    <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> 
+                    <span className="truncate">{aid.location}</span>
+                  </div>
+
+                  <p className="text-xs text-white/80 bg-black/30 p-3 rounded-xl border border-white/5 leading-relaxed mb-3">
+                    {aid.description}
                   </p>
+
+                  <div className="flex items-center gap-1.5 text-xs text-amber-300 font-mono">
+                    <Clock className="w-3.5 h-3.5 shrink-0" /> {aid.operatingHours}
+                  </div>
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                  <span className="text-xs text-rose-400 font-mono font-semibold flex items-center gap-1">
-                    Urgency: {req.urgency}
+                  <span className="text-xs text-muted flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Active Relief Point
                   </span>
 
                   <button
                     type="button"
-                    onClick={() => handleContactWhatsApp(req.contactPhone, req.title)}
+                    onClick={() => handleContactWhatsApp(aid.contactPhone, aid.title)}
                     className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                   >
                     <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>Coordinate via WhatsApp</span>
@@ -667,118 +638,104 @@ export default function SpazaRescuePage() {
         </div>
       )}
 
-      {/* REGISTER SHOP MODAL */}
-      {isShopModalOpen && (
+      {/* REGISTER SPAZA STORE MODAL */}
+      {isStoreModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto overflow-y-auto">
           <div
-            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto"
+            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto rounded-3xl"
             style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Store className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Register Off-Grid Spaza Status
+                <Store className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Register Spaza Food Store
               </h3>
               <button
                 type="button"
-                onClick={() => setIsShopModalOpen(false)}
+                onClick={() => setIsStoreModalOpen(false)}
                 className="text-muted hover:text-white cursor-pointer relative z-30 p-1"
               >
                 <X className="h-4 w-4 pointer-events-none" />
               </button>
             </div>
 
-            <form onSubmit={handleRegisterShop} className="space-y-3 relative z-20">
+            <form onSubmit={handleRegisterStore} className="space-y-3 relative z-20">
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Spaza / Shop Name</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Spaza / Shop Name *</label>
                 <input
                   type="text"
                   required
                   value={shopName}
                   onChange={(e) => setShopName(e.target.value)}
-                  placeholder="e.g. Mam' Rose Spaza"
+                  placeholder="e.g. Mam' Rose Groceries"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Owner Name</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Owner / Manager Full Name *</label>
                 <input
                   type="text"
                   required
-                  value={owner}
-                  onChange={(e) => setOwner(e.target.value)}
+                  value={ownerName}
+                  onChange={(e) => setOwnerName(e.target.value)}
                   placeholder="e.g. Rose Dlamini"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
 
-              {/* Low-Tech Status Toggles */}
-              <div className="space-y-2 py-1">
-                <label className="text-[11px] sm:text-xs text-muted block">Low-Tech & Outage Capabilities:</label>
-
-                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl gap-2">
-                  <span className="text-xs text-white flex items-center gap-1.5">
-                    🕯️ Dry-Stock Active Only (Maize, Rice, Canned, Candles)
-                  </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Trading Permit / Reg ID *</label>
                   <input
-                    type="checkbox"
-                    checked={hasDry}
-                    onChange={(e) => setHasDry(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--accent)] shrink-0"
+                    type="text"
+                    required
+                    value={tradingPermitId}
+                    onChange={(e) => setTradingPermitId(e.target.value)}
+                    placeholder="e.g. TRD-2026-MS221"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors font-mono"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl gap-2">
-                  <span className="text-xs text-white flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Gas Refills & Paraffin Available
-                  </span>
+                <div>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Municipal Ward *</label>
                   <input
-                    type="checkbox"
-                    checked={hasGasPara}
-                    onChange={(e) => setHasGasPara(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--accent)] shrink-0"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl gap-2">
-                  <span className="text-xs text-white flex items-center gap-1.5">
-                    <BatteryCharging className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> 12V Car Battery Micro-Charging
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={hasCharging}
-                    onChange={(e) => setHasCharging(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--accent)] shrink-0"
+                    type="text"
+                    required
+                    value={ward}
+                    onChange={(e) => setWard(e.target.value)}
+                    placeholder="e.g. Ward 26"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Daily Fresh Spoilage Clearance (Optional)</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Daily Spoilage Clearance Deal (Optional)</label>
                 <input
                   type="text"
-                  value={clearanceText}
-                  onChange={(e) => setClearanceText(e.target.value)}
-                  placeholder="e.g. Meat & Milk 50% off before power loss"
+                  value={spoilageAlert}
+                  onChange={(e) => setSpoilageAlert(e.target.value)}
+                  placeholder="e.g. Fresh milk & bread 50% off before grid failure"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Available Essentials (comma-separated)</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Available Food Essentials (comma-separated) *</label>
                 <input
                   type="text"
-                  value={stockInput}
-                  onChange={(e) => setStockInput(e.target.value)}
-                  placeholder="Maize Meal, Candles, Matches, Paraffin"
+                  required
+                  value={essentialsInput}
+                  onChange={(e) => setEssentialsInput(e.target.value)}
+                  placeholder="Maize Meal, Canned Pilchards, Long-life Milk, Bread"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Phone Number</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact Phone *</label>
                 <input
                   type="text"
                   required
@@ -791,86 +748,111 @@ export default function SpazaRescuePage() {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
+                className="w-full py-3 rounded-full border text-xs font-semibold transition-all mt-3 cursor-pointer hover:opacity-95 shadow-lg"
                 style={{
                   color: accentColor,
                   borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
                   backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
                 }}
               >
-                Post Status to Community Grid
+                Publish Store Listing
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* POST RELIEF / TANKER ALERT MODAL */}
-      {isReliefModalOpen && (
+      {/* POST FOOD AID / KITCHEN MODAL */}
+      {isAidModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto overflow-y-auto">
           <div
-            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto"
+            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto rounded-3xl"
             style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
 
             <div className="flex items-center justify-between border-b border-white/10 pb-3 relative z-20">
               <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                <Megaphone className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Post Emergency Relief or Tanker Alert
+                <HeartHandshake className="h-4 w-4 shrink-0" style={{ color: accentColor }} /> Post Food Aid or Soup Kitchen
               </h3>
               <button
                 type="button"
-                onClick={() => setIsReliefModalOpen(false)}
+                onClick={() => setIsAidModalOpen(false)}
                 className="text-muted hover:text-white cursor-pointer relative z-30 p-1"
               >
                 <X className="h-4 w-4 pointer-events-none" />
               </button>
             </div>
 
-            <form onSubmit={handlePostRelief} className="space-y-3 relative z-20">
+            <form onSubmit={handlePostAid} className="space-y-3 relative z-20">
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Alert Title</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Title / Organisation Name *</label>
                 <input
                   type="text"
                   required
-                  value={reliefTitle}
-                  onChange={(e) => setReliefTitle(e.target.value)}
-                  placeholder="e.g. Spaza Bulk Restock Needed or Tanker at Corner"
+                  value={aidTitle}
+                  onChange={(e) => setAidTitle(e.target.value)}
+                  placeholder="e.g. Sunset Ridge Soup Kitchen"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Alert Type</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Aid Type *</label>
                 <select
-                  value={reliefType}
-                  onChange={(e) => setReliefType(e.target.value as any)}
+                  value={aidType}
+                  onChange={(e) => setAidType(e.target.value as any)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
                 >
-                  <option value="bulk-need" className="bg-neutral-900 text-white">📢 Spaza Emergency Bulk Need (Restock / Distributor)</option>
-                  <option value="tanker-alert" className="bg-neutral-900 text-white">🚰 Roving Municipal Water Tanker / Generator Alert</option>
+                  <option value="soup-kitchen" className="bg-neutral-900 text-white">🍲 Community Soup Kitchen (Prepared Meals)</option>
+                  <option value="community-pantry" className="bg-neutral-900 text-white">📦 Community Food Pantry / Dry Parcels</option>
+                  <option value="bulk-food-drop" className="bg-neutral-900 text-white">🚚 Bulk Food Distribution Drop</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Description & Location Details</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Coordinator / Contact Person *</label>
+                <input
+                  type="text"
+                  required
+                  value={aidCoordinator}
+                  onChange={(e) => setAidCoordinator(e.target.value)}
+                  placeholder="e.g. Pastor Thabo Mokoena"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Operating Hours / Schedule *</label>
+                <input
+                  type="text"
+                  required
+                  value={aidHours}
+                  onChange={(e) => setAidHours(e.target.value)}
+                  placeholder="e.g. Daily: 12:00 PM - 2:00 PM"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Description &amp; Requirements *</label>
                 <textarea
                   required
                   rows={3}
-                  value={reliefDesc}
-                  onChange={(e) => setReliefDesc(e.target.value)}
-                  placeholder="Describe what is needed or where the tanker/generator is parked..."
+                  value={aidDesc}
+                  onChange={(e) => setAidDesc(e.target.value)}
+                  placeholder="Describe meals served, who is eligible, or volunteer/donation needs..."
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors resize-none"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact Phone</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact Phone *</label>
                 <input
                   type="text"
                   required
-                  value={reliefPhone}
-                  onChange={(e) => setReliefPhone(e.target.value)}
+                  value={aidPhone}
+                  onChange={(e) => setAidPhone(e.target.value)}
                   placeholder="e.g. 27821234567"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
@@ -878,14 +860,14 @@ export default function SpazaRescuePage() {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
+                className="w-full py-3 rounded-full border text-xs font-semibold transition-all mt-3 cursor-pointer hover:opacity-95 shadow-lg"
                 style={{
                   color: accentColor,
                   borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
                   backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
                 }}
               >
-                Broadcast Alert to Community
+                Publish Food Aid Point
               </button>
             </form>
           </div>

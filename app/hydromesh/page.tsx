@@ -164,6 +164,8 @@ export default function HydroMeshPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [newOwner, setNewOwner] = useState("");
   const [newType, setNewType] = useState("Borehole & Filtration");
+  const [customSupplyType, setCustomSupplyType] = useState("");
+  const [isOtherType, setIsOtherType] = useState(false);
   const [newCapacity, setNewCapacity] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newPhone, setNewPhone] = useState("");
@@ -544,12 +546,13 @@ export default function HydroMeshPage() {
 
   const handleAddTank = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOwner || !newCapacity || !newPrice || !newPhone) return;
+    const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Tank") : newType;
+    if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
 
     const newNode: WaterNode = {
       id: `node-${Date.now()}`,
       owner: newOwner.trim(),
-      type: newType,
+      type: resolvedType,
       capacity: newCapacity.trim(),
       price: newPrice.trim(),
       latitude: location?.latitude || -29.6000,
@@ -565,6 +568,9 @@ export default function HydroMeshPage() {
 
     setIsShareModalOpen(false);
     setNewOwner("");
+    setNewType("Borehole & Filtration");
+    setCustomSupplyType("");
+    setIsOtherType(false);
     setNewCapacity("");
     setNewPrice("");
     setNewPhone("");
@@ -1181,16 +1187,39 @@ export default function HydroMeshPage() {
               <div>
                 <label className="text-[11px] sm:text-xs text-muted block mb-1">Supply Type</label>
                 <select
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value)}
+                  value={isOtherType ? "Other" : newType}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "Other") {
+                      setIsOtherType(true);
+                    } else {
+                      setIsOtherType(false);
+                      setNewType(val);
+                    }
+                  }}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
                   <option value="Borehole & Filtration" className="bg-neutral-900 text-white">Borehole & Filtration</option>
                   <option value="Rainwater Tank" className="bg-neutral-900 text-white">Rainwater Tank</option>
                   <option value="Solar UV Tap" className="bg-neutral-900 text-white">Solar UV Tap</option>
                   <option value="Municipal Storage Tank" className="bg-neutral-900 text-white">Municipal Storage Tank</option>
+                  <option value="Other" className="bg-neutral-900 text-white">Other (Custom)</option>
                 </select>
               </div>
+
+              {isOtherType && (
+                <div>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Custom Supply Type</label>
+                  <input
+                    type="text"
+                    required={isOtherType}
+                    value={customSupplyType}
+                    onChange={(e) => setCustomSupplyType(e.target.value)}
+                    placeholder="e.g. Solar Borehole Reserve"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -1232,7 +1261,7 @@ export default function HydroMeshPage() {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer touch-manipulation relative z-30 pointer-events-auto hover:opacity-90"
+                className="w-full py-3 rounded-full border text-xs font-semibold transition-all mt-2 cursor-pointer touch-manipulation relative z-30 pointer-events-auto hover:opacity-95"
                 style={{
                   color: accentColor,
                   borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,

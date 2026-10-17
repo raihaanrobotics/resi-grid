@@ -282,29 +282,42 @@ export default function MarketplacePage() {
 
       <div className="relative z-10 mx-auto w-full max-w-[1920px] px-3 pb-32 pt-4 sm:px-6 sm:space-y-6 lg:px-10 lg:pb-12 lg:pt-7 space-y-5">
         
-        {/* TOP NAVIGATION & LOCATION PILL ROW */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <header className="glass-header flex items-center gap-3 p-3.5 sm:p-4">
-            <div className="feature-icon feature-energy shrink-0" style={{ color: accentColor }}>
-              <ShoppingBag className="w-5 h-5" style={{ color: accentColor }} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                RESIMARKET
-              </h1>
-              <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                POWER, WATER & SERVICE TRADING
-              </p>
-            </div>
-          </header>
+        {/* UNIFIED TOP COMMAND PANEL CONTAINER */}
+        <div 
+          className="glass-panel p-3.5 sm:p-5 relative overflow-hidden space-y-3 pointer-events-auto border"
+          style={{
+            borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+            backgroundColor: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+          }}
+        >
+          <div className="panel-reflection pointer-events-none" />
 
-          <div className="flex items-center gap-2">
-            {/* Independent Location Pill */}
+          {/* Top Row: Header Branding */}
+          <div className="flex items-center justify-between relative z-10">
+            <Link href="/" className="flex items-center gap-3 min-w-0">
+              <div className="feature-icon feature-energy shrink-0" style={{ color: accentColor }}>
+                <ShoppingBag className="w-[18px] h-[18px]" style={{ color: accentColor }} />
+              </div>
+
+              <div className="min-w-0">
+                <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm truncate">
+                  RESIMARKET
+                </h1>
+                <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
+                  POWER, WATER & SERVICE TRADING
+                </p>
+              </div>
+            </Link>
+          </div>
+
+          {/* Bottom Row: Location Pill & Post Listing Button Side-by-Side (Full Width on Mobile) */}
+          <div className="flex items-center gap-2 relative z-20 pt-1">
+            {/* Location Pill */}
             <div 
-              className="glass-panel px-3 sm:px-4 py-2 flex items-center justify-between gap-3 pointer-events-auto flex-1 sm:flex-initial min-w-0"
+              className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
               style={{
-                borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
+                borderColor: `color-mix(in srgb, ${accentColor} 35%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
               }}
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -320,18 +333,18 @@ export default function MarketplacePage() {
                 className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
                 style={{ color: accentColor }}
               >
-                <RefreshCw className={`h-3 w-3 ${geoLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-3.5 w-3.5 ${geoLoading ? "animate-spin" : ""}`} />
               </button>
             </div>
 
-            {/* Slimmer Post Listing Badge Pill Matching Location Pill Height */}
+            {/* Post Listing Button Pill */}
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="glass-panel px-3 py-2 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
+              className="glass-panel px-4 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation z-30 hover:opacity-90 shrink-0 rounded-xl"
               style={{
-                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+                borderColor: `color-mix(in srgb, ${accentColor} 45%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
               }}
             >
               <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
@@ -339,9 +352,6 @@ export default function MarketplacePage() {
             </button>
           </div>
         </div>
-
-        {/* BREATHING ROOM DIVIDER LINE */}
-        <div className="w-full h-px bg-white/15 my-2" />
 
         {/* EXTRA SPACING CONTAINER BETWEEN DIVIDER AND SEARCH BAR */}
         <div className="pt-2 sm:pt-4">

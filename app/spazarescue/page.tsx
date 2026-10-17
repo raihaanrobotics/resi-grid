@@ -349,87 +349,89 @@ export default function SpazaRescuePage() {
         <div className="ambient-grid" />
       </div>
 
-      {/* HEADER & LOCATION */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between relative z-10">
-        <header className="glass-header p-3.5 sm:p-4 flex items-center gap-3">
-          <div className="feature-icon feature-food shrink-0" style={{ color: accentColor }}>
-            <Store className="w-5 h-5" style={{ color: accentColor }} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xs sm:text-sm font-semibold tracking-[0.18em] text-white">
+      {/* UNIFIED TOP COMMAND PANEL CONTAINER */}
+      <div 
+        className="glass-panel p-3.5 sm:p-5 relative overflow-hidden space-y-3 pointer-events-auto border"
+        style={{
+          borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+          backgroundColor: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+        }}
+      >
+        <div className="panel-reflection pointer-events-none" />
+
+        {/* Top Row: Header Branding */}
+        <div className="flex items-center justify-between relative z-10">
+          <Link href="/" className="flex items-center gap-3 min-w-0">
+            <div className="feature-icon feature-food shrink-0" style={{ color: accentColor }}>
+              <Store className="w-[18px] h-[18px]" style={{ color: accentColor }} />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm truncate">
                 SPAZARESCUE™
               </h1>
-              <span 
-                className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em]"
-                style={{
-                  color: accentColor,
-                  borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
-                  backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
-                }}
-              >
-                LOW-TECH OUTAGE & RELIEF HUB
+              <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
+                DRY-STOCK SHOPS, SPOILAGE CLEARANCE, MICRO-CHARGING & ROVING TANKER ALERTS
+              </p>
+            </div>
+          </Link>
+        </div>
+
+        {/* Bottom Row: Location Pill (Full Width) */}
+        <div className="flex items-center gap-2 relative z-20 pt-1">
+          <div 
+            className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
+            style={{
+              borderColor: `color-mix(in srgb, ${accentColor} 35%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
+              <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
+                {streetAddress}
               </span>
             </div>
-            <p className="mt-0.5 text-[9px] sm:text-[10px] tracking-[0.12em] text-muted">
-              DRY-STOCK SHOPS, SPOILAGE CLEARANCE, MICRO-CHARGING & ROVING TANKER ALERTS
-            </p>
+            <button
+              type="button"
+              onClick={refreshLocation}
+              title="Refresh Location"
+              className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
+              style={{ color: accentColor }}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${geoLoading ? "animate-spin" : ""}`} />
+            </button>
           </div>
-        </header>
-
-        {/* Location Pill */}
-        <div 
-          className="glass-panel px-3 sm:px-4 py-2 flex items-center justify-between gap-3 pointer-events-auto min-w-0"
-          style={{
-            borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
-            backgroundColor: `color-mix(in srgb, ${accentColor} 10%, transparent)`,
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
-            <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-              {streetAddress}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={refreshLocation}
-            title="Refresh Location"
-            className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-            style={{ color: accentColor }}
-          >
-            <RefreshCw className={`h-3 w-3 ${geoLoading ? "animate-spin" : ""}`} />
-          </button>
         </div>
       </div>
 
       {/* TABS & ACTION BAR */}
-      <div className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 relative pointer-events-auto z-10">
+      <div className="glass-panel p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 relative pointer-events-auto z-10">
         <div className="panel-reflection pointer-events-none" />
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setActiveTab("shops")}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === "shops"
                 ? "bg-white/20 text-white border border-white/30"
                 : "bg-white/5 border border-white/10 text-muted hover:text-white"
             }`}
           >
-            <Store className="w-3.5 h-3.5" /> Off-Grid Spazas & Clearance
+            <Store className="w-3.5 h-3.5 shrink-0" /> Off-Grid Spazas & Clearance
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("relief")}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeTab === "relief"
                 ? "bg-white/20 text-white border border-white/30"
                 : "bg-white/5 border border-white/10 text-muted hover:text-white"
             }`}
           >
-            <Megaphone className="w-3.5 h-3.5" /> Emergency Relief & Tankers
+            <Megaphone className="w-3.5 h-3.5 shrink-0" /> Emergency Relief & Tankers
           </button>
         </div>
 
@@ -439,23 +441,23 @@ export default function SpazaRescuePage() {
             if (activeTab === "shops") setIsShopModalOpen(true);
             else setIsReliefModalOpen(true);
           }}
-          className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 ml-auto shrink-0"
+          className="px-4 py-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 w-full sm:w-auto shrink-0"
           style={{
             color: accentColor,
             borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
             backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
           }}
         >
-          <Plus className="w-3.5 h-3.5" />
-          {activeTab === "shops" ? "Register Shop Status" : "Post Relief / Tanker Alert"}
+          <Plus className="w-3.5 h-3.5 shrink-0" />
+          <span>{activeTab === "shops" ? "Register Shop Status" : "Post Relief / Tanker Alert"}</span>
         </button>
       </div>
 
       {/* SEARCH & FILTERS */}
-      <div className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4 relative pointer-events-auto z-10">
+      <div className="glass-panel p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 relative pointer-events-auto z-10">
         <div className="panel-reflection pointer-events-none" />
 
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative flex-1 w-full sm:min-w-[240px]">
           <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
@@ -467,30 +469,30 @@ export default function SpazaRescuePage() {
         </div>
 
         {activeTab === "shops" && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setGasParaffinFilter(!gasParaffinFilter)}
-              className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 gasParaffinFilter
                   ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                   : "bg-white/5 border-white/10 text-muted hover:text-white"
               }`}
             >
-              <Flame className="w-3.5 h-3.5" />
+              <Flame className="w-3.5 h-3.5 shrink-0" />
               <span>{gasParaffinFilter ? "Gas / Paraffin Only" : "Filter Fuel"}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setClearanceFilter(!clearanceFilter)}
-              className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 clearanceFilter
                   ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
                   : "bg-white/5 border-white/10 text-muted hover:text-white"
               }`}
             >
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
               <span>{clearanceFilter ? "Spoilage Clearance Only" : "Food Clearance Deals"}</span>
             </button>
           </div>
@@ -508,16 +510,16 @@ export default function SpazaRescuePage() {
             filteredShops.map((shop) => (
               <div
                 key={shop.id}
-                className="glass-panel p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
               >
                 <div className="panel-reflection pointer-events-none" />
 
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                  <div className="flex items-start sm:items-center justify-between gap-2 mb-3">
+                    <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-amber-300 transition-colors leading-snug">
                       {shop.shopName}
                     </h3>
-                    <span className="text-xs font-mono" style={{ color: accentColor }}>
+                    <span className="text-[11px] sm:text-xs font-mono shrink-0" style={{ color: accentColor }}>
                       {shop.formattedDistance ? `${shop.formattedDistance} away` : "Nearby"}
                     </span>
                   </div>
@@ -525,7 +527,7 @@ export default function SpazaRescuePage() {
                   <div className="flex items-center gap-2 text-xs text-muted mb-3 flex-wrap">
                     <span>Owner: <strong className="text-white">{shop.owner}</strong></span>
                     <span>•</span>
-                    <span className="flex items-center gap-1 truncate">
+                    <span className="flex items-center gap-1 truncate max-w-full">
                       <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{shop.location}</span>
                     </span>
                   </div>
@@ -553,13 +555,13 @@ export default function SpazaRescuePage() {
 
                     {shop.hasGasOrParaffin && (
                       <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
-                        <Flame className="w-3 h-3" /> Gas / Paraffin
+                        <Flame className="w-3 h-3 shrink-0" /> Gas / Paraffin
                       </span>
                     )}
 
                     {shop.hasEmergencyCharging && (
                       <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-md border bg-cyan-500/10 text-cyan-400 border-cyan-500/30 flex items-center gap-1">
-                        <BatteryCharging className="w-3 h-3" /> 12V Micro-Charging
+                        <BatteryCharging className="w-3 h-3 shrink-0" /> 12V Micro-Charging
                       </span>
                     )}
                   </div>
@@ -579,17 +581,17 @@ export default function SpazaRescuePage() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
+                <div className="mt-6 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <span className="text-xs text-muted flex items-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Community Verified
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Community Verified
                   </span>
 
                   <button
                     type="button"
                     onClick={() => handleContactWhatsApp(shop.contactPhone, shop.shopName)}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" style={{ color: accentColor }} /> WhatsApp Shop
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>WhatsApp Shop</span>
                   </button>
                 </div>
               </div>
@@ -607,12 +609,12 @@ export default function SpazaRescuePage() {
             filteredRelief.map((req) => (
               <div
                 key={req.id}
-                className="glass-panel p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
               >
                 <div className="panel-reflection pointer-events-none" />
 
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-start sm:items-center justify-between gap-2 mb-3 flex-wrap">
                     <span
                       className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
                         req.type === "bulk-need"
@@ -620,23 +622,23 @@ export default function SpazaRescuePage() {
                           : "bg-cyan-500/10 text-cyan-400 border-cyan-500/30"
                       }`}
                     >
-                      {req.type === "bulk-need" ? <Megaphone className="w-3 h-3" /> : <Droplets className="w-3 h-3" />}
-                      {req.type === "bulk-need" ? "Spaza Bulk Restock Need" : "Roving Municipal Tanker"}
+                      {req.type === "bulk-need" ? <Megaphone className="w-3 h-3 shrink-0" /> : <Droplets className="w-3 h-3 shrink-0" />}
+                      <span>{req.type === "bulk-need" ? "Spaza Emergency Bulk Need" : "Roving Municipal Tanker"}</span>
                     </span>
 
-                    <span className="text-xs font-mono" style={{ color: accentColor }}>
+                    <span className="text-[11px] sm:text-xs font-mono shrink-0" style={{ color: accentColor }}>
                       {req.formattedDistance ? `${req.formattedDistance} away` : "Nearby"}
                     </span>
                   </div>
 
-                  <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                  <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-amber-300 transition-colors leading-snug">
                     {req.title}
                   </h3>
 
                   <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-3 flex-wrap">
                     <span>By: <strong className="text-white">{req.postedBy}</strong></span>
                     <span>•</span>
-                    <span className="flex items-center gap-1 truncate">
+                    <span className="flex items-center gap-1 truncate max-w-full">
                       <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{req.location}</span>
                     </span>
                   </div>
@@ -646,7 +648,7 @@ export default function SpazaRescuePage() {
                   </p>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
+                <div className="mt-6 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <span className="text-xs text-rose-400 font-mono font-semibold flex items-center gap-1">
                     Urgency: {req.urgency}
                   </span>
@@ -654,9 +656,9 @@ export default function SpazaRescuePage() {
                   <button
                     type="button"
                     onClick={() => handleContactWhatsApp(req.contactPhone, req.title)}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" style={{ color: accentColor }} /> Coordinate via WhatsApp
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>Coordinate via WhatsApp</span>
                   </button>
                 </div>
               </div>
@@ -667,9 +669,9 @@ export default function SpazaRescuePage() {
 
       {/* REGISTER SHOP MODAL */}
       {isShopModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto overflow-y-auto">
           <div
-            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
+            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto"
             style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
@@ -716,7 +718,7 @@ export default function SpazaRescuePage() {
               <div className="space-y-2 py-1">
                 <label className="text-[11px] sm:text-xs text-muted block">Low-Tech & Outage Capabilities:</label>
 
-                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl gap-2">
                   <span className="text-xs text-white flex items-center gap-1.5">
                     🕯️ Dry-Stock Active Only (Maize, Rice, Canned, Candles)
                   </span>
@@ -724,31 +726,31 @@ export default function SpazaRescuePage() {
                     type="checkbox"
                     checked={hasDry}
                     onChange={(e) => setHasDry(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
+                    className="w-4 h-4 cursor-pointer accent-[var(--accent)] shrink-0"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl gap-2">
                   <span className="text-xs text-white flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-amber-400" /> Gas Refills & Paraffin Available
+                    <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Gas Refills & Paraffin Available
                   </span>
                   <input
                     type="checkbox"
                     checked={hasGasPara}
                     onChange={(e) => setHasGasPara(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
+                    className="w-4 h-4 cursor-pointer accent-[var(--accent)] shrink-0"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+                <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl gap-2">
                   <span className="text-xs text-white flex items-center gap-1.5">
-                    <BatteryCharging className="w-3.5 h-3.5 text-cyan-400" /> 12V Car Battery Micro-Charging
+                    <BatteryCharging className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> 12V Car Battery Micro-Charging
                   </span>
                   <input
                     type="checkbox"
                     checked={hasCharging}
                     onChange={(e) => setHasCharging(e.target.checked)}
-                    className="w-4 h-4 cursor-pointer accent-[var(--accent)]"
+                    className="w-4 h-4 cursor-pointer accent-[var(--accent)] shrink-0"
                   />
                 </div>
               </div>
@@ -805,9 +807,9 @@ export default function SpazaRescuePage() {
 
       {/* POST RELIEF / TANKER ALERT MODAL */}
       {isReliefModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto overflow-y-auto">
           <div
-            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
+            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto"
             style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />

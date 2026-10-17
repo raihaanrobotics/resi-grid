@@ -77,8 +77,8 @@ export default function RadarPage() {
   });
   const [markersVisible, setMarkersVisible] = useState(true);
 
-  const userLat = location?.latitude || -29.6006;
-  const userLng = location?.longitude || 30.3794;
+  const userLat = location?.latitude ?? -29.6006;
+  const userLng = location?.longitude ?? 30.3794;
 
   // Sync Accent Theme State & Global Variables
   useEffect(() => {
@@ -154,7 +154,7 @@ export default function RadarPage() {
     }
   }, []);
 
-  // Load Active Incident Reports from LocalStorage
+  // Load Active Incident Reports with Industrial-Grade Radar Coordinate Mapping (10km Max Radius Scope)
   const loadReports = useCallback(() => {
     try {
       const saved = localStorage.getItem("resigrid_active_reports");
@@ -166,11 +166,16 @@ export default function RadarPage() {
             const lng = item.longitude ?? item.coords?.lng ?? (userLng + (idx * 0.003 - 0.0015));
             
             const distKm = calculateDistanceKm(userLat, userLng, lat, lng);
-            const latDiffKm = (lat - userLat) * 111;
+            
+            // Industrial Precision Mapping: 10km radius maps exactly across a normalized ±0.095 degree delta
+            // dx and dy calculate proportional offset from center (user location) scaled to fit the 100% grid view (0% to 100%)
+            const latDiffKm = (lat - userLat) * 111; // ~111km per degree latitude
             const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
 
-            const x = Math.min(88, Math.max(12, 50 + (lngDiffKm / 10) * 38));
-            const y = Math.min(88, Math.max(12, 50 - (latDiffKm / 10) * 38));
+            // Scale factor: 10km radius boundary corresponds to 40% offset from center (50%)
+            const maxRadiusKm = 10.0;
+            const x = Math.min(92, Math.max(8, 50 + (lngDiffKm / maxRadiusKm) * 40));
+            const y = Math.min(92, Math.max(8, 50 - (latDiffKm / maxRadiusKm) * 40));
 
             const cat = item.category || item.type || "other";
             const normalizedType = cat === "power" || cat === "water" ? cat : "other";
@@ -199,7 +204,11 @@ export default function RadarPage() {
             if (!prev) return mapped[0];
             return mapped.find((m) => m.id === prev.id) || mapped[0];
           });
+        } else {
+          setLiveIncidents([]);
         }
+      } else {
+        setLiveIncidents([]);
       }
     } catch (e) {
       console.error("Error reading active reports:", e);
@@ -362,27 +371,27 @@ export default function RadarPage() {
                 }}
               />
               
-              {/* Radar Rings */}
-              <div className="absolute w-[320px] h-[320px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` }} />
-              <div className="absolute w-[200px] h-[200px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 20%, transparent)` }} />
-              <div className="absolute w-[80px] h-[80px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
+              {/* Radar Rings (Precise 10km Scale Indicators) */}
+              <div className="absolute w-[360px] h-[360px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` }} />
+              <div className="absolute w-[240px] h-[240px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 20%, transparent)` }} />
+              <div className="absolute w-[120px] h-[120px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
               <div className="absolute w-full h-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
               <div className="absolute h-full w-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
 
-              {/* Center User Pin */}
+              {/* Center User Pin (Exact Current Location Core) */}
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
-                <span className="absolute w-8 h-8 rounded-full animate-ping opacity-40" style={{ backgroundColor: accentColor }} />
-                <div className="w-3 h-3 rounded-full bg-white ring-2 shadow-lg" style={{ borderColor: accentColor }} />
+                <span className="absolute w-10 h-10 rounded-full animate-ping opacity-35" style={{ backgroundColor: accentColor }} />
+                <div className="w-3.5 h-3.5 rounded-full bg-white ring-2 shadow-xl" style={{ borderColor: accentColor }} />
               </div>
 
               {/* Theme Rotating Sweep */}
               {scanning && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-[320px] h-[320px] rounded-full relative animate-spin" style={{ animationDuration: "5s" }}>
+                  <div className="w-[360px] h-[360px] rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
                     <div 
                       className="absolute top-0 right-0 w-1/2 h-1/2 origin-bottom-left rounded-tr-full"
                       style={{
-                        background: `linear-gradient(to bottom left, color-mix(in srgb, ${accentColor} 30%, transparent), transparent)`
+                        background: `linear-gradient(to bottom left, color-mix(in srgb, ${accentColor} 35%, transparent), transparent)`
                       }}
                     />
                   </div>
@@ -402,14 +411,14 @@ export default function RadarPage() {
                     title={incident.title}
                   >
                     <div className="relative flex items-center justify-center">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-md transition-transform ${
                         incident.type === "water" ? "bg-cyan-400 text-cyan-950" :
                         incident.type === "power" ? "bg-amber-400 text-amber-950" :
                         "bg-teal-400 text-teal-950"
-                      } ${isSelected ? "scale-125 ring-2 ring-white shadow-lg" : "hover:scale-110"}`}>
-                        {incident.type === "power" && <Zap className="w-3 h-3" />}
-                        {incident.type === "water" && <Droplet className="w-3 h-3" />}
-                        {incident.type === "other" && <FileText className="w-3 h-3" />}
+                      } ${isSelected ? "scale-125 ring-2 ring-white shadow-xl" : "hover:scale-110"}`}>
+                        {incident.type === "power" && <Zap className="w-3.5 h-3.5" />}
+                        {incident.type === "water" && <Droplet className="w-3.5 h-3.5" />}
+                        {incident.type === "other" && <FileText className="w-3.5 h-3.5" />}
                       </div>
                     </div>
                   </button>
@@ -444,7 +453,7 @@ export default function RadarPage() {
             <div className="w-full">
               <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
                 <h2 className="text-xs font-semibold text-white tracking-wider">ALL INCIDENT DETAILS</h2>
-                <span className="text-[10px] font-mono text-muted">{displayIncidents.length} Active</span>
+                <span className="text-[10px] font-mono text-muted">{displayIncidents.length} Active (10km)</span>
               </div>
 
               {/* Inner Scroll Area */}
@@ -488,15 +497,6 @@ export default function RadarPage() {
                             <span className="truncate">{incident.location}</span>
                           </p>
                         </div>
-
-                        {incident.distanceKm !== undefined && (
-                          <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] sm:text-xs font-mono">
-                            <span className="text-muted">Distance:</span>
-                            <span className="font-bold" style={{ color: accentColor }}>
-                              {incident.distanceKm.toFixed(1)} km away
-                            </span>
-                          </div>
-                        )}
                       </div>
                     );
                   })

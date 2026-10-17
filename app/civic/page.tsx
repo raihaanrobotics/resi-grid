@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect } from "react";
 import {
   AlertTriangle,
@@ -250,50 +251,64 @@ export default function CivicAIPage() {
 
       <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-4 px-3 pb-32 pt-4 sm:space-y-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
         
-        {/* TOP HEADER & INDEPENDENT OUTSIDE LOCATION PILL */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <header className="glass-panel p-3.5 sm:p-4 flex items-center gap-3">
-            <div className="feature-icon feature-civic shrink-0" style={{ color: "var(--accent)" }}>
-              <FileText className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: "var(--accent)" }} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                INCIDENT REPORTING
-              </h1>
-              <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                DIRECT MUNICIPAL ISSUE LOGGING
-              </p>
-            </div>
-          </header>
+        {/* UNIFIED TOP COMMAND PANEL CONTAINER */}
+        <div 
+          className="glass-panel p-3.5 sm:p-5 relative overflow-hidden space-y-3 pointer-events-auto border"
+          style={{
+            borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+            backgroundColor: "color-mix(in srgb, var(--accent) 6%, transparent)",
+          }}
+        >
+          <div className="panel-reflection pointer-events-none" />
 
-          {/* Fully Independent Outside Location Pill */}
-          <div 
-            className="glass-panel px-4 py-2.5 flex items-center justify-between gap-3 pointer-events-auto"
-            style={{
-              borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
-              backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)",
-            }}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
-              {geoLoading || isRefreshingGeo ? (
-                <span className="text-[10px] sm:text-xs" style={{ color: "var(--accent)" }}>LOCATING STREET...</span>
-              ) : (
-                <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                  {useCustomAddress && customAddress.trim() ? customAddress : streetAddress}
-                </span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleManualRefreshLocation}
-              onTouchEnd={handleManualRefreshLocation}
-              title="Refresh Location"
-              className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-              style={{ color: "var(--accent)" }}
+          {/* Top Row: Header Branding */}
+          <div className="flex items-center justify-between relative z-10">
+            <Link href="/" className="flex items-center gap-3 min-w-0">
+              <div className="feature-icon feature-civic shrink-0" style={{ color: "var(--accent)" }}>
+                <FileText className="h-[18px] w-[18px]" style={{ color: "var(--accent)" }} />
+              </div>
+
+              <div className="min-w-0">
+                <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm truncate">
+                  INCIDENT REPORTING
+                </h1>
+                <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
+                  DIRECT MUNICIPAL ISSUE LOGGING
+                </p>
+              </div>
+            </Link>
+          </div>
+
+          {/* Bottom Row: Location Pill (Full Width) */}
+          <div className="flex items-center gap-2 relative z-20 pt-1">
+            <div 
+              className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 35%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)",
+              }}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
-            </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
+                {geoLoading || isRefreshingGeo ? (
+                  <span className="text-[10px] sm:text-xs truncate" style={{ color: "var(--accent)" }}>LOCATING STREET...</span>
+                ) : (
+                  <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
+                    {useCustomAddress && customAddress.trim() ? customAddress : streetAddress}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleManualRefreshLocation}
+                onTouchEnd={handleManualRefreshLocation}
+                title="Refresh Location"
+                className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
+                style={{ color: "var(--accent)" }}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingGeo ? "animate-spin" : ""}`} />
+              </button>
+            </div>
           </div>
         </div>
 

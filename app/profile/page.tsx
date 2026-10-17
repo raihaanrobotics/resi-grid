@@ -604,66 +604,12 @@ export default function ProfilePage() {
             </form>
           </div>
 
-          {/* ALERT & NOTIFICATION PREFERENCES */}
-          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
-            <div className="panel-reflection pointer-events-none" />
-
-            <div className="border-b border-white/10 pb-3">
-              <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                <Bell className="w-4 h-4 text-accent-dynamic shrink-0" /> Alert & Dispatch Notifications
-              </h2>
-              <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">Configure how you receive incident reports and community water alerts.</p>
-            </div>
-
-            <div className="space-y-3 pt-1 relative z-20">
-              <div className="flex items-center justify-between p-3 bg-black/20 border border-white/5 rounded-xl gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-white">High Priority Outage Alerts</p>
-                  <p className="text-[10px] text-muted">Instant notifications for water line and power grid trips in your ward</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEmergencyAlerts(!emergencyAlerts)}
-                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer z-30 shrink-0 select-none"
-                  style={{ 
-                    backgroundColor: emergencyAlerts ? "var(--accent)" : "rgba(255,255,255,0.1)",
-                    touchAction: "manipulation"
-                  }}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform pointer-events-none ${
-                    emergencyAlerts ? "translate-x-6" : "translate-x-0"
-                  }`} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-black/20 border border-white/5 rounded-xl gap-3">
-                <div>
-                  <p className="text-xs font-semibold text-white">Community Water Hub Broadcasts</p>
-                  <p className="text-[10px] text-muted">Receive updates when nearby neighborhood tanks open for sharing</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCommunityBroadcasts(!communityBroadcasts)}
-                  className="w-12 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer z-30 shrink-0 select-none"
-                  style={{ 
-                    backgroundColor: communityBroadcasts ? "var(--accent)" : "rgba(255,255,255,0.1)",
-                    touchAction: "manipulation"
-                  }}
-                >
-                  <div className={`w-5 h-5 rounded-full bg-white transition-transform transform pointer-events-none ${
-                    communityBroadcasts ? "translate-x-6" : "translate-x-0"
-                  }`} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* SAVE PREFERENCES BUTTON AT THE END AFTER ALERT & DISPATCH CONTAINER */}
+          {/* SAVE PREFERENCES BUTTON AT THE END */}
           <div className="flex justify-end pt-2">
             <button
               type="button"
               onClick={() => handleSave()}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none"
+              className="w-full sm:w-auto px-6 py-3 rounded-full border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
                 borderColor: "color-mix(in srgb, var(--accent) 45%, transparent)",

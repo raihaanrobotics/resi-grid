@@ -19,6 +19,7 @@ import {
   Activity,
   Sunrise,
   Sunset,
+  MapPin,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
@@ -32,6 +33,126 @@ export interface ResiGridNotification {
   read?: boolean;
   timestamp?: number;
 }
+
+interface ProvinceAtmosphericData {
+  provinceName: string;
+  imageBgUrls: string[];
+  threatLevel: "green" | "yellow" | "orange" | "red";
+  levelBadge: string;
+  statusTitle: string;
+  warningMessage: string;
+}
+
+const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
+  "KwaZulu-Natal": {
+    provinceName: "KwaZulu-Natal",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1576485290814-1c72aa4bbb8e?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "green",
+    levelBadge: "SAWS Level 0 • Green",
+    statusTitle: "Regional Atmospheric Baseline Stable",
+    warningMessage: "No severe weather warnings active across KwaZulu-Natal. Atmospheric pressure and coastal cloud cover remain within safe baseline limits.",
+  },
+  "Gauteng": {
+    provinceName: "Gauteng",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1577948000111-9c970dfe3743?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1518684079-3c830dcef090?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "yellow",
+    levelBadge: "SAWS Level 2 • Yellow",
+    statusTitle: "Severe Thunderstorm Watch",
+    warningMessage: "Localized severe thunderstorms expected over southern Johannesburg and Ekurhuleni. High risk of localized flooding and small hail.",
+  },
+  "Western Cape": {
+    provinceName: "Western Cape",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1580619305218-8423a7ef79b4?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "orange",
+    levelBadge: "SAWS Level 6 • Orange",
+    statusTitle: "Gale Force Wind & Coastal Surge Alert",
+    warningMessage: "Damaging coastal winds reaching up to 75 km/h along the Cape Peninsula. High sea swells and severe disruption to port activities expected.",
+  },
+  "Eastern Cape": {
+    provinceName: "Eastern Cape",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1519046904884-53103b34b206?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "green",
+    levelBadge: "SAWS Level 0 • Green",
+    statusTitle: "Clear Atmospheric Conditions",
+    warningMessage: "Stable oceanic high pressure dominates the Wild Coast corridor with gentle onshore breeze and light sea swell.",
+  },
+  "Free State": {
+    provinceName: "Free State",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "green",
+    levelBadge: "SAWS Level 0 • Green",
+    statusTitle: "Stable Agricultural Climate",
+    warningMessage: "Favorable dry conditions across Mangaung and surrounding agricultural districts with clear skies and moderate thermal ranges.",
+  },
+  "Mpumalanga": {
+    provinceName: "Mpumalanga",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1511497584788-876761142197?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "yellow",
+    levelBadge: "SAWS Level 1 • Yellow",
+    statusTitle: "Escarpment Mist & Morning Fog",
+    warningMessage: "Reduced visibility along the Sabie and Nelspruit escarpment routes due to heavy morning mist. Motorists advised to use fog lights.",
+  },
+  "Limpopo": {
+    provinceName: "Limpopo",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "green",
+    levelBadge: "SAWS Level 0 • Green",
+    statusTitle: "Warm & Clear Bushveld Climate",
+    warningMessage: "Stable high-pressure weather system across Polokwane and the Waterberg biosphere with minimal cloud obstruction.",
+  },
+  "North West": {
+    provinceName: "North West",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "green",
+    levelBadge: "SAWS Level 0 • Green",
+    statusTitle: "Normal Atmospheric Pressure",
+    warningMessage: "Clear skies and moderate wind speeds across Rustenburg and Mahikeng mining and agricultural zones.",
+  },
+  "Northern Cape": {
+    provinceName: "Northern Cape",
+    imageBgUrls: [
+      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop"
+    ],
+    threatLevel: "green",
+    levelBadge: "SAWS Level 0 • Green",
+    statusTitle: "Arid & Stable Karoo Climate",
+    warningMessage: "Hot daytime temperatures and clear nocturnal skies across Kimberley and Upington. Low humidity baseline.",
+  },
+};
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -47,6 +168,7 @@ export default function WeatherClimatePage() {
 
   // Province State Loaded from User Profile
   const [userProvince, setUserProvince] = useState<string>("KwaZulu-Natal");
+  const [currentBgImage, setCurrentBgImage] = useState<string>("");
 
   // Comprehensive Weather & Meteorological Data States
   const [temperature, setTemperature] = useState<number | null>(null);
@@ -156,6 +278,15 @@ export default function WeatherClimatePage() {
     };
   }, []);
 
+  // Rotate random high-resolution image for the province on mount/province change
+  useEffect(() => {
+    const provData = PROVINCIAL_ATMOSPHERIC_DATA[userProvince] || PROVINCIAL_ATMOSPHERIC_DATA["KwaZulu-Natal"];
+    if (provData && provData.imageBgUrls.length > 0) {
+      const randomIndex = Math.floor(Math.random() * provData.imageBgUrls.length);
+      setCurrentBgImage(provData.imageBgUrls[randomIndex]);
+    }
+  }, [userProvince]);
+
   // Fetch Comprehensive Open-Meteo Weather Data & Province-Specific Warnings
   useEffect(() => {
     const fetchWeatherForLocation = async () => {
@@ -209,6 +340,8 @@ export default function WeatherClimatePage() {
           setVisibility(10);
           setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 
+          const activeProvData = PROVINCIAL_ATMOSPHERIC_DATA[userProvince] || PROVINCIAL_ATMOSPHERIC_DATA["KwaZulu-Natal"];
+
           if (code >= 95) {
             setWeatherCondition("Severe Thunderstorm Warning");
             setIsAlertActive(true);
@@ -232,9 +365,9 @@ export default function WeatherClimatePage() {
             pushGlobalNotification(`${userProvince} High Wind Warning`, desc, "warning");
           } else {
             setWeatherCondition("Stable Meteorological Conditions");
-            setIsAlertActive(false);
-            setAlertHeadline(`${userProvince} Regional Atmospheric Status Stable`);
-            setAlertDetails(`No severe weather warnings issued for ${userProvince}. Barometric pressure and atmospheric stability are well within optimal baseline ranges.`);
+            setIsAlertActive(activeProvData.threatLevel !== "green");
+            setAlertHeadline(`${userProvince} Regional Atmospheric Status`);
+            setAlertDetails(activeProvData.warningMessage);
           }
         } else {
           setWeatherCondition("Stable Conditions");
@@ -284,6 +417,21 @@ export default function WeatherClimatePage() {
     const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
     const val = Math.floor((degrees / 22.5) + 0.5);
     return directions[(val % 16)];
+  };
+
+  const currentProvData = PROVINCIAL_ATMOSPHERIC_DATA[userProvince] || PROVINCIAL_ATMOSPHERIC_DATA["KwaZulu-Natal"];
+
+  const getBadgeStyle = (level: ProvinceAtmosphericData["threatLevel"]) => {
+    switch (level) {
+      case "yellow":
+        return "bg-amber-500/20 text-amber-300 border-amber-500/40";
+      case "orange":
+        return "bg-orange-500/20 text-orange-300 border-orange-500/40";
+      case "red":
+        return "bg-rose-500/20 text-rose-300 border-rose-500/40";
+      default:
+        return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+    }
   };
 
   return (
@@ -357,44 +505,52 @@ export default function WeatherClimatePage() {
         {/* MAIN DESIGN LAYOUT: COMPREHENSIVE METEOROLOGICAL TELEMETRY & PROVINCE ALERTS */}
         <div className="space-y-5">
           
-          {/* OFFICIAL PROVINCE WARNING BANNER */}
-          <section className="glass-panel p-5 sm:p-7 relative overflow-hidden pointer-events-auto border"
-            style={{
-              borderColor: isAlertActive ? "rgba(245, 158, 11, 0.4)" : "color-mix(in srgb, var(--accent) 30%, transparent)",
-              backgroundColor: isAlertActive ? "rgba(245, 158, 11, 0.08)" : "color-mix(in srgb, var(--accent) 5%, transparent)",
-            }}
-          >
-            <div className="panel-reflection pointer-events-none" />
+          {/* PROVINCIAL ATMOSPHERIC VISUAL & WARNING HERO CARD */}
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/80 text-white shadow-2xl min-h-[190px] sm:min-h-[220px] flex flex-col justify-between group pointer-events-auto">
+            
+            {/* REAL-WORLD BACKGROUND IMAGE WITH ATMOSPHERIC GRADIENT */}
+            <div
+              className="absolute inset-0 bg-cover bg-center transition-all duration-700 group-hover:scale-105"
+              style={{
+                backgroundImage: `url('${currentBgImage || currentProvData.imageBgUrls[0]}')`,
+              }}
+            />
+            
+            {/* DARK ATMOSPHERIC BACKDROP BLEND OVERLAY */}
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/40 backdrop-blur-[1px]" />
 
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 relative z-10">
-              <div className="flex items-start gap-3.5 min-w-0 w-full">
-                <div 
-                  className="p-3 rounded-2xl border shrink-0 mt-0.5"
-                  style={{
-                    borderColor: isAlertActive ? "rgba(245, 158, 11, 0.5)" : "color-mix(in srgb, var(--accent) 40%, transparent)",
-                    backgroundColor: isAlertActive ? "rgba(245, 158, 11, 0.2)" : "color-mix(in srgb, var(--accent) 15%, transparent)",
-                    color: isAlertActive ? "#f59e0b" : "var(--accent)"
-                  }}
-                >
-                  {isAlertActive ? <ShieldAlert className="h-6 w-6 animate-pulse" /> : <ShieldCheck className="h-6 w-6" />}
+            {/* TOP ROW: REGION & OFFICIAL SAWS LEVEL BADGE */}
+            <div className="relative z-10 p-4 sm:p-5 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-black/50 border border-white/15 backdrop-blur-md text-[var(--accent)]">
+                  <MapPin className="w-4 h-4" />
                 </div>
-
-                <div className="space-y-2 min-w-0 flex-1">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[10px] font-mono text-muted">Refreshed: {lastCheckTimestamp}</span>
-                  </div>
-
-                  <h2 className="text-base sm:text-xl font-bold text-white">
-                    {alertHeadline}
-                  </h2>
-                  
-                  <p className="text-xs text-muted leading-relaxed">
-                    {alertDetails}
-                  </p>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wider uppercase">
+                    {currentProvData.provinceName} Regional Status
+                  </h3>
                 </div>
               </div>
+
+              {/* SAWS THREAT LEVEL PILL BADGE */}
+              <span className={`px-3 py-1 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider backdrop-blur-md shadow-md ${getBadgeStyle(currentProvData.threatLevel)}`}>
+                {currentProvData.levelBadge}
+              </span>
             </div>
-          </section>
+
+            {/* BOTTOM ROW: WARNING & ATMOSPHERIC REPORT */}
+            <div className="relative z-10 p-4 sm:p-5 pt-0 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm sm:text-base font-extrabold text-white leading-snug">
+                  {currentProvData.statusTitle}
+                </h4>
+              </div>
+
+              <p className="text-xs text-white/80 bg-black/50 p-3 rounded-xl border border-white/10 backdrop-blur-md leading-relaxed">
+                {currentProvData.warningMessage}
+              </p>
+            </div>
+          </div>
 
           {/* COMPREHENSIVE METEOROLOGICAL TELEMETRY GRID WITH PLAIN-LANGUAGE RECOMMENDATIONS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">

@@ -12,11 +12,9 @@ import {
   RefreshCw,
   MessageCircle,
   X,
-  ShieldCheck,
   AlertTriangle,
   HeartHandshake,
   Clock,
-  CheckCircle2,
   SlidersHorizontal,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
@@ -365,8 +363,8 @@ export default function SpazaRescuePage() {
           </Link>
         </div>
 
-        {/* Bottom Row: Location Pill & Register Button Side-by-Side (Stacked on very small screens, responsive flex) */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 relative z-20 pt-1">
+        {/* Bottom Row: Location Pill & Register Button Side-by-Side */}
+        <div className="flex items-center gap-2 relative z-20 pt-1">
           {/* Location Pill */}
           <div 
             className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
@@ -396,7 +394,7 @@ export default function SpazaRescuePage() {
           <button
             type="button"
             onClick={() => setIsStoreModalOpen(true)}
-            className="glass-panel px-4 py-2.5 sm:py-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation z-30 hover:opacity-90 shrink-0 rounded-xl"
+            className="glass-panel px-3.5 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation z-30 hover:opacity-90 shrink-0 rounded-xl whitespace-nowrap"
             style={{
               borderColor: `color-mix(in srgb, ${accentColor} 45%, transparent)`,
               backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
@@ -409,7 +407,7 @@ export default function SpazaRescuePage() {
       </div>
 
       {/* SEARCH & FILTER BAR */}
-      <div className="glass-panel p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 relative pointer-events-auto rounded-2xl">
+      <div className="glass-panel p-3 sm:p-4 flex items-center gap-2 relative pointer-events-auto rounded-2xl">
         <div className="panel-reflection pointer-events-none" />
 
         {/* Search Input */}
@@ -420,41 +418,39 @@ export default function SpazaRescuePage() {
             placeholder="Search maize meal, bread, soup kitchens..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 sm:py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
           />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Filter Modal Trigger Button */}
-          <button
-            type="button"
-            onClick={() => setIsFilterModalOpen(true)}
-            className="flex-1 sm:flex-initial px-3.5 py-2.5 sm:py-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer hover:opacity-90"
-            style={{
-              color: accentColor,
-              borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-              backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
-            }}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
-          </button>
+        {/* Filter Modal Trigger Button */}
+        <button
+          type="button"
+          onClick={() => setIsFilterModalOpen(true)}
+          className="px-3 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer hover:opacity-90 shrink-0"
+          style={{
+            color: accentColor,
+            borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+            backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+          }}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+          <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
+        </button>
 
-          {/* Post Aid / Listing Button */}
-          <button
-            type="button"
-            onClick={() => setIsAidModalOpen(true)}
-            className="flex-1 sm:flex-initial px-3.5 py-2.5 sm:py-2 rounded-xl border text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:opacity-95 whitespace-nowrap"
-            style={{
-              color: accentColor,
-              borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-              backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
-            }}
-          >
-            <Plus className="w-3.5 h-3.5 shrink-0" />
-            <span>Post Aid</span>
-          </button>
-        </div>
+        {/* Post Aid / Listing Button */}
+        <button
+          type="button"
+          onClick={() => setIsAidModalOpen(true)}
+          className="px-3 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer hover:opacity-95 shrink-0 whitespace-nowrap"
+          style={{
+            color: accentColor,
+            borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+            backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+          }}
+        >
+          <Plus className="w-3.5 h-3.5 shrink-0" />
+          <span>Post Aid</span>
+        </button>
       </div>
 
       {/* UNIFIED FOOD SECURITY & RELIEF FEED */}
@@ -528,11 +524,7 @@ export default function SpazaRescuePage() {
                       </div>
                     </div>
 
-                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <span className="text-xs text-muted flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Verified Retailer
-                      </span>
-
+                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-end">
                       <button
                         type="button"
                         onClick={() => handleContactWhatsApp(store.contactPhone, store.shopName)}
@@ -609,11 +601,7 @@ export default function SpazaRescuePage() {
                       )}
                     </div>
 
-                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                      <span className="text-xs text-muted flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" /> Active Relief Point
-                      </span>
-
+                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-end">
                       <button
                         type="button"
                         onClick={() => handleContactWhatsApp(aid.contactPhone, aid.title)}

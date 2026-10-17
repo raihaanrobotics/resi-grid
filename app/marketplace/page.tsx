@@ -310,8 +310,9 @@ export default function MarketplacePage() {
             </Link>
           </div>
 
-          {/* Bottom Row: Location Pill (Full Width) */}
+          {/* Bottom Row: Location Pill & Post Listing Button Side-by-Side (Full Width on Mobile) */}
           <div className="flex items-center gap-2 relative z-20 pt-1">
+            {/* Location Pill */}
             <div 
               className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
               style={{
@@ -335,25 +336,19 @@ export default function MarketplacePage() {
                 <RefreshCw className={`h-3.5 w-3.5 ${geoLoading ? "animate-spin" : ""}`} />
               </button>
             </div>
-          </div>
-        </div>
 
-        {/* TABS & ACTION BAR */}
-        <div className="glass-panel p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 relative pointer-events-auto z-10">
-          <div className="panel-reflection pointer-events-none" />
-
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
+            {/* Post Listing Button Pill */}
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap border"
+              className="glass-panel px-4 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation z-30 hover:opacity-90 shrink-0 rounded-xl"
               style={{
-                color: accentColor,
-                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+                borderColor: `color-mix(in srgb, ${accentColor} 45%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
               }}
             >
-              <Plus className="w-3.5 h-3.5 shrink-0" /> Post Listing
+              <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
+              <span className="inline">Post Listing</span>
             </button>
           </div>
         </div>

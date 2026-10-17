@@ -354,10 +354,10 @@ export default function SpazaRescuePage() {
 
             <div className="min-w-0">
               <h1 className="text-xs font-semibold tracking-[0.15em] sm:tracking-[0.18em] text-white sm:text-sm truncate">
-                SPAZARESCUE™
+                SPAZARESCUE
               </h1>
               <p className="mt-0.5 truncate text-[8px] sm:text-[10px] tracking-[0.1em] text-muted">
-                FOOD SECURITY, DRY-STOCK SPASAS, SPOILAGE CLEARANCE & COMMUNITY SOUP KITCHENS
+                FOOD SECURITY & SPOILAGE CLEARANCE
               </p>
             </div>
           </Link>
@@ -406,6 +406,11 @@ export default function SpazaRescuePage() {
         </div>
       </div>
 
+      {/* WHITE DIVIDER LINE & BREATHING ROOM */}
+      <div className="pt-2 pb-2">
+        <hr className="border-t border-white/20 w-full" />
+      </div>
+
       {/* SEARCH & FILTER BAR */}
       <div className="glass-panel p-3 sm:p-4 flex items-center gap-2 relative pointer-events-auto rounded-2xl">
         <div className="panel-reflection pointer-events-none" />
@@ -426,43 +431,35 @@ export default function SpazaRescuePage() {
         <button
           type="button"
           onClick={() => setIsFilterModalOpen(true)}
-          className="px-3 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer hover:opacity-90 shrink-0"
+          className="p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer hover:opacity-90 shrink-0"
           style={{
             color: accentColor,
             borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
             backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
           }}
+          title="Filter"
         >
-          <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
-          <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
+          <SlidersHorizontal className="w-4 h-4 shrink-0" />
         </button>
 
         {/* Post Aid / Listing Button */}
         <button
           type="button"
           onClick={() => setIsAidModalOpen(true)}
-          className="px-3 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer hover:opacity-95 shrink-0 whitespace-nowrap"
+          className="p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer hover:opacity-95 shrink-0"
           style={{
             color: accentColor,
             borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
             backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
           }}
+          title="Post Aid"
         >
-          <Plus className="w-3.5 h-3.5 shrink-0" />
+          <Plus className="w-4 h-4 shrink-0" />
         </button>
       </div>
 
       {/* UNIFIED FOOD SECURITY & RELIEF FEED */}
       <div className="space-y-4 sm:space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs sm:text-base font-bold text-white flex items-center gap-2">
-            <Store className="w-4 h-4 shrink-0" style={{ color: accentColor }} /> Community Food Security &amp; Relief Feed
-          </h2>
-          <span className="text-[11px] sm:text-xs text-muted font-mono">
-            {(showStores ? filteredStores.length : 0) + (showAid ? filteredAid.length : 0)} active listings
-          </span>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 relative z-10">
           {(!showStores || filteredStores.length === 0) && (!showAid || filteredAid.length === 0) ? (
             <div className="col-span-full glass-panel p-6 sm:p-8 text-center text-muted text-xs rounded-2xl">
@@ -511,7 +508,7 @@ export default function SpazaRescuePage() {
                       {/* Food Essentials Badges */}
                       <div>
                         <span className="text-[10px] uppercase text-muted tracking-wider block mb-1.5">
-                          Available Food Essentials &amp; Dry-Stock:
+                          Available:
                         </span>
                         <div className="flex flex-wrap gap-1.5">
                           {store.foodEssentials.map((item, idx) => (
@@ -581,7 +578,7 @@ export default function SpazaRescuePage() {
                       {aid.foodEssentials && aid.foodEssentials.length > 0 && (
                         <div className="mb-3">
                           <span className="text-[10px] uppercase text-muted tracking-wider block mb-1.5">
-                            Available Food Essentials &amp; Dry-Stock:
+                            Available:
                           </span>
                           <div className="flex flex-wrap gap-1.5">
                             {aid.foodEssentials.map((item, idx) => (

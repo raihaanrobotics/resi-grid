@@ -8,7 +8,6 @@ import {
   Tag,
   Search,
   Plus,
-  ChevronRight,
   BatteryCharging,
   Droplets,
   Wrench,
@@ -271,7 +270,7 @@ export default function MarketplacePage() {
   });
 
   return (
-    <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
+    <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] pb-28 sm:pb-32 pt-3 sm:pt-4 px-2.5 sm:px-6 lg:px-10 max-w-[1920px] mx-auto space-y-4 sm:space-y-6 selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
       {/* Ambient environment */}
       <div className="ambient-background pointer-events-none" aria-hidden="true">
         <div className="ambient-orb orb-one" />
@@ -280,130 +279,131 @@ export default function MarketplacePage() {
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1920px] px-3 pb-32 pt-4 sm:px-6 sm:space-y-6 lg:px-10 lg:pb-12 lg:pt-7 space-y-5">
-        
-        {/* UNIFIED TOP COMMAND PANEL CONTAINER */}
-        <div 
-          className="glass-panel p-3.5 sm:p-5 relative overflow-hidden space-y-3 pointer-events-auto border"
+      {/* UNIFIED TOP COMMAND PANEL CONTAINER */}
+      <div 
+        className="glass-panel p-3 sm:p-5 relative overflow-hidden space-y-2.5 sm:space-y-3 pointer-events-auto border rounded-2xl"
+        style={{
+          borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+          backgroundColor: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+        }}
+      >
+        <div className="panel-reflection pointer-events-none" />
+
+        {/* Top Row: Header Branding */}
+        <div className="flex items-center justify-between relative z-10 min-w-0">
+          <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="feature-icon feature-energy shrink-0" style={{ color: accentColor }}>
+              <ShoppingBag className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color: accentColor }} />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="text-xs font-semibold tracking-[0.15em] sm:tracking-[0.18em] text-white sm:text-sm truncate">
+                RESIMARKET
+              </h1>
+              <p className="mt-0.5 truncate text-[8px] sm:text-[10px] tracking-[0.1em] text-muted">
+                POWER, WATER & SERVICE TRADING
+              </p>
+            </div>
+          </Link>
+        </div>
+
+        {/* Bottom Row: Location Pill & Register Button Side-by-Side */}
+        <div className="flex items-center gap-2 relative z-20 pt-1">
+          {/* Location Pill */}
+          <div 
+            className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
+            style={{
+              borderColor: `color-mix(in srgb, ${accentColor} 35%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
+            }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
+              <span className="truncate font-semibold text-white text-[11px] sm:text-xs">
+                {streetAddress}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={refreshLocation}
+              title="Refresh Location"
+              className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
+              style={{ color: accentColor }}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${geoLoading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
+
+          {/* Register / Post Listing Button Pill */}
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            className="glass-panel px-3.5 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation z-30 hover:opacity-90 shrink-0 rounded-xl whitespace-nowrap"
+            style={{
+              borderColor: `color-mix(in srgb, ${accentColor} 45%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
+            <span className="inline">Post</span>
+          </button>
+        </div>
+      </div>
+
+      {/* WHITE DIVIDER LINE & BREATHING ROOM */}
+      <div className="pt-2 pb-2">
+        <hr className="border-t border-white/20 w-full" />
+      </div>
+
+      {/* SEARCH & FILTER BAR */}
+      <div className="glass-panel p-3 sm:p-4 flex items-center gap-2 relative pointer-events-auto rounded-2xl">
+        <div className="panel-reflection pointer-events-none" />
+
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-0">
+          <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search power, water reserves, equipment..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
+          />
+        </div>
+
+        {/* Filter Modal Trigger Button */}
+        <button
+          type="button"
+          onClick={() => setIsFilterModalOpen(true)}
+          className="p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer hover:opacity-90 shrink-0"
           style={{
-            borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
-            backgroundColor: `color-mix(in srgb, ${accentColor} 6%, transparent)`,
+            color: accentColor,
+            borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+            backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
           }}
+          title="Filter"
         >
-          <div className="panel-reflection pointer-events-none" />
+          <SlidersHorizontal className="w-4 h-4 shrink-0" />
+        </button>
+      </div>
 
-          {/* Top Row: Header Branding */}
-          <div className="flex items-center justify-between relative z-10">
-            <Link href="/" className="flex items-center gap-3 min-w-0">
-              <div className="feature-icon feature-energy shrink-0" style={{ color: accentColor }}>
-                <ShoppingBag className="w-[18px] h-[18px]" style={{ color: accentColor }} />
-              </div>
-
-              <div className="min-w-0">
-                <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm truncate">
-                  RESIMARKET
-                </h1>
-                <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                  POWER, WATER & SERVICE TRADING
-                </p>
-              </div>
-            </Link>
-          </div>
-
-          {/* Bottom Row: Location Pill & Post Listing Button Side-by-Side (Full Width on Mobile) */}
-          <div className="flex items-center gap-2 relative z-20 pt-1">
-            {/* Location Pill */}
-            <div 
-              className="glass-panel px-3 py-2 flex items-center justify-between gap-2 flex-1 min-w-0 rounded-xl"
-              style={{
-                borderColor: `color-mix(in srgb, ${accentColor} 35%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
-              }}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
-                <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                  {streetAddress}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={refreshLocation}
-                title="Refresh Location"
-                className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
-                style={{ color: accentColor }}
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${geoLoading ? "animate-spin" : ""}`} />
-              </button>
-            </div>
-
-            {/* Post Listing Button Pill */}
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(true)}
-              className="glass-panel px-4 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation z-30 hover:opacity-90 shrink-0 rounded-xl"
-              style={{
-                borderColor: `color-mix(in srgb, ${accentColor} 45%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
-              <span className="inline">Post Listing</span>
-            </button>
-          </div>
-        </div>
-
-        {/* EXTRA SPACING CONTAINER BETWEEN DIVIDER AND SEARCH BAR */}
-        <div className="pt-2 sm:pt-4">
-          {/* SEARCH & FILTER ICON BAR */}
-          <div className="glass-panel p-4 flex items-center gap-3 relative pointer-events-auto">
-            <div className="panel-reflection pointer-events-none" />
-
-            {/* Search Input */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search power, water reserves, equipment, or local services..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
-              />
-            </div>
-
-            {/* Filter Modal Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setIsFilterModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer hover:opacity-90 shrink-0"
-              style={{
-                color: accentColor,
-                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
-              }}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span className="capitalize">{activeCategory === "all" ? "Filter" : activeCategory}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* LISTINGS GRID (WITHIN 10KM RADIUS) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+      {/* LISTINGS GRID (WITHIN 10KM RADIUS) */}
+      <div className="space-y-4 sm:space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4 relative z-10">
           {filteredListings.length === 0 ? (
-            <div className="col-span-full glass-panel p-8 text-center text-muted text-xs">
+            <div className="col-span-full glass-panel p-6 sm:p-8 text-center text-muted text-xs rounded-2xl">
               No listings found within 10km matching your criteria.
             </div>
           ) : (
             filteredListings.map((item) => (
               <div
                 key={item.id}
-                className="glass-panel p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto"
+                className="glass-panel p-4 sm:p-5 flex flex-col justify-between group hover:border-white/30 transition-all relative pointer-events-auto rounded-2xl focus:outline-none"
               >
                 <div className="panel-reflection pointer-events-none" />
 
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2.5 sm:mb-3">
                     <span
                       className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
                         item.category === "power"
@@ -421,35 +421,30 @@ export default function MarketplacePage() {
                       {item.category === "goods" && <Tag className="w-3 h-3" />}
                       {item.category.toUpperCase()}
                     </span>
-
-                    <span className="text-xs font-mono" style={{ color: accentColor }}>
-                      {item.formattedDistance ? `${item.formattedDistance} away` : "Nearby"}
-                    </span>
                   </div>
 
-                  <div className="w-full h-px bg-white/20 my-3" />
-
-                  <h3 className="text-base font-bold text-white transition-colors">
+                  <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
                     {item.title}
                   </h3>
 
-                  <div className="flex items-center gap-2 mt-2 text-xs text-muted">
+                  <div className="flex items-center gap-2 mt-2 text-xs text-muted flex-wrap">
                     <span>
                       By <strong className="text-white">{item.seller}</strong>
                     </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 truncate">
-                      <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{item.location}</span>
-                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs text-muted mt-1.5 mb-3 truncate">
+                    <MapPin className="w-3 h-3 shrink-0" style={{ color: accentColor }} /> 
+                    <span className="truncate">{item.location}</span>
                   </div>
                 </div>
 
-                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
+                <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <div>
                     <span className="text-[10px] uppercase text-muted tracking-wider block">
                       Asking Rate
                     </span>
-                    <span className="text-lg font-extrabold font-mono" style={{ color: accentColor }}>
+                    <span className="text-base sm:text-lg font-extrabold font-mono" style={{ color: accentColor }}>
                       {item.price}
                     </span>
                   </div>
@@ -457,23 +452,22 @@ export default function MarketplacePage() {
                   <button
                     type="button"
                     onClick={() => handleTradeContact(item)}
-                    className="px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <MessageCircle className="w-3.5 h-3.5" style={{ color: accentColor }} /> Contact Seller
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>Contact Seller</span>
                   </button>
                 </div>
               </div>
             ))
           )}
         </div>
-
       </div>
 
       {/* FILTER SELECTION POPUP MODAL */}
       {isFilterModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
           <div
-            className="glass-panel w-full max-w-sm p-5 sm:p-6 relative space-y-4 pointer-events-auto"
+            className="glass-panel w-full max-w-sm p-4 sm:p-6 relative space-y-3.5 pointer-events-auto rounded-2xl"
             style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
@@ -492,7 +486,7 @@ export default function MarketplacePage() {
             </div>
 
             <div className="space-y-2 relative z-25 py-2">
-              {(["all", "power", "water", "goods", "services"] as const).map((cat) => (
+              {(["all", "power", "water", "goods"] as const).map((cat) => (
                 <button
                   type="button"
                   key={cat}
@@ -516,9 +510,9 @@ export default function MarketplacePage() {
 
       {/* CREATE NEW LISTING MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 pointer-events-auto overflow-y-auto">
           <div
-            className="glass-panel w-full max-w-md p-5 sm:p-6 relative space-y-4 pointer-events-auto"
+            className="glass-panel w-full max-w-md p-4 sm:p-6 relative space-y-3.5 pointer-events-auto my-auto max-h-[90vh] overflow-y-auto rounded-2xl"
             style={{ borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)` }}
           >
             <div className="panel-reflection pointer-events-none" />
@@ -538,7 +532,7 @@ export default function MarketplacePage() {
 
             <form onSubmit={handlePostListing} className="space-y-3 relative z-20">
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Listing Title / Item Name</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Listing Title / Item Name *</label>
                 <input
                   type="text"
                   required
@@ -550,7 +544,7 @@ export default function MarketplacePage() {
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs text-muted block mb-1">Category</label>
+                <label className="text-[11px] sm:text-xs text-muted block mb-1">Category *</label>
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as any)}
@@ -565,7 +559,7 @@ export default function MarketplacePage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Price / Rate</label>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Price / Rate *</label>
                   <input
                     type="text"
                     required
@@ -577,7 +571,7 @@ export default function MarketplacePage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Seller / Business Name</label>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Seller / Business Name *</label>
                   <input
                     type="text"
                     required
@@ -591,7 +585,7 @@ export default function MarketplacePage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Location / Zone</label>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">Location / Zone *</label>
                   <input
                     type="text"
                     required
@@ -603,7 +597,7 @@ export default function MarketplacePage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact</label>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact *</label>
                   <input
                     type="text"
                     required
@@ -617,7 +611,7 @@ export default function MarketplacePage() {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl border text-xs font-semibold transition-all mt-2 cursor-pointer hover:opacity-90"
+                className="w-full py-3 rounded-full border text-xs font-semibold transition-all mt-3 cursor-pointer hover:opacity-95 shadow-lg"
                 style={{
                   color: accentColor,
                   borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,

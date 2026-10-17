@@ -401,7 +401,7 @@ export default function SpazaRescuePage() {
             }}
           >
             <Plus className="h-3.5 w-3.5" style={{ color: accentColor }} />
-            <span className="inline">Register Business</span>
+            <span className="inline">Register</span>
           </button>
         </div>
       </div>
@@ -449,7 +449,6 @@ export default function SpazaRescuePage() {
           }}
         >
           <Plus className="w-3.5 h-3.5 shrink-0" />
-          <span>Post Aid</span>
         </button>
       </div>
 

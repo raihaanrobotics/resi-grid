@@ -338,7 +338,7 @@ export default function CivicAIPage() {
                   type="button"
                   onClick={(e) => handleCategorySelect(cat, e)}
                   onTouchEnd={(e) => handleCategorySelect(cat, e)}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-semibold uppercase tracking-wider border transition-all flex items-center gap-2 justify-center cursor-pointer touch-manipulation active:scale-95 ${
+                  className={`py-2.5 px-3 rounded-full text-xs font-semibold uppercase tracking-wider border transition-all flex items-center gap-2 justify-center cursor-pointer touch-manipulation active:scale-95 ${
                     category === cat
                       ? "shadow-[0_0_15px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
                       : "bg-white/5 border-white/10 text-muted hover:text-white"
@@ -530,7 +530,7 @@ export default function CivicAIPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl border font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-90 shadow-lg"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-full border font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 cursor-pointer touch-manipulation pointer-events-auto hover:opacity-90 shadow-lg"
               style={{
                 color: "var(--accent)",
                 borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",

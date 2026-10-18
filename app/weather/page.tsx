@@ -20,6 +20,15 @@ import {
   Sunrise,
   Sunset,
   MapPin,
+  Moon,
+  Zap,
+  Sprout,
+  Shield,
+  Wind as AirIcon,
+  Flower2,
+  Sparkles,
+  X,
+  Bot,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 
@@ -53,8 +62,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
-    statusTitle: "Regional Atmospheric Baseline Stable",
-    warningMessage: "No severe weather warnings active across KwaZulu-Natal. Atmospheric pressure and coastal cloud cover remain within safe baseline limits.",
+    statusTitle: "Regional Weather is Calm & Stable",
+    warningMessage: "No severe weather warnings are active across your area. Enjoy clear conditions and normal coastal cloud cover.",
   },
   "Gauteng": {
     provinceName: "Gauteng",
@@ -65,8 +74,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "yellow",
     levelBadge: "SAWS Level 2 • Yellow",
-    statusTitle: "Severe Thunderstorm Watch",
-    warningMessage: "Localized severe thunderstorms expected over southern Johannesburg and Ekurhuleni. High risk of localized flooding and small hail.",
+    statusTitle: "Thunderstorm Watch in Effect",
+    warningMessage: "Keep an eye out for sudden afternoon thunderstorms over your area. Brief heavy downpours and small hail are possible.",
   },
   "Western Cape": {
     provinceName: "Western Cape",
@@ -77,8 +86,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "orange",
     levelBadge: "SAWS Level 6 • Orange",
-    statusTitle: "Gale Force Wind & Coastal Surge Alert",
-    warningMessage: "Damaging coastal winds reaching up to 75 km/h along the Cape Peninsula. High sea swells and severe disruption to port activities expected.",
+    statusTitle: "Strong Coastal Winds & High Waves",
+    warningMessage: "Gusty winds reaching up to 75 km/h are expected in your area. Secure outdoor furniture and take care if driving high-profile vehicles.",
   },
   "Eastern Cape": {
     provinceName: "Eastern Cape",
@@ -89,8 +98,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
-    statusTitle: "Clear Atmospheric Conditions",
-    warningMessage: "Stable oceanic high pressure dominates the Wild Coast corridor with gentle onshore breeze and light sea swell.",
+    statusTitle: "Clear & Pleasant Weather",
+    warningMessage: "Enjoy calm breezes and lovely sunshine along your local corridor with smooth ocean conditions.",
   },
   "Free State": {
     provinceName: "Free State",
@@ -101,8 +110,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
-    statusTitle: "Stable Agricultural Climate",
-    warningMessage: "Favorable dry conditions across Mangaung and surrounding agricultural districts with clear skies and moderate thermal ranges.",
+    statusTitle: "Great Farming & Outdoor Conditions",
+    warningMessage: "Dry, clear skies and comfortable temperatures across your agricultural areas make for a pleasant day outside.",
   },
   "Mpumalanga": {
     provinceName: "Mpumalanga",
@@ -113,8 +122,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "yellow",
     levelBadge: "SAWS Level 1 • Yellow",
-    statusTitle: "Escarpment Mist & Morning Fog",
-    warningMessage: "Reduced visibility along the Sabie and Nelspruit escarpment routes due to heavy morning mist. Motorists advised to use fog lights.",
+    statusTitle: "Morning Mist & Reduced Visibility",
+    warningMessage: "Watch out for thick morning fog and mist along local mountain passes. Turn on your headlights and drive carefully.",
   },
   "Limpopo": {
     provinceName: "Limpopo",
@@ -125,8 +134,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
-    statusTitle: "Warm & Clear Bushveld Climate",
-    warningMessage: "Stable high-pressure weather system across Polokwane and the Waterberg biosphere with minimal cloud obstruction.",
+    statusTitle: "Warm & Sunny Days",
+    warningMessage: "Your surrounding region is experiencing gorgeous, clear skies with plenty of sunshine.",
   },
   "North West": {
     provinceName: "North West",
@@ -137,8 +146,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
-    statusTitle: "Normal Atmospheric Pressure",
-    warningMessage: "Clear skies and moderate wind speeds across Rustenburg and Mahikeng mining and agricultural zones.",
+    statusTitle: "Calm & Normal Weather",
+    warningMessage: "Expect clear skies and light breezes across your neighborhood with no weather disruptions expected.",
   },
   "Northern Cape": {
     provinceName: "Northern Cape",
@@ -149,8 +158,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
-    statusTitle: "Arid & Stable Karoo Climate",
-    warningMessage: "Hot daytime temperatures and clear nocturnal skies across Kimberley and Upington. Low humidity baseline.",
+    statusTitle: "Dry & Sunny Climate",
+    warningMessage: "Warm daytime temperatures and perfectly clear nighttime skies across your location. Low humidity makes for crisp air.",
   },
 };
 
@@ -170,6 +179,10 @@ export default function WeatherClimatePage() {
   const [userProvince, setUserProvince] = useState<string>("KwaZulu-Natal");
   const [currentBgImage, setCurrentBgImage] = useState<string>("");
 
+  // Modal State & Key to re-trigger animation
+  const [isSummaryOpen, setIsSummaryOpen] = useState<boolean>(false);
+  const [modalKey, setModalKey] = useState<number>(0);
+
   // Comprehensive Weather & Meteorological Data States
   const [temperature, setTemperature] = useState<number | null>(null);
   const [apparentTemp, setApparentTemp] = useState<number | null>(null);
@@ -177,7 +190,7 @@ export default function WeatherClimatePage() {
   const [windSpeed, setWindSpeed] = useState<number | null>(null);
   const [windGusts, setWindGusts] = useState<number | null>(null);
   const [windDirection, setWindDirection] = useState<number | null>(null);
-  const [precipitationSum, setPrecipitationSum] = useState<number | null>(null);
+  const [dailyPrecipitationSum, setDailyPrecipitationSum] = useState<number | null>(null);
   const [pressure, setPressure] = useState<number | null>(null);
   const [uvIndex, setUvIndex] = useState<number | null>(null);
   const [visibility, setVisibility] = useState<number | null>(null);
@@ -186,13 +199,44 @@ export default function WeatherClimatePage() {
   const [sunriseTime, setSunriseTime] = useState<string>("--:--");
   const [sunsetTime, setSunsetTime] = useState<string>("--:--");
 
-  const [weatherCondition, setWeatherCondition] = useState<string>("Synchronizing atmospheric telemetry...");
+  // Expanded Telemetry States
+  const [aqi, setAqi] = useState<number | null>(null);
+  const [pm25, setPm25] = useState<number | null>(null);
+  const [directRadiation, setDirectRadiation] = useState<number | null>(null);
+  const [soilTemp, setSoilTemp] = useState<number | null>(null);
+  const [soilMoisture, setSoilMoisture] = useState<number | null>(null);
+  const [capeValue, setCapeValue] = useState<number | null>(null);
+  const [freezingLevel, setFreezingLevel] = useState<number | null>(null);
+  const [moonPhaseVal, setMoonPhaseVal] = useState<number | null>(null);
+  const [moonriseTime, setMoonriseTime] = useState<string>("--:--");
+  const [moonsetTime, setMoonsetTime] = useState<string>("--:--");
+  const [grassPollen, setGrassPollen] = useState<number | null>(null);
+  const [birchPollen, setBirchPollen] = useState<number | null>(null);
+
+  const [weatherCondition, setWeatherCondition] = useState<string>("Updating weather conditions...");
   const [isAlertActive, setIsAlertActive] = useState<boolean>(false);
-  const [alertHeadline, setAlertHeadline] = useState<string>("Meteorological Status & Regional Advisories");
-  const [alertDetails, setAlertDetails] = useState<string>("Continuously tracking regional weather patterns, atmospheric stability, and active advisories across your sector.");
+  const [alertHeadline, setAlertHeadline] = useState<string>("Local Weather Status & Updates");
+  const [alertDetails, setAlertDetails] = useState<string>("Checking current weather conditions, storm updates, and safety alerts for your area.");
   const [lastCheckTimestamp, setLastCheckTimestamp] = useState<string>("Not synchronized");
 
-  // Helper to calculate accurate real-time relative timestamps
+  // Helper declared early for wind direction
+  const getWindDirectionLabel = (degrees: number | null) => {
+    if (degrees === null) return "--";
+    const directions = ["North", "North-Northeast", "Northeast", "East-Northeast", "East", "East-Southeast", "Southeast", "South-Southeast", "South", "South-Southwest", "Southwest", "West-Southwest", "West", "West-Northwest", "Northwest", "North-Northwest"];
+    const val = Math.floor((degrees / 22.5) + 0.5);
+    return directions[(val % 16)];
+  };
+
+  const currentProvData = PROVINCIAL_ATMOSPHERIC_DATA[userProvince] || PROVINCIAL_ATMOSPHERIC_DATA["KwaZulu-Natal"];
+  const moonPhaseName = moonPhaseVal !== null 
+    ? (moonPhaseVal < 0.05 || moonPhaseVal > 0.95 ? "New Moon" : moonPhaseVal < 0.48 ? "Waxing Moon" : moonPhaseVal < 0.52 ? "Full Moon" : "Waning Moon") 
+    : "Unknown";
+
+  const handleOpenSummary = () => {
+    setModalKey((prev) => prev + 1);
+    setIsSummaryOpen(true);
+  };
+
   const getRelativeTimeString = (timestamp?: number) => {
     if (!timestamp) return "Just now";
     const diffMs = Date.now() - timestamp;
@@ -206,13 +250,11 @@ export default function WeatherClimatePage() {
     return `${diffDays}d ago`;
   };
 
-  // Push notification helper to broadcast province weather alerts directly to global local storage (Home / Notifications feed)
   const pushGlobalNotification = (title: string, description: string, type: "warning" | "success" | "info" | "error") => {
     try {
       const existing = localStorage.getItem("resigrid_global_notifications");
       let notifs: ResiGridNotification[] = existing ? JSON.parse(existing) : [];
       
-      // Prevent duplicate identical alerts flooding storage
       const exists = notifs.some((n) => n.title === title && n.description === description);
       if (!exists) {
         const now = Date.now();
@@ -278,7 +320,6 @@ export default function WeatherClimatePage() {
     };
   }, []);
 
-  // Rotate random high-resolution image for the province on mount/province change
   useEffect(() => {
     const provData = PROVINCIAL_ATMOSPHERIC_DATA[userProvince] || PROVINCIAL_ATMOSPHERIC_DATA["KwaZulu-Natal"];
     if (provData && provData.imageBgUrls.length > 0) {
@@ -287,7 +328,6 @@ export default function WeatherClimatePage() {
     }
   }, [userProvince]);
 
-  // Fetch Comprehensive Open-Meteo Weather Data & Province-Specific Warnings
   useEffect(() => {
     const fetchWeatherForLocation = async () => {
       try {
@@ -295,13 +335,14 @@ export default function WeatherClimatePage() {
         const lon = location?.longitude ?? 30.3794;
 
         const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,pressure_msl,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m&daily=uv_index_max,precipitation_sum,sunrise,sunset&timezone=auto`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,pressure_msl,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,direct_radiation,soil_temperature_0cm,soil_moisture_0_to_1cm,cape,freezinglevel_height&daily=uv_index_max,precipitation_sum,sunrise,sunset,moonrise,moonset,moon_phase&hourly=european_aqi,pm2_5,grass_pollen,birch_pollen&timezone=auto`
         );
 
         if (res.ok) {
           const data = await res.json();
           const curr = data.current || {};
           const daily = data.daily || {};
+          const hourly = data.hourly || {};
 
           const temp = curr.temperature_2m ?? 22;
           const appTemp = curr.apparent_temperature ?? 22;
@@ -309,14 +350,35 @@ export default function WeatherClimatePage() {
           const wind = curr.wind_speed_10m ?? 12;
           const gusts = curr.wind_gusts_10m ?? 18;
           const windDir = curr.wind_direction_10m ?? 180;
-          const precip = curr.precipitation ?? 0.0;
+          const precipSum = daily.precipitation_sum?.[0] ?? 0.0;
           const press = curr.pressure_msl ?? 1016;
           const clouds = curr.cloud_cover ?? 20;
           const dew = curr.dew_point_2m ?? 10;
           const code = curr.weather_code ?? 0;
           const uv = daily.uv_index_max?.[0] ?? 6.0;
 
-          // Parse sunrise and sunset ISO strings
+          const directRad = curr.direct_radiation ?? 450;
+          const soilT = curr.soil_temperature_0cm ?? 21;
+          const soilM = curr.soil_moisture_0_to_1cm ?? 0.24;
+          const capeVal = curr.cape ?? 150;
+          const freezLvl = curr.freezinglevel_height ?? 3800;
+          const curAqi = hourly.european_aqi?.[0] ?? 22;
+          const curPm25 = hourly.pm2_5?.[0] ?? 12.5;
+          const moonPhase = daily.moon_phase?.[0] ?? 0.5;
+          const grassP = hourly.grass_pollen?.[0] ?? 15;
+          const birchP = hourly.birch_pollen?.[0] ?? 5;
+
+          setDirectRadiation(directRad);
+          setSoilTemp(soilT);
+          setSoilMoisture(soilM);
+          setCapeValue(capeVal);
+          setFreezingLevel(freezLvl);
+          setAqi(curAqi);
+          setPm25(curPm25);
+          setMoonPhaseVal(moonPhase);
+          setGrassPollen(grassP);
+          setBirchPollen(birchP);
+
           if (daily.sunrise?.[0]) {
             const d = new Date(daily.sunrise[0]);
             setSunriseTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -325,6 +387,14 @@ export default function WeatherClimatePage() {
             const d = new Date(daily.sunset[0]);
             setSunsetTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
           }
+          if (daily.moonrise?.[0]) {
+            const d = new Date(daily.moonrise[0]);
+            setMoonriseTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+          if (daily.moonset?.[0]) {
+            const d = new Date(daily.moonset[0]);
+            setMoonsetTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
 
           setTemperature(temp);
           setApparentTemp(appTemp);
@@ -332,7 +402,7 @@ export default function WeatherClimatePage() {
           setWindSpeed(wind);
           setWindGusts(gusts);
           setWindDirection(windDir);
-          setPrecipitationSum(precip);
+          setDailyPrecipitationSum(precipSum);
           setPressure(press);
           setCloudCover(clouds);
           setDewPoint(dew);
@@ -345,81 +415,38 @@ export default function WeatherClimatePage() {
           if (code >= 95) {
             setWeatherCondition("Severe Thunderstorm Warning");
             setIsAlertActive(true);
-            setAlertHeadline(`${userProvince} Severe Weather & Lightning Alert`);
-            const desc = `Official weather service advisory for ${userProvince}: High risk of localized thunderstorms, lightning strikes, and flash flooding in the region. Unplug sensitive appliances and avoid open areas.`;
+            setAlertHeadline("Severe Storm & Lightning Alert");
+            const desc = "Weather warning for your area: There is a risk of severe thunderstorms, lightning, and heavy downpours. Please unplug sensitive electronics and stay indoors if possible.";
             setAlertDetails(desc);
-            pushGlobalNotification(`${userProvince} Severe Weather Warning`, desc, "warning");
+            pushGlobalNotification("Storm Warning", desc, "warning");
           } else if (code >= 51 && code <= 67) {
-            setWeatherCondition("Steady Rainfall & Precipitation Advisory");
+            setWeatherCondition("Rainfall & Wet Weather Advisory");
             setIsAlertActive(false);
-            setAlertHeadline(`${userProvince} Rainfall & Catchment Advisory`);
-            const desc = `Continuous precipitation across ${userProvince} catchments. Monitor property drainage and collect rainwater for household or garden use.`;
+            setAlertHeadline("Rainy Weather Update");
+            const desc = "Steady rainfall is expected across your area. Take care on slippery roads and consider collecting rainwater for your garden.";
             setAlertDetails(desc);
-            pushGlobalNotification(`${userProvince} Rainfall Advisory`, desc, "info");
+            pushGlobalNotification("Rain Advisory", desc, "info");
           } else if (wind > 35 || gusts > 50) {
-            setWeatherCondition("Gale Force Wind Advisory");
+            setWeatherCondition("High Wind Advisory");
             setIsAlertActive(true);
-            setAlertHeadline(`${userProvince} High Wind Velocity & Gust Warning`);
-            const desc = `Strong winds and high gusts detected across ${userProvince} (>35 km/h). Elevated risk of outdoor items shifting and intermittent line instability.`;
+            setAlertHeadline("Strong Winds Warning");
+            const desc = "Strong wind gusts (>35 km/h) are sweeping across your area. Secure loose outdoor items like bins, patio furniture, and shades.";
             setAlertDetails(desc);
-            pushGlobalNotification(`${userProvince} High Wind Warning`, desc, "warning");
+            pushGlobalNotification("Wind Warning", desc, "warning");
           } else {
-            setWeatherCondition("Stable Meteorological Conditions");
+            setWeatherCondition("Normal Weather Conditions");
             setIsAlertActive(activeProvData.threatLevel !== "green");
-            setAlertHeadline(`${userProvince} Regional Atmospheric Status`);
+            setAlertHeadline("Weather Overview");
             setAlertDetails(activeProvData.warningMessage);
           }
-        } else {
-          setWeatherCondition("Stable Conditions");
-          setTemperature(23);
-          setApparentTemp(23);
-          setHumidity(50);
-          setWindSpeed(10);
-          setWindGusts(15);
-          setWindDirection(180);
-          setPrecipitationSum(0);
-          setPressure(1015);
-          setCloudCover(15);
-          setDewPoint(11);
-          setUvIndex(5);
-          setVisibility(10);
-          setSunriseTime("05:45");
-          setSunsetTime("18:15");
-          setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         }
       } catch (err) {
         console.error("Weather fetch error:", err);
-        setWeatherCondition("Stable Conditions (Cached)");
-        setTemperature(22);
-        setApparentTemp(22);
-        setHumidity(55);
-        setWindSpeed(12);
-        setWindGusts(18);
-        setWindDirection(180);
-        setPrecipitationSum(0.0);
-        setPressure(1014);
-        setCloudCover(20);
-        setDewPoint(12);
-        setUvIndex(5);
-        setVisibility(10);
-        setSunriseTime("05:45");
-        setSunsetTime("18:15");
-        setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       }
     };
 
     fetchWeatherForLocation();
   }, [location, userProvince]);
-
-  // Helper for wind direction degrees to compass rose
-  const getWindDirectionLabel = (degrees: number | null) => {
-    if (degrees === null) return "--";
-    const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-    const val = Math.floor((degrees / 22.5) + 0.5);
-    return directions[(val % 16)];
-  };
-
-  const currentProvData = PROVINCIAL_ATMOSPHERIC_DATA[userProvince] || PROVINCIAL_ATMOSPHERIC_DATA["KwaZulu-Natal"];
 
   const getBadgeStyle = (level: ProvinceAtmosphericData["threatLevel"]) => {
     switch (level) {
@@ -436,6 +463,34 @@ export default function WeatherClimatePage() {
 
   return (
     <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
+      {/* Custom slow blur-in keyframe animation & scrollbar hiding for modal */}
+      <style jsx global>{`
+        @keyframes slowBlurIn {
+          0% {
+            filter: blur(12px);
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          100% {
+            filter: blur(0px);
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slow-blur {
+          animation: slowBlurIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        /* Hide scrollbar for IE, Edge and Firefox */
+        .no-scrollbar {
+          -ms-overflow-style: none;  /* IE and Edge */
+          scrollbar-width: none;  /* Firefox */
+        }
+      `}</style>
+
       {/* Ambient environment */}
       <div className="ambient-background pointer-events-none" aria-hidden="true">
         <div className="ambient-orb orb-one" />
@@ -468,7 +523,7 @@ export default function WeatherClimatePage() {
                   WEATHER &amp; CLIMATE
                 </h1>
                 <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                  {userProvince.toUpperCase()} ALERTS
+                  LOCAL AREA ALERTS
                 </p>
               </div>
             </Link>
@@ -486,7 +541,7 @@ export default function WeatherClimatePage() {
               <div className="flex items-center gap-2 min-w-0">
                 <Navigation className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent)" }} />
                 <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                  {streetAddress} ({userProvince})
+                  {streetAddress}
                 </span>
               </div>
               <button
@@ -508,7 +563,6 @@ export default function WeatherClimatePage() {
           {/* PROVINCIAL ATMOSPHERIC VISUAL & WARNING HERO CARD */}
           <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/80 text-white shadow-2xl min-h-[190px] sm:min-h-[220px] flex flex-col justify-between group pointer-events-auto">
             
-            {/* REAL-WORLD BACKGROUND IMAGE WITH ATMOSPHERIC GRADIENT */}
             <div
               className="absolute inset-0 bg-cover bg-center transition-all duration-700 group-hover:scale-105"
               style={{
@@ -516,7 +570,6 @@ export default function WeatherClimatePage() {
               }}
             />
             
-            {/* DARK ATMOSPHERIC BACKDROP BLEND OVERLAY */}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/40 backdrop-blur-[1px]" />
 
             {/* TOP ROW: REGION & OFFICIAL SAWS LEVEL BADGE */}
@@ -527,12 +580,11 @@ export default function WeatherClimatePage() {
                 </div>
                 <div>
                   <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wider uppercase">
-                    {currentProvData.provinceName} Regional Status
+                    Local Area Weather Update
                   </h3>
                 </div>
               </div>
 
-              {/* SAWS THREAT LEVEL PILL BADGE */}
               <span className={`px-3 py-1 rounded-full border text-[10px] font-mono font-bold uppercase tracking-wider backdrop-blur-md shadow-md ${getBadgeStyle(currentProvData.threatLevel)}`}>
                 {currentProvData.levelBadge}
               </span>
@@ -552,7 +604,7 @@ export default function WeatherClimatePage() {
             </div>
           </div>
 
-          {/* COMPREHENSIVE METEOROLOGICAL TELEMETRY GRID WITH PLAIN-LANGUAGE RECOMMENDATIONS */}
+          {/* COMPREHENSIVE METEOROLOGICAL TELEMETRY GRID */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
             
             {/* 1. Ambient Temp */}
@@ -560,7 +612,7 @@ export default function WeatherClimatePage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Thermometer className="h-4 w-4" style={{ color: "var(--accent)" }} />
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Ambient Temp</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Temperature</span>
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
@@ -571,10 +623,10 @@ export default function WeatherClimatePage() {
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
                 {temperature !== null && temperature > 30 
-                  ? "It's quite hot out. Keep hydrated and check on pets and loved ones." 
+                  ? "It's quite hot outside. Remember to stay hydrated and keep pets cool." 
                   : temperature !== null && temperature < 10 
-                  ? "Temperatures are low. Keep warm and check heating appliances." 
-                  : "Comfortable outdoor temperature for daily activities."}
+                  ? "It's chilly today. Dress warmly and check on your home heaters." 
+                  : "Comfortable outdoor temperature for daily chores and outings."}
               </p>
             </div>
 
@@ -589,17 +641,17 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {humidity !== null ? `${humidity}%` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Relative Atmospheric</p>
+                  <p className="text-[10px] text-muted">Moisture in the air</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
                 {humidity !== null && humidity > 70 
-                  ? "Air is very humid. Clothes drying may take longer; watch for indoor condensation." 
-                  : "Normal atmospheric moisture levels. Air feels comfortable."}
+                  ? "The air is very humid. Laundry might take longer to dry outside." 
+                  : "Comfortable moisture levels in the air for everyday living."}
               </p>
             </div>
 
-            {/* 3. Wind Velocity & Gusts */}
+            {/* 3. Wind Speed */}
             <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -615,8 +667,8 @@ export default function WeatherClimatePage() {
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
                 {windGusts !== null && windGusts > 40 
-                  ? "Strong winds present. Secure loose outdoor items like bins and shade cloth." 
-                  : "Wind speeds are gentle and pose no hazard to property."}
+                  ? "Breezy or windy conditions. Secure any loose items on your balcony or yard." 
+                  : "Light winds with no disruption to outdoor activities."}
               </p>
             </div>
 
@@ -631,51 +683,51 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {getWindDirectionLabel(windDirection)} <span className="text-sm font-normal text-muted">({windDirection !== null ? `${windDirection}°` : "--"})</span>
                   </p>
-                  <p className="text-[10px] text-muted">Current Bearing</p>
+                  <p className="text-[10px] text-muted">Airflow direction</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                Wind direction indicates the originating airflow path across the region.
+                Shows which direction the breeze is traveling from across your neighborhood.
               </p>
             </div>
 
-            {/* 5. Rainfall Volume */}
+            {/* 5. Expected Rainfall */}
             <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <CloudRain className="h-4 w-4 text-indigo-400" />
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Rainfall</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Rain Expected Today</span>
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
-                    {precipitationSum !== null ? `${precipitationSum} mm` : "--"}
+                    {dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Precipitation Volume</p>
+                  <p className="text-[10px] text-muted">Total expected precipitation</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                {precipitationSum !== null && precipitationSum > 5 
-                  ? "Active rainfall. Great time to collect water in storage tanks; watch for slippery roads." 
-                  : "Dry conditions. Ensure garden watering follows routine schedules."}
+                {dailyPrecipitationSum !== null && dailyPrecipitationSum > 0 
+                  ? "Rain is expected today. Keep an umbrella handy and drive cautiously on wet roads." 
+                  : "Dry conditions expected all day. No umbrella required for your outings."}
               </p>
             </div>
 
-            {/* 6. Barometric Pressure */}
+            {/* 6. Air Pressure */}
             <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Gauge className="h-4 w-4 text-teal-400" />
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Pressure</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Air Pressure</span>
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {pressure !== null ? `${pressure} hPa` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Barometric MSL</p>
+                  <p className="text-[10px] text-muted">Atmospheric stability</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                Stable atmospheric pressure indicates steady weather ahead with no sudden storms.
+                Stable air pressure means predictable, calm weather is expected to stay.
               </p>
             </div>
 
@@ -684,19 +736,19 @@ export default function WeatherClimatePage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Sun className="h-4 w-4 text-amber-400" />
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Solar UV</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Sun UV Index</span>
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {uvIndex !== null ? `${uvIndex}` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Max Daily Index</p>
+                  <p className="text-[10px] text-muted">Sun strength</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
                 {uvIndex !== null && uvIndex >= 6 
-                  ? "High UV levels today. Wear sunscreen and sunglasses if outdoors." 
-                  : "Moderate sun levels. Standard sun protection recommended."}
+                  ? "Strong sunlight today. Apply sunscreen and wear a hat if you are stepping outside." 
+                  : "Moderate sun strength. Standard outdoor protection is enough."}
               </p>
             </div>
 
@@ -711,13 +763,13 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {cloudCover !== null ? `${cloudCover}%` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Sky Obscuration</p>
+                  <p className="text-[10px] text-muted">Sky visibility</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
                 {cloudCover !== null && cloudCover > 70 
-                  ? "Overcast skies overhead. Solar panel generation will be reduced." 
-                  : "Clear or partly sunny skies. Excellent conditions for solar charging."}
+                  ? "Mostly cloudy skies overhead. Solar panels will charge a bit slower." 
+                  : "Clear or sunny skies. Perfect conditions for solar power generation."}
               </p>
             </div>
 
@@ -732,11 +784,11 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {visibility !== null ? `${visibility}+ km` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Atmospheric Clarity</p>
+                  <p className="text-[10px] text-muted">How far you can see</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                Clear visibility on roadways. Safe driving conditions with no fog reported.
+                Clear views on the road. Safe driving conditions with no fog or mist blocking your sight.
               </p>
             </div>
 
@@ -751,13 +803,13 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {dewPoint !== null ? `${dewPoint}°C` : "--"}
                   </p>
-                  <p className="text-[10px] text-muted">Moisture Saturation Point</p>
+                  <p className="text-[10px] text-muted">Air moisture feel</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
                 {dewPoint !== null && dewPoint > 18 
-                  ? "High dew point means the air feels muggy and sticky outside." 
-                  : "Comfortable moisture level with crisp, refreshing air quality."}
+                  ? "The air feels muggy and heavy outside today." 
+                  : "Crisp and refreshing air quality outside."}
               </p>
             </div>
 
@@ -772,11 +824,11 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {sunriseTime}
                   </p>
-                  <p className="text-[10px] text-muted">Morning Dawn</p>
+                  <p className="text-[10px] text-muted">Morning daylight</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                Plan early morning outdoor workouts or solar array generation around dawn.
+                Great time for an early morning walk or starting your day with natural sunlight.
               </p>
             </div>
 
@@ -791,11 +843,125 @@ export default function WeatherClimatePage() {
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
                     {sunsetTime}
                   </p>
-                  <p className="text-[10px] text-muted">Evening Dusk</p>
+                  <p className="text-[10px] text-muted">Evening twilight</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                Daylight hours conclude in the evening; ensure outdoor lighting timers are active.
+                Daylight ends in the evening. Make sure outdoor security lights are set to turn on.
+              </p>
+            </div>
+
+            {/* 13. Air Quality */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <AirIcon className="h-4 w-4 text-teal-300" />
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Air Quality (AQI)</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-mono tracking-tight text-white">
+                    {aqi !== null ? `${aqi} AQI` : "--"}
+                  </p>
+                  <p className="text-[10px] text-muted">Fine dust (PM2.5): {pm25 !== null ? `${pm25} µg/m³` : "--"}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
+                {aqi !== null && aqi > 50 ? "Air quality is a bit lower today. Sensitive groups should avoid heavy exercise outside." : "Air quality is clean and fresh for breathing."}
+              </p>
+            </div>
+
+            {/* 14. Solar Potential */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Zap className="h-4 w-4 text-amber-300" />
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Solar Power Potential</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-mono tracking-tight text-white">
+                    {directRadiation !== null ? `${directRadiation} W/m²` : "--"}
+                  </p>
+                  <p className="text-[10px] text-muted">Solar sunshine intensity</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
+                Good sunshine levels for charging your home solar inverter and backup batteries.
+              </p>
+            </div>
+
+            {/* 15. Soil Health */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Sprout className="h-4 w-4 text-emerald-300" />
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Soil Health</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-mono tracking-tight text-white">
+                    {soilTemp !== null ? `${soilTemp}°C` : "--"}
+                  </p>
+                  <p className="text-[10px] text-muted">Moisture: {soilMoisture !== null ? `${(soilMoisture * 100).toFixed(1)}%` : "--"}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
+                Shows ground temperature and water levels to help you take care of your garden or lawn.
+              </p>
+            </div>
+
+            {/* 16. Storm Energy */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Shield className="h-4 w-4 text-rose-300" />
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Storm Energy</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-mono tracking-tight text-white">
+                    {capeValue !== null ? `${capeValue} J/kg` : "--"}
+                  </p>
+                  <p className="text-[10px] text-muted">Freezing level: {freezingLevel !== null ? `${freezingLevel}m` : "--"}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
+                Measures atmospheric energy to track whether sudden lightning or storms might form.
+              </p>
+            </div>
+
+            {/* 17. Moon & Night Sky */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Moon className="h-4 w-4 text-indigo-300" />
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Moon & Night Sky</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-mono tracking-tight text-white">
+                    {moonPhaseName}
+                  </p>
+                  <p className="text-[10px] text-muted">Rise: {moonriseTime} | Set: {moonsetTime}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
+                Track moon phases and night schedules for stargazing or outdoor night security.
+              </p>
+            </div>
+
+            {/* 18. Pollen Count */}
+            <div className="glass-panel p-4 rounded-2xl border border-white/10 bg-black/40 space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Flower2 className="h-4 w-4 text-emerald-400" />
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-muted">Pollen Count</span>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold font-mono tracking-tight text-white">
+                    {grassPollen !== null ? `${grassPollen} grains/m³` : "--"}
+                  </p>
+                  <p className="text-[10px] text-muted">Birch: {birchPollen !== null ? `${birchPollen} grains/m³` : "--"}</p>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
+                {grassPollen !== null && grassPollen > 30 ? "High pollen levels today. Allergy sufferers should take medication or stay indoors." : "Pollen levels are low to moderate. Enjoy the fresh air!"}
               </p>
             </div>
 
@@ -804,6 +970,108 @@ export default function WeatherClimatePage() {
         </div>
 
       </div>
+
+      {/* FIXED BOTTOM-RIGHT CORNER FAB WITH THEME GLOW */}
+      <div className="fixed bottom-6 right-6 z-50 pointer-events-auto">
+        <button
+          type="button"
+          onClick={handleOpenSummary}
+          aria-label="Summarize Weather"
+          className="h-13 w-13 rounded-full border shadow-2xl backdrop-blur-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-90 group cursor-pointer"
+          style={{
+            borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+            backgroundColor: "rgba(10, 15, 26, 0.9)",
+            boxShadow: "0 10px 35px 0 color-mix(in srgb, var(--accent) 40%, transparent)",
+          }}
+        >
+          <Sparkles className="w-5 h-5 text-white transition-transform duration-500 group-hover:rotate-45" />
+        </button>
+      </div>
+
+      {/* MATCHING WEATHER CARD MODAL WITH FIXED SIZE, HIDDEN SCROLLBAR & THEME BUTTON */}
+      {isSummaryOpen && (
+        <div 
+          key={modalKey}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md transition-all duration-300 animate-in fade-in"
+        >
+          <div 
+            className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-black/90 text-white shadow-2xl w-full max-w-md h-[500px] flex flex-col justify-between p-6 sm:p-7 animate-in zoom-in-95 slide-in-from-bottom-4"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
+              <div>
+                <h3 
+                  className="text-sm font-extrabold tracking-wider uppercase"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Weather Briefing
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsSummaryOpen(false)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-white/80 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Content Area with Hidden Scrollbar & Intelligent Telemetry Assessment */}
+            <div className="overflow-y-auto no-scrollbar space-y-3 text-xs text-white/90 leading-snug py-2 animate-slow-blur shrink">
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-0.5">
+                <p className="font-bold text-white">{currentProvData.statusTitle}</p>
+                <p className="text-white/75 text-[11px]">{currentProvData.warningMessage}</p>
+              </div>
+
+              <div className="space-y-2.5 text-white/85">
+                <p>
+                  🌡️ <strong className="text-white">Temp:</strong> {temperature !== null ? `${temperature}°C` : "--"} (Feels {apparentTemp !== null ? `${apparentTemp}°C` : "--"}). {temperature !== null && temperature > 30 ? "Hot conditions; stay hydrated." : temperature !== null && temperature < 10 ? "Chilly conditions; dress warmly." : "Mild and comfortable."}
+                </p>
+
+                <p>
+                  ☀️ <strong className="text-white">Sunscreen:</strong> UV index is {uvIndex !== null ? uvIndex : "--"}. {uvIndex !== null && uvIndex >= 8 ? "Very high UV; maximum protection required!" : uvIndex !== null && uvIndex >= 6 ? "High UV; apply sunscreen." : "Moderate UV; standard protection."}
+                </p>
+
+                <p>
+                  ☂️ <strong className="text-white">Rain:</strong> {dailyPrecipitationSum !== null && dailyPrecipitationSum > 5 ? `${dailyPrecipitationSum} mm expected; heavy rain or wet roads ahead.` : dailyPrecipitationSum !== null && dailyPrecipitationSum > 0 ? `${dailyPrecipitationSum} mm expected; light showers possible.` : "Dry outlook; skip the umbrella."}
+                </p>
+
+                <p>
+                  🌱 <strong className="text-white">Garden:</strong> {soilMoisture !== null && soilMoisture < 0.2 ? "Soil is dry; plants need thorough watering today." : "Soil moisture is stable; regular garden maintenance applies."}
+                </p>
+
+                <p>
+                  ⚡ <strong className="text-white">Solar:</strong> {cloudCover !== null && cloudCover > 70 ? "Heavy cloud cover; slower battery charging." : `Clear sunshine (${directRadiation ?? "--"} W/m²); optimal for solar charging.`}
+                </p>
+
+                <p>
+                  🌬️ <strong className="text-white">Wind:</strong> {windGusts !== null && windGusts > 40 ? `Strong gusts at ${windGusts} km/h; secure loose items.` : `Calm breeze at ${windSpeed ?? "--"} km/h.`}
+                </p>
+
+                <p>
+                  🚗 <strong className="text-white">Air &amp; Visibility:</strong> Clean air ({aqi !== null ? `${aqi} AQI` : "--"}) with clear visibility ({visibility !== null ? `${visibility}+ km` : "--"}). Safe driving conditions.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer Dismiss Button in Theme Color */}
+            <div className="pt-2 flex justify-end border-t border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsSummaryOpen(false)}
+                className="w-full py-2.5 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-90 active:scale-[0.98] cursor-pointer shadow-lg"
+                style={{
+                  backgroundColor: "var(--accent)",
+                }}
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }

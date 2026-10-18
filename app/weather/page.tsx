@@ -580,7 +580,7 @@ export default function WeatherClimatePage() {
                 </div>
                 <div>
                   <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wider uppercase">
-                    Local Area Weather Update
+                    {currentProvData.provinceName}
                   </h3>
                 </div>
               </div>
@@ -972,7 +972,7 @@ export default function WeatherClimatePage() {
       </div>
 
       {/* FIXED BOTTOM-RIGHT CORNER FAB WITH THEME GLOW */}
-      <div className="fixed bottom-6 right-6 z-50 pointer-events-auto">
+      <div className="fixed bottom-20 right-6 z-50 pointer-events-auto">
         <button
           type="button"
           onClick={handleOpenSummary}

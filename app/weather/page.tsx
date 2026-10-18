@@ -26,7 +26,7 @@ import {
   Shield,
   Wind as AirIcon,
   Flower2,
-  Sparkles,
+  Wand2,
   X,
   Bot,
 } from "lucide-react";
@@ -56,9 +56,9 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "KwaZulu-Natal": {
     provinceName: "KwaZulu-Natal",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1576485290814-1c72aa4bbb8e?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop"
+      "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=1200&auto=format&fit=crop", // Durban beachfront / KZN coast
+      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop", // Drakensberg mountains KZN
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
@@ -68,9 +68,9 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Gauteng": {
     provinceName: "Gauteng",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1577948000111-9c970dfe3743?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1518684079-3c830dcef090?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop"
+      "https://images.unsplash.com/photo-1577948000111-9c970dfe3743?q=80&w=1200&auto=format&fit=crop", // Johannesburg skyline
+      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop", // Sandton / Pretoria modern architecture
+      "https://images.unsplash.com/photo-1518684079-3c830dcef090?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "yellow",
     levelBadge: "SAWS Level 2 • Yellow",
@@ -80,9 +80,9 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Western Cape": {
     provinceName: "Western Cape",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1580619305218-8423a7ef79b4?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=1200&auto=format&fit=crop"
+      "https://images.unsplash.com/photo-1580619305218-8423a7ef79b4?q=80&w=1200&auto=format&fit=crop", // Cape Town Table Mountain / Camps Bay
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop", // Winelands
+      "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?q=80&w=1200&auto=format&fit=crop"  // Atlantic Seaboard
     ],
     threatLevel: "orange",
     levelBadge: "SAWS Level 6 • Orange",
@@ -92,9 +92,9 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Eastern Cape": {
     provinceName: "Eastern Cape",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1519046904884-53103b34b206?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop"
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop", // Wild Coast beach / cliffs
+      "https://images.unsplash.com/photo-1519046904884-53103b34b206?q=80&w=1200&auto=format&fit=crop", // Gqeberha / Sunshine Coast
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
@@ -104,9 +104,9 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Free State": {
     provinceName: "Free State",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop"
+      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop", // Golden Gate / Maluti mountains
+      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop", // Farmlands & plains
+      "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
     levelBadge: "SAWS Level 0 • Green",
@@ -116,8 +116,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Mpumalanga": {
     provinceName: "Mpumalanga",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop", // Blyde River Canyon / Panorama Route
+      "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=1200&auto=format&fit=crop", // Lowveld mist / forests
       "https://images.unsplash.com/photo-1511497584788-876761142197?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "yellow",
@@ -128,8 +128,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Limpopo": {
     provinceName: "Limpopo",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=1200&auto=format&fit=crop", // Baobab trees / bushveld
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1200&auto=format&fit=crop", // Waterberg mountains
       "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -140,8 +140,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "North West": {
     provinceName: "North West",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop", // Pilanesberg / Magaliesberg bushveld
+      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop", // Sun City / savannah plains
       "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -152,8 +152,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Northern Cape": {
     provinceName: "Northern Cape",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop", // Namaqualand desert / flowers
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop", // Augrabies / Orange River
       "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -191,6 +191,9 @@ export default function WeatherClimatePage() {
   const [windGusts, setWindGusts] = useState<number | null>(null);
   const [windDirection, setWindDirection] = useState<number | null>(null);
   const [dailyPrecipitationSum, setDailyPrecipitationSum] = useState<number | null>(null);
+  const [currentRainChance, setCurrentRainChance] = useState<number | null>(null);
+  const [peakRainChance, setPeakRainChance] = useState<number | null>(null);
+  const [peakRainTime, setPeakRainTime] = useState<string>("--:--");
   const [pressure, setPressure] = useState<number | null>(null);
   const [uvIndex, setUvIndex] = useState<number | null>(null);
   const [visibility, setVisibility] = useState<number | null>(null);
@@ -335,7 +338,7 @@ export default function WeatherClimatePage() {
         const lon = location?.longitude ?? 30.3794;
 
         const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,pressure_msl,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,direct_radiation,soil_temperature_0cm,soil_moisture_0_to_1cm,cape,freezinglevel_height&daily=uv_index_max,precipitation_sum,sunrise,sunset,moonrise,moonset,moon_phase&hourly=european_aqi,pm2_5,grass_pollen,birch_pollen&timezone=auto`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,pressure_msl,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,direct_radiation,soil_temperature_0cm,soil_moisture_0_to_1cm,cape,freezinglevel_height&daily=uv_index_max,precipitation_sum,sunrise,sunset,moonrise,moonset,moon_phase&hourly=precipitation_probability,european_aqi,pm2_5,grass_pollen,birch_pollen&timezone=auto`
         );
 
         if (res.ok) {
@@ -356,6 +359,36 @@ export default function WeatherClimatePage() {
           const dew = curr.dew_point_2m ?? 10;
           const code = curr.weather_code ?? 0;
           const uv = daily.uv_index_max?.[0] ?? 6.0;
+
+          // Process hourly precipitation probability
+          const hourlyTimes: string[] = hourly.time || [];
+          const hourlyPrecipProb: number[] = hourly.precipitation_probability || [];
+          
+          const nowIso = new Date().toISOString().slice(0, 13); // e.g. "2026-10-18T11"
+          const currentIndex = hourlyTimes.findIndex((t: string) => t.startsWith(nowIso));
+          const curRainChance = currentIndex !== -1 ? (hourlyPrecipProb[currentIndex] ?? 0) : (hourlyPrecipProb[0] ?? 0);
+
+          // Find peak rain chance for today (next 24 hours starting from current or index 0)
+          const startIndex = currentIndex !== -1 ? currentIndex : 0;
+          const todaySlice = hourlyPrecipProb.slice(startIndex, startIndex + 24);
+          const todayTimes = hourlyTimes.slice(startIndex, startIndex + 24);
+          
+          let maxProb = 0;
+          let maxTimeStr = "--:--";
+          todaySlice.forEach((prob: number, idx: number) => {
+            if (prob > maxProb) {
+              maxProb = prob;
+              const fullTimeStr = todayTimes[idx];
+              if (fullTimeStr) {
+                const d = new Date(fullTimeStr);
+                maxTimeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              }
+            }
+          });
+
+          setCurrentRainChance(curRainChance);
+          setPeakRainChance(maxProb);
+          setPeakRainTime(maxTimeStr);
 
           const directRad = curr.direct_radiation ?? 450;
           const soilT = curr.soil_temperature_0cm ?? 21;
@@ -700,15 +733,15 @@ export default function WeatherClimatePage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold font-mono tracking-tight text-white">
-                    {dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "--"}
+                    {currentRainChance !== null ? `${currentRainChance}%` : "--"} <span className="text-sm font-normal text-muted">({dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "--"})</span>
                   </p>
-                  <p className="text-[10px] text-muted">Total expected precipitation</p>
+                  <p className="text-[10px] text-muted">Peak: {peakRainChance !== null ? `${peakRainChance}%` : "--"} at {peakRainTime}</p>
                 </div>
               </div>
               <p className="text-[11px] text-muted border-t border-white/10 pt-2 leading-relaxed">
-                {dailyPrecipitationSum !== null && dailyPrecipitationSum > 0 
-                  ? "Rain is expected today. Keep an umbrella handy and drive cautiously on wet roads." 
-                  : "Dry conditions expected all day. No umbrella required for your outings."}
+                {currentRainChance !== null && currentRainChance > 40 
+                  ? "High chance of rain today. Keep an umbrella handy and drive cautiously on wet roads." 
+                  : "Low chance of rain for now. Dry conditions expected across most of the day."}
               </p>
             </div>
 
@@ -972,7 +1005,7 @@ export default function WeatherClimatePage() {
       </div>
 
       {/* FIXED BOTTOM-RIGHT CORNER FAB WITH THEME GLOW */}
-      <div className="fixed bottom-20 right-6 z-50 pointer-events-auto">
+      <div className="fixed bottom-36 right-6 z-50 pointer-events-auto">
         <button
           type="button"
           onClick={handleOpenSummary}
@@ -984,7 +1017,7 @@ export default function WeatherClimatePage() {
             boxShadow: "0 10px 35px 0 color-mix(in srgb, var(--accent) 40%, transparent)",
           }}
         >
-          <Sparkles className="w-5 h-5 text-white transition-transform duration-500 group-hover:rotate-45" />
+          <Wand2 className="w-5 h-5 text-white transition-transform duration-500 group-hover:rotate-45" />
         </button>
       </div>
 
@@ -995,7 +1028,7 @@ export default function WeatherClimatePage() {
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md transition-all duration-300 animate-in fade-in"
         >
           <div 
-            className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-black/90 text-white shadow-2xl w-full max-w-md h-[500px] flex flex-col justify-between p-6 sm:p-7 animate-in zoom-in-95 slide-in-from-bottom-4"
+            className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-black/90 text-white shadow-2xl w-full max-w-md h-[500px] flex flex-col justify-between p-6 sm:p-7 animate-in zoom-in-95 slide-in-from-bottom-4 mb-20"
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
@@ -1034,7 +1067,7 @@ export default function WeatherClimatePage() {
                 </p>
 
                 <p>
-                  ☂️ <strong className="text-white">Rain:</strong> {dailyPrecipitationSum !== null && dailyPrecipitationSum > 5 ? `${dailyPrecipitationSum} mm expected; heavy rain or wet roads ahead.` : dailyPrecipitationSum !== null && dailyPrecipitationSum > 0 ? `${dailyPrecipitationSum} mm expected; light showers possible.` : "Dry outlook; skip the umbrella."}
+                  ☂️ <strong className="text-white">Rain:</strong> {currentRainChance !== null ? `${currentRainChance}% chance now (${dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "--"})` : "--"}. Peak is {peakRainChance !== null ? `${peakRainChance}%` : "--"} at {peakRainTime}.
                 </p>
 
                 <p>

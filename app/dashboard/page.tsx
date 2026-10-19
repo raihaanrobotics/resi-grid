@@ -406,7 +406,7 @@ export default function MunicipalDashboardPage() {
                 No incident reports matched the selected ward or category filters.
               </div>
             ) : (
-              filteredReports.map((item) => (
+              filteredReports.map((item, index) => (
                 <div
                   key={item.id}
                   className="p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
@@ -463,6 +463,10 @@ export default function MunicipalDashboardPage() {
 
                   {/* STATUS UPDATE & INSPECT CONTROLS */}
                   <div className="flex items-center gap-2 border-t md:border-t-0 border-white/10 pt-3 md:pt-0 shrink-0 flex-wrap">
+                    <span className={`text-[9px] font-mono px-2.5 py-1 rounded-full border font-bold ${index % 2 === 0 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : "bg-blue-500/15 text-blue-300 border-blue-500/30"}`}>
+                      {index % 2 === 0 ? "food aid" : "food stores"}
+                    </span>
+
                     <button
                       onClick={() => setActiveReportDetail(item)}
                       className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1"

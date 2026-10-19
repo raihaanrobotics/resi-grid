@@ -18,6 +18,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
+import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 
 interface SpazaFoodStore {
   id: string;
@@ -381,7 +382,10 @@ export default function SpazaRescuePage() {
             </div>
             <button
               type="button"
-              onClick={refreshLocation}
+              onClick={(event) => {
+                animateRefreshIcon(event.currentTarget);
+                refreshLocation();
+              }}
               title="Refresh Location"
               className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
               style={{ color: accentColor }}
@@ -520,7 +524,10 @@ export default function SpazaRescuePage() {
                       </div>
                     </div>
 
-                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-end">
+                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-between gap-2">
+                      <span className="text-[9px] font-mono px-2.5 py-1 rounded-full border font-bold bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                        Food Store
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleContactWhatsApp(store.contactPhone, store.shopName)}
@@ -597,7 +604,10 @@ export default function SpazaRescuePage() {
                       )}
                     </div>
 
-                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-end">
+                    <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-between gap-2">
+                      <span className="text-[9px] font-mono px-2.5 py-1 rounded-full border font-bold bg-blue-500/15 text-blue-300 border-blue-500/30">
+                        food aid
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleContactWhatsApp(aid.contactPhone, aid.title)}
@@ -638,8 +648,8 @@ export default function SpazaRescuePage() {
             <div className="space-y-2 relative z-25 py-2">
               {[
                 { key: "all", label: "All Listings" },
-                { key: "stores", label: "Spaza Food Stores" },
-                { key: "aid", label: "Soup Kitchens & Food Aid" },
+                { key: "stores", label: "Food Stores" },
+                { key: "aid", label: "Food Aid" },
               ].map((item) => (
                 <button
                   type="button"
@@ -760,7 +770,7 @@ export default function SpazaRescuePage() {
 
             <div className="flex items-center justify-between border-b border-white/10 pb-2.5 relative z-20">
               <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <HeartHandshake className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} /> Post Food Aid or Spaza Listing
+                <HeartHandshake className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} /> Post Food Aid or Store Listing
               </h3>
               <button
                 type="button"
@@ -793,7 +803,7 @@ export default function SpazaRescuePage() {
                         : undefined
                     }
                   >
-                    <Utensils className="w-3 h-3 shrink-0" /> Soup Kitchen / Pantry
+                    <Utensils className="w-3 h-3 shrink-0" /> Food Aid
                   </button>
 
                   <button
@@ -814,7 +824,7 @@ export default function SpazaRescuePage() {
                         : undefined
                     }
                   >
-                    <Store className="w-3 h-3 shrink-0" /> Spaza Food Store
+                    <Store className="w-3 h-3 shrink-0" /> Food Store
                   </button>
                 </div>
               </div>

@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
+import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 
 interface ListingItem {
   id: string;
@@ -325,7 +326,10 @@ export default function MarketplacePage() {
             </div>
             <button
               type="button"
-              onClick={refreshLocation}
+              onClick={(event) => {
+                animateRefreshIcon(event.currentTarget);
+                refreshLocation();
+              }}
               title="Refresh Location"
               className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
               style={{ color: accentColor }}

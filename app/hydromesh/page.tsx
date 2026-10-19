@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
+import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 
 // Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
 declare global {
@@ -641,7 +642,10 @@ export default function HydroMeshPage() {
               </div>
               <button
                 type="button"
-                onClick={refreshLocation}
+                onClick={(event) => {
+                  animateRefreshIcon(event.currentTarget);
+                  refreshLocation();
+                }}
                 title="Refresh Location"
                 className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
                 style={{ color: accentColor }}

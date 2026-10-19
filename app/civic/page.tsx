@@ -21,6 +21,7 @@ import {
   Home,
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
+import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -147,6 +148,7 @@ export default function CivicAIPage() {
   // Manual GPS Re-sync Handler
   const handleManualRefreshLocation = (e?: React.SyntheticEvent) => {
     if (e) {
+      animateRefreshIcon(e.currentTarget);
       e.preventDefault();
       e.stopPropagation();
     }

@@ -17,6 +17,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
+import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 
 interface IncidentMarker {
   id: string;
@@ -435,7 +436,10 @@ export default function RadarPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => refreshLocation()}
+                  onClick={(event) => {
+                    animateRefreshIcon(event.currentTarget);
+                    refreshLocation();
+                  }}
                   title="Refresh Location"
                   className="p-1 rounded-lg border border-white/10 hover:text-white transition-colors cursor-pointer shrink-0"
                   style={{ color: accentColor }}

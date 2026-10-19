@@ -56,8 +56,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "KwaZulu-Natal": {
     provinceName: "KwaZulu-Natal",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=1200&auto=format&fit=crop", // Durban beachfront / KZN coast
-      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop", // Drakensberg mountains KZN
+      "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -68,8 +68,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Gauteng": {
     provinceName: "Gauteng",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1577948000111-9c970dfe3743?q=80&w=1200&auto=format&fit=crop", // Johannesburg skyline
-      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop", // Sandton / Pretoria modern architecture
+      "https://images.unsplash.com/photo-1577948000111-9c970dfe3743?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1518684079-3c830dcef090?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "yellow",
@@ -80,9 +80,9 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Western Cape": {
     provinceName: "Western Cape",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1580619305218-8423a7ef79b4?q=80&w=1200&auto=format&fit=crop", // Cape Town Table Mountain / Camps Bay
-      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop", // Winelands
-      "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?q=80&w=1200&auto=format&fit=crop"  // Atlantic Seaboard
+      "https://images.unsplash.com/photo-1580619305218-8423a7ef79b4?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "orange",
     levelBadge: "SAWS Level 6 • Orange",
@@ -92,8 +92,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Eastern Cape": {
     provinceName: "Eastern Cape",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop", // Wild Coast beach / cliffs
-      "https://images.unsplash.com/photo-1519046904884-53103b34b206?q=80&w=1200&auto=format&fit=crop", // Gqeberha / Sunshine Coast
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1519046904884-53103b34b206?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -104,8 +104,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Free State": {
     provinceName: "Free State",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop", // Golden Gate / Maluti mountains
-      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop", // Farmlands & plains
+      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -116,8 +116,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Mpumalanga": {
     provinceName: "Mpumalanga",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop", // Blyde River Canyon / Panorama Route
-      "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=1200&auto=format&fit=crop", // Lowveld mist / forests
+      "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1511497584788-876761142197?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "yellow",
@@ -128,8 +128,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Limpopo": {
     provinceName: "Limpopo",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=1200&auto=format&fit=crop", // Baobab trees / bushveld
-      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1200&auto=format&fit=crop", // Waterberg mountains
+      "https://images.unsplash.com/photo-1516426122078-c23e76319801?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -140,8 +140,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "North West": {
     provinceName: "North West",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop", // Pilanesberg / Magaliesberg bushveld
-      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop", // Sun City / savannah plains
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -152,8 +152,8 @@ const PROVINCIAL_ATMOSPHERIC_DATA: Record<string, ProvinceAtmosphericData> = {
   "Northern Cape": {
     provinceName: "Northern Cape",
     imageBgUrls: [
-      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop", // Namaqualand desert / flowers
-      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop", // Augrabies / Orange River
+      "https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=1200&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=1200&auto=format&fit=crop",
       "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=1200&auto=format&fit=crop"
     ],
     threatLevel: "green",
@@ -182,6 +182,7 @@ export default function WeatherClimatePage() {
   // Modal State & Key to re-trigger animation
   const [isSummaryOpen, setIsSummaryOpen] = useState<boolean>(false);
   const [modalKey, setModalKey] = useState<number>(0);
+  const [isRefreshingLocation, setIsRefreshingLocation] = useState<boolean>(false);
 
   // Comprehensive Weather & Meteorological Data States
   const [temperature, setTemperature] = useState<number | null>(null);
@@ -238,6 +239,21 @@ export default function WeatherClimatePage() {
   const handleOpenSummary = () => {
     setModalKey((prev) => prev + 1);
     setIsSummaryOpen(true);
+  };
+
+  const handleRefreshLocationClick = async () => {
+    setIsRefreshingLocation(true);
+    try {
+      if (refreshLocation) {
+        await refreshLocation();
+      }
+    } catch (err) {
+      console.error("Error refreshing location:", err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingLocation(false);
+      }, 1000);
+    }
   };
 
   const getRelativeTimeString = (timestamp?: number) => {
@@ -360,15 +376,13 @@ export default function WeatherClimatePage() {
           const code = curr.weather_code ?? 0;
           const uv = daily.uv_index_max?.[0] ?? 6.0;
 
-          // Process hourly precipitation probability
           const hourlyTimes: string[] = hourly.time || [];
           const hourlyPrecipProb: number[] = hourly.precipitation_probability || [];
           
-          const nowIso = new Date().toISOString().slice(0, 13); // e.g. "2026-10-18T11"
+          const nowIso = new Date().toISOString().slice(0, 13);
           const currentIndex = hourlyTimes.findIndex((t: string) => t.startsWith(nowIso));
           const curRainChance = currentIndex !== -1 ? (hourlyPrecipProb[currentIndex] ?? 0) : (hourlyPrecipProb[0] ?? 0);
 
-          // Find peak rain chance for today (next 24 hours starting from current or index 0)
           const startIndex = currentIndex !== -1 ? currentIndex : 0;
           const todaySlice = hourlyPrecipProb.slice(startIndex, startIndex + 24);
           const todayTimes = hourlyTimes.slice(startIndex, startIndex + 24);
@@ -496,13 +510,12 @@ export default function WeatherClimatePage() {
 
   return (
     <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
-      {/* Custom slow blur-in keyframe animation & scrollbar hiding for modal */}
       <style jsx global>{`
         @keyframes slowBlurIn {
           0% {
-            filter: blur(12px);
+            filter: blur(8px);
             opacity: 0;
-            transform: translateY(8px);
+            transform: translateY(6px);
           }
           100% {
             filter: blur(0px);
@@ -511,16 +524,14 @@ export default function WeatherClimatePage() {
           }
         }
         .animate-slow-blur {
-          animation: slowBlurIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          animation: slowBlurIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
-        /* Hide scrollbar for Chrome, Safari and Opera */
         .no-scrollbar::-webkit-scrollbar {
           display: none;
         }
-        /* Hide scrollbar for IE, Edge and Firefox */
         .no-scrollbar {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
+          -ms-overflow-style: none;
+          scrollbar-width: none;
         }
       `}</style>
 
@@ -579,12 +590,12 @@ export default function WeatherClimatePage() {
               </div>
               <button
                 type="button"
-                onClick={refreshLocation}
+                onClick={handleRefreshLocationClick}
                 title="Refresh Location"
                 className="transition-colors shrink-0 cursor-pointer p-1 touch-manipulation z-30 hover:text-white"
                 style={{ color: "var(--accent)" }}
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${geoLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`h-3.5 w-3.5 ${(geoLoading || isRefreshingLocation) ? "animate-spin" : ""}`} />
               </button>
             </div>
           </div>
@@ -605,7 +616,6 @@ export default function WeatherClimatePage() {
             
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-950/40 backdrop-blur-[1px]" />
 
-            {/* TOP ROW: REGION & OFFICIAL SAWS LEVEL BADGE */}
             <div className="relative z-10 p-4 sm:p-5 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-black/50 border border-white/15 backdrop-blur-md text-[var(--accent)]">
@@ -623,7 +633,6 @@ export default function WeatherClimatePage() {
               </span>
             </div>
 
-            {/* BOTTOM ROW: WARNING & ATMOSPHERIC REPORT */}
             <div className="relative z-10 p-4 sm:p-5 pt-0 space-y-1.5">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm sm:text-base font-extrabold text-white leading-snug">
@@ -1021,23 +1030,25 @@ export default function WeatherClimatePage() {
         </button>
       </div>
 
-      {/* MATCHING WEATHER CARD MODAL WITH FIXED SIZE, HIDDEN SCROLLBAR & THEME BUTTON */}
+      {/* WEATHER BRIEFING MODAL WITH TRANSPARENT BACKDROP AND CLEAN CONTAINER */}
       {isSummaryOpen && (
         <div 
           key={modalKey}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md transition-all duration-300 animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-transparent pointer-events-none transition-all duration-300 animate-in fade-in"
         >
           <div 
-            className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-black/90 text-white shadow-2xl w-full max-w-md h-[500px] flex flex-col justify-between p-6 sm:p-7 animate-in zoom-in-95 slide-in-from-bottom-4 mb-20"
+            className="relative overflow-hidden rounded-[2.5rem] border border-white/15 bg-black/95 text-white shadow-2xl w-full max-w-md h-[500px] flex flex-col justify-between p-6 sm:p-7 animate-in zoom-in-95 slide-in-from-bottom-4 mb-20 pointer-events-auto"
+            style={{ borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
-              <div>
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-4 h-4" style={{ color: "var(--accent)" }} />
                 <h3 
                   className="text-sm font-extrabold tracking-wider uppercase"
                   style={{ color: "var(--accent)" }}
                 >
-                  Weather Briefing
+                  INTELLIGENT BRIEFING
                 </h3>
               </div>
 
@@ -1050,40 +1061,36 @@ export default function WeatherClimatePage() {
               </button>
             </div>
 
-            {/* Scrollable Content Area with Hidden Scrollbar & Intelligent Telemetry Assessment */}
-            <div className="overflow-y-auto no-scrollbar space-y-3 text-xs text-white/90 leading-snug py-2 animate-slow-blur shrink">
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-0.5">
-                <p className="font-bold text-white">{currentProvData.statusTitle}</p>
-                <p className="text-white/75 text-[11px]">{currentProvData.warningMessage}</p>
+            {/* Scrollable Content Area with Hidden Scrollbar & Friendly, Actionable Insights */}
+            <div className="overflow-y-auto no-scrollbar space-y-3.5 text-xs text-white/90 leading-snug py-2 animate-slow-blur shrink">
+              <div className="p-3 rounded-xl border border-white/10 space-y-1" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" }}>
+                <p className="font-bold text-white text-xs">{currentProvData.statusTitle}</p>
+                <p className="text-white/80 text-[11px] leading-relaxed">{currentProvData.warningMessage}</p>
               </div>
 
-              <div className="space-y-2.5 text-white/85">
-                <p>
-                  🌡️ <strong className="text-white">Temp:</strong> {temperature !== null ? `${temperature}°C` : "--"} (Feels {apparentTemp !== null ? `${apparentTemp}°C` : "--"}). {temperature !== null && temperature > 30 ? "Hot conditions; stay hydrated." : temperature !== null && temperature < 10 ? "Chilly conditions; dress warmly." : "Mild and comfortable."}
+              <div className="space-y-3 text-white/85 px-1">
+                <p className="leading-relaxed">
+                  🌡️ <strong className="text-white">Temperature &amp; Comfort:</strong> It's currently {temperature !== null ? `${temperature}°C` : "pleasant"} (feels like {apparentTemp !== null ? `${apparentTemp}°C` : "normal"}). {temperature !== null && temperature > 30 ? "It's quite hot out there—remember to drink plenty of water and stay cool." : temperature !== null && temperature < 10 ? "It's a chilly day, so bundle up warmly and check on your indoor heating." : "The temperature is comfortable for everyday activities and stepping outside."}
                 </p>
 
-                <p>
-                  ☀️ <strong className="text-white">Sunscreen:</strong> UV index is {uvIndex !== null ? uvIndex : "--"}. {uvIndex !== null && uvIndex >= 8 ? "Very high UV; maximum protection required!" : uvIndex !== null && uvIndex >= 6 ? "High UV; apply sunscreen." : "Moderate UV; standard protection."}
+                <p className="leading-relaxed">
+                  ☀️ <strong className="text-white">Sun &amp; UV Protection:</strong> The UV index is running at {uvIndex !== null ? uvIndex : "moderate levels"}. {uvIndex !== null && uvIndex >= 8 ? "Very strong sun today! Make sure to wear sunscreen, sunglasses, and a hat." : uvIndex !== null && uvIndex >= 6 ? "Strong sunshine today—good idea to put on some sunscreen if you're heading out." : "Enjoy the sunshine safely with standard outdoor protection."}
                 </p>
 
-                <p>
-                  ☂️ <strong className="text-white">Rain:</strong> {currentRainChance !== null ? `${currentRainChance}% chance now (${dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "--"})` : "--"}. Peak is {peakRainChance !== null ? `${peakRainChance}%` : "--"} at {peakRainTime}.
+                <p className="leading-relaxed">
+                  ☂️ <strong className="text-white">Rain &amp; Weather Check:</strong> There's a {currentRainChance !== null ? `${currentRainChance}% chance of rain` : "low chance of rain"} today ({dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "minimal"} expected). {peakRainChance !== null && peakRainChance > 40 ? `Keep an umbrella handy; peak rain is expected around ${peakRainTime}.` : "Conditions look mostly dry and clear for your plans today."}
                 </p>
 
-                <p>
-                  🌱 <strong className="text-white">Garden:</strong> {soilMoisture !== null && soilMoisture < 0.2 ? "Soil is dry; plants need thorough watering today." : "Soil moisture is stable; regular garden maintenance applies."}
+                <p className="leading-relaxed">
+                  🌱 <strong className="text-white">Garden &amp; Soil Care:</strong> Soil moisture is around {soilMoisture !== null ? `${(soilMoisture * 100).toFixed(1)}%` : "stable"}. {soilMoisture !== null && soilMoisture < 0.2 ? "The soil is a bit dry—your plants or lawn would love a good watering today." : "Your garden soil has plenty of hydration and looks healthy."}
                 </p>
 
-                <p>
-                  ⚡ <strong className="text-white">Solar:</strong> {cloudCover !== null && cloudCover > 70 ? "Heavy cloud cover; slower battery charging." : `Clear sunshine (${directRadiation ?? "--"} W/m²); optimal for solar charging.`}
+                <p className="leading-relaxed">
+                  ⚡ <strong className="text-white">Solar Power &amp; Battery:</strong> Sunlight intensity is at {directRadiation !== null ? `${directRadiation} W/m²` : "normal levels"}. {cloudCover !== null && cloudCover > 70 ? "With heavier clouds around, your solar panels might charge a little slower than usual." : "Great sunshine conditions for charging up your home solar batteries and inverters."}
                 </p>
 
-                <p>
-                  🌬️ <strong className="text-white">Wind:</strong> {windGusts !== null && windGusts > 40 ? `Strong gusts at ${windGusts} km/h; secure loose items.` : `Calm breeze at ${windSpeed ?? "--"} km/h.`}
-                </p>
-
-                <p>
-                  🚗 <strong className="text-white">Air &amp; Visibility:</strong> Clean air ({aqi !== null ? `${aqi} AQI` : "--"}) with clear visibility ({visibility !== null ? `${visibility}+ km` : "--"}). Safe driving conditions.
+                <p className="leading-relaxed">
+                  🌬️ <strong className="text-white">Wind &amp; Breeze:</strong> Winds are blowing at {windSpeed !== null ? `${windSpeed} km/h` : "light speeds"} with gusts up to {windGusts !== null ? `${windGusts} km/h` : "normal"}. {windGusts !== null && windGusts > 40 ? "It's quite windy—best to secure outdoor chairs, umbrellas, or bins." : "Calm and pleasant breezes outside with no wind worries."}
                 </p>
               </div>
             </div>
@@ -1098,7 +1105,7 @@ export default function WeatherClimatePage() {
                   backgroundColor: "var(--accent)",
                 }}
               >
-                Got It
+                Got it
               </button>
             </div>
           </div>

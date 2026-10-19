@@ -26,6 +26,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
+import { supabase } from "@/lib/supabase";
 
 // Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
 declare global {
@@ -67,45 +68,6 @@ interface WaterReportItem {
   ward?: string;
   priority?: "High" | "Medium" | "Low" | "Critical";
 }
-
-const DEFAULT_WATER_NODES: WaterNode[] = [
-  {
-    id: "node-1",
-    owner: "Community Hub",
-    type: "Borehole & Filtration",
-    capacity: "2,500 L",
-    price: "R15 / 20L",
-    latitude: -29.6006,
-    longitude: 30.3794,
-    location: "Sector 4 - Sunset Ridge",
-    whatsappPhone: "27821234567",
-    isUserCreated: false,
-  },
-  {
-    id: "node-2",
-    owner: "Emergency Tank Alpha",
-    type: "Rainwater Tank",
-    capacity: "800 L",
-    price: "R10 / 20L",
-    latitude: -29.6100,
-    longitude: 30.3850,
-    location: "Block 12 - Main Rd",
-    whatsappPhone: "27839876543",
-    isUserCreated: false,
-  },
-  {
-    id: "node-3",
-    owner: "Kasi Eco Hub",
-    type: "Solar UV Tap",
-    capacity: "5,000 L",
-    price: "Free for Pensioners",
-    latitude: -29.5900,
-    longitude: 30.3600,
-    location: "Community Center",
-    whatsappPhone: "27815550192",
-    isUserCreated: false,
-  },
-];
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -159,7 +121,7 @@ export default function HydroMeshPage() {
 
   // Water Reports & P2P Nodes State
   const [waterReports, setWaterReports] = useState<WaterReportItem[]>([]);
-  const [waterNodesList, setWaterNodesList] = useState<WaterNode[]>(DEFAULT_WATER_NODES);
+  const [waterNodesList, setWaterNodesList] = useState<WaterNode[]>([]);
 
   // Share Tank Modal State
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -330,26 +292,78 @@ export default function HydroMeshPage() {
     };
   }, [broadcastTelemetryToGlobal]);
 
-  useEffect(() => {
+  // Fetch reports and water nodes directly from Supabase with localStorage fallback and BroadcastChannel sync
+  const loadSupabaseData = useCallback(async () => {
     try {
-      const savedReports = localStorage.getItem("resigrid_active_reports");
-      if (savedReports) {
-        const parsed: WaterReportItem[] = JSON.parse(savedReports);
-        setWaterReports(parsed.filter((r) => r.category === "water"));
+      // Fetch water reports from Supabase
+      const { data: reportsData, error: reportsError } = await supabase
+        .from("reports")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (reportsError) {
+        console.error("Error fetching reports from Supabase on HydroMesh:", reportsError);
       }
 
-      const savedNodes = localStorage.getItem("resigrid_water_nodes");
-      if (savedNodes) {
-        const parsedNodes = JSON.parse(savedNodes);
-        if (Array.isArray(parsedNodes) && parsedNodes.length > 0) {
-          setWaterNodesList(parsedNodes);
-        }
-      } else {
-        localStorage.setItem("resigrid_water_nodes", JSON.stringify(DEFAULT_WATER_NODES));
+      if (reportsData) {
+        const formattedReports: WaterReportItem[] = reportsData.map((row: any) => ({
+          id: row.report_id || `RPT-${row.id}`,
+          category: row.category || "water",
+          title: row.title || "Untitled Incident",
+          description: row.description || "",
+          locationAddress: row.location_address || "Unknown Location",
+          status: row.status || "Auto-Dispatched",
+          time: row.time_str || "Today",
+          latitude: row.latitude || -29.6006,
+          longitude: row.longitude || 30.3794,
+          ward: row.ward || "Ward 26",
+          priority: row.priority || "High",
+        }));
+        setWaterReports(formattedReports.filter((r) => r.category === "water"));
       }
-    } catch (e) {
-      console.error("Storage read error:", e);
+
+      // Fetch shared water nodes from Supabase if table exists, fallback to localStorage/defaults
+      const { data: nodesData, error: nodesError } = await supabase
+        .from("water_nodes")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (nodesError) {
+        // Table might not exist yet, fallback to localStorage
+        const savedNodes = localStorage.getItem("resigrid_water_nodes");
+        if (savedNodes) {
+          const parsed = JSON.parse(savedNodes);
+          if (Array.isArray(parsed)) setWaterNodesList(parsed);
+        }
+      } else if (nodesData && nodesData.length > 0) {
+        const mappedNodes: WaterNode[] = nodesData.map((row: any) => ({
+          id: row.node_id || `node-${row.id}`,
+          owner: row.owner || "Community Hub",
+          type: row.type || "Borehole & Filtration",
+          capacity: row.capacity || "1,000 L",
+          price: row.price || "Free",
+          latitude: row.latitude || -29.6006,
+          longitude: row.longitude || 30.3794,
+          location: row.location || "Sector 4",
+          whatsappPhone: row.whatsapp_phone || "27821234567",
+          isUserCreated: row.is_user_created ?? true,
+        }));
+        setWaterNodesList(mappedNodes);
+        localStorage.setItem("resigrid_water_nodes", JSON.stringify(mappedNodes));
+      } else {
+        const savedNodes = localStorage.getItem("resigrid_water_nodes");
+        if (savedNodes) {
+          setWaterNodesList(JSON.parse(savedNodes));
+        }
+      }
+    } catch (err) {
+      console.error("Supabase exception on HydroMesh fetch:", err);
     }
+  }, []);
+
+  useEffect(() => {
+    loadSupabaseData();
+    const interval = setInterval(loadSupabaseData, 10000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -358,47 +372,26 @@ export default function HydroMeshPage() {
       broadcastChannel.onmessage = (event) => {
         const { type, payload } = event.data || {};
 
-        if (type === "NEW_REPORT" && payload && payload.category === "water") {
-          setWaterReports((prev) => {
-            const exists = prev.some((r) => r.id === payload.id);
-            if (exists) return prev;
-            return [payload, ...prev];
-          });
-        }
-
-        if (type === "STATUS_UPDATE" && payload?.id) {
-          setWaterReports((prev) =>
-            prev.map((r) => (r.id === payload.id ? { ...r, status: payload.status } : r))
-          );
+        if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
+          loadSupabaseData();
         }
       };
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" && e.newValue) {
-        try {
-          const parsed: WaterReportItem[] = JSON.parse(e.newValue);
-          setWaterReports(parsed.filter((r) => r.category === "water"));
-        } catch (err) {
-          console.error("Storage parse error:", err);
-        }
-      }
-      if (e.key === "resigrid_water_nodes" && e.newValue) {
-        try {
-          setWaterNodesList(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error("Nodes parse error:", err);
-        }
+      if (e.key === "resigrid_active_reports" || e.key === "resigrid_water_nodes") {
+        loadSupabaseData();
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
 
     return () => {
+      clearInterval(interval);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, []);
+  }, [loadSupabaseData]);
 
   const stopAcousticScan = useCallback(() => {
     if (animFrameRef.current) {
@@ -545,7 +538,7 @@ export default function HydroMeshPage() {
     window.open(whatsappUrl, "_blank");
   };
 
-  const handleAddTank = (e: React.FormEvent) => {
+  const handleAddTank = async (e: React.FormEvent) => {
     e.preventDefault();
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Tank") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
@@ -567,6 +560,25 @@ export default function HydroMeshPage() {
     setWaterNodesList(updatedNodes);
     localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
 
+    try {
+      await supabase.from("water_nodes").insert([
+        {
+          node_id: newNode.id,
+          owner: newNode.owner,
+          type: newNode.type,
+          capacity: newNode.capacity,
+          price: newNode.price,
+          latitude: newNode.latitude,
+          longitude: newNode.longitude,
+          location: newNode.location,
+          whatsapp_phone: newNode.whatsappPhone,
+          is_user_created: true,
+        },
+      ]);
+    } catch (err) {
+      console.error("Failed to insert water node into Supabase:", err);
+    }
+
     setIsShareModalOpen(false);
     setNewOwner("");
     setNewType("Borehole & Filtration");
@@ -577,11 +589,17 @@ export default function HydroMeshPage() {
     setNewPhone("");
   };
 
-  const handleRemoveTankNode = (nodeId: string, isUserCreated?: boolean) => {
+  const handleRemoveTankNode = async (nodeId: string, isUserCreated?: boolean) => {
     if (!isUserCreated) return;
     const updatedNodes = waterNodesList.filter((node) => node.id !== nodeId);
     setWaterNodesList(updatedNodes);
     localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
+
+    try {
+      await supabase.from("water_nodes").delete().eq("node_id", nodeId);
+    } catch (err) {
+      console.error("Failed to delete water node from Supabase:", err);
+    }
   };
 
   return (

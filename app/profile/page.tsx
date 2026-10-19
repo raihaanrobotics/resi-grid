@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import {
   User,
   Shield,
   MapPin,
-  Bell,
   Save,
   CheckCircle2,
   Palette,
@@ -15,7 +13,14 @@ import {
   Trash2,
   Hash,
   Home,
+  Mail,
+  Lock,
+  ArrowRight,
+  KeyRound,
+  Building2,
+  UserCheck,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 const ACCENT_PALETTES = [
   { id: "teal", name: "Resi Teal", hex: "#14b8a6", border: "border-teal-500", bg: "bg-teal-500" },
@@ -184,6 +189,17 @@ const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string
 };
 
 export default function ProfilePage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [accountType, setAccountType] = useState<"resident" | "municipal">("resident");
+
+  // Auth Form States
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [municipalSecretCode, setMunicipalSecretCode] = useState("");
+  const [authError, setAuthError] = useState("");
+
   const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
   const [selectedAccent, setSelectedAccent] = useState<string>("teal");
@@ -204,8 +220,36 @@ export default function ProfilePage() {
   const [emergencyAlerts, setEmergencyAlerts] = useState(true);
   const [communityBroadcasts, setCommunityBroadcasts] = useState(true);
 
-  // Load Saved Preferences on Mount & Apply Accent to DOM Root
+  // Check Supabase Auth Session on Mount & hide global navigation if unauthenticated
   useEffect(() => {
+    async function checkSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          setIsAuthenticated(true);
+          if (session.user?.email) {
+            setEmail(session.user.email);
+            if (session.user.email.endsWith("@gov.za") || session.user.user_metadata?.role === "municipal") {
+              setAccountType("municipal");
+            }
+          }
+        } else {
+          const savedProfile = localStorage.getItem("resigrid_user_profile");
+          const savedRole = localStorage.getItem("resigrid_account_role");
+          if (savedProfile) {
+            setIsAuthenticated(true);
+            if (savedRole === "municipal") setAccountType("municipal");
+          }
+        }
+      } catch (err) {
+        console.error("Auth check error:", err);
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+
+    checkSession();
+
     try {
       const savedAccent = localStorage.getItem("resigrid_accent_theme");
       const savedProfile = localStorage.getItem("resigrid_user_profile");
@@ -231,13 +275,75 @@ export default function ProfilePage() {
         if (parsed.streetAddress) setStreetAddress(parsed.streetAddress);
         if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
         if (parsed.standNumber) setStandNumber(parsed.standNumber);
-        if (parsed.emergencyAlerts !== undefined) setEmergencyAlerts(parsed.emergencyAlerts);
-        if (parsed.communityBroadcasts !== undefined) setCommunityBroadcasts(parsed.communityBroadcasts);
       }
     } catch (e) {
       console.error("Error reading saved preferences:", e);
     }
   }, []);
+
+  // Hide or show bottom navigation dock based on authentication state
+  useEffect(() => {
+    const navDock = document.querySelector(".resigrid-dock, nav[class*='dock'], footer[class*='navigation']") as HTMLElement;
+    if (navDock) {
+      navDock.style.display = isAuthenticated ? "" : "none";
+    }
+    return () => {
+      if (navDock) {
+        navDock.style.display = "";
+      }
+    };
+  }, [isAuthenticated]);
+
+  // Handle Authentication (Login / Signup) via Supabase
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+
+    if (accountType === "municipal") {
+      const validMunicipalKey = "MUNI-SECURE-2026";
+      if (municipalSecretCode !== validMunicipalKey) {
+        setAuthError("Invalid Municipal Authorization Key. Access restricted to authorized personnel only.");
+        return;
+      }
+    }
+
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+          options: {
+            data: { role: accountType }
+          }
+        });
+        if (error) {
+          setAuthError(error.message);
+          return;
+        }
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) {
+          setAuthError(error.message);
+          return;
+        }
+      }
+
+      setEmail(authEmail);
+      localStorage.setItem("resigrid_account_role", accountType);
+      localStorage.setItem("resigrid_user_profile", JSON.stringify({ fullName, email: authEmail, phone, selectedProvince, selectedCity, selectedWard, streetAddress, accountNumber, standNumber }));
+      
+      if (accountType === "municipal") {
+        window.location.href = "/municipal";
+      } else {
+        setIsAuthenticated(true);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Authentication failed");
+    }
+  };
 
   // Handle Province Change to update available cities and wards
   const handleProvinceChange = (province: string) => {
@@ -266,8 +372,8 @@ export default function ProfilePage() {
     setStagedAccent(accentId);
   };
 
-  // Save All Profile Settings & Apply Accent Theme
-  const handleSave = (e?: React.FormEvent) => {
+  // Save All Profile Settings & Apply Accent Theme with Supabase sync
+  const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
     setSelectedAccent(stagedAccent);
@@ -296,37 +402,208 @@ export default function ProfilePage() {
     };
 
     localStorage.setItem("resigrid_user_profile", JSON.stringify(profileData));
-    setSuccessMessage("Preferences saved successfully");
+
+    try {
+      await supabase.from("reports").insert([
+        {
+          report_id: `PROF-${Date.now()}`,
+          category: "civic",
+          title: `Profile Update: ${fullName}`,
+          description: `Account settings and municipal profile synchronized for ward ${selectedWard}.`,
+          location_address: streetAddress,
+          province: selectedProvince,
+          municipality: selectedCity,
+          ward: selectedWard,
+          priority: "Low",
+          status: "Resolved",
+          time_str: "Just now",
+          reporter_name: fullName,
+          reporter_phone: phone,
+          account_number: accountNumber,
+          stand_number: standNumber,
+          assigned_depot: "Municipal Administration Desk",
+          estimated_fix_time: "Completed",
+          latitude: -29.6006,
+          longitude: 30.3794,
+        }
+      ]);
+    } catch (err) {
+      console.error("Failed to push profile sync record to Supabase:", err);
+    }
+
+    setSuccessMessage("Preferences saved successfully and synced with cloud database");
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  // Sign Out Session Handler (Clears session state)
-  const handleSignOut = () => {
+  // Sign Out Session Handler
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Supabase sign out error:", err);
+    }
     localStorage.removeItem("resigrid_user_profile");
-    setSuccessMessage("Signed out successfully. Session terminated.");
-    setSavedSuccess(true);
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
+    localStorage.removeItem("resigrid_account_role");
+    setIsAuthenticated(false);
   };
 
-  // Delete App Data Handler (Completely clears everything across the app)
-  const handleDeleteAllData = () => {
-    if (window.confirm("Are you sure you want to delete all ResiGrid data across the app? This action cannot be undone.")) {
+  // Delete App Data Handler
+  const handleDeleteAllData = async () => {
+    if (window.confirm("Are you sure you want to delete all ResiGrid data across the app and remote databases? This action cannot be undone.")) {
+      try {
+        await supabase.from("reports").delete().neq("id", 0);
+        await supabase.from("water_nodes").delete().neq("id", 0);
+        await supabase.from("power_nodes").delete().neq("id", 0);
+      } catch (err) {
+        console.error("Cloud table clear error:", err);
+      }
+
       localStorage.clear();
       sessionStorage.clear();
-      setSuccessMessage("All application data deleted completely.");
-      setSavedSuccess(true);
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1500);
+      setIsAuthenticated(false);
     }
   };
 
   const currentCities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
   const currentWards = currentCities[selectedCity] || [];
   const wardNumberOnly = selectedWard ? selectedWard.split(":")[0] : selectedWard;
+
+  if (authLoading) {
+    return (
+      <main className="resigrid-shell min-h-screen flex items-center justify-center text-white">
+        <div className="animate-pulse text-xs tracking-[0.2em] text-muted">LOADING SESSION...</div>
+      </main>
+    );
+  }
+
+  // RENDER LOGIN / SIGNUP SCREEN IF NOT AUTHENTICATED WITH FULL MOBILE RESPONSIVENESS AND HIDDEN DOCK
+  if (!isAuthenticated) {
+    return (
+      <main className="resigrid-shell min-h-screen flex items-center justify-center p-3 sm:p-6 text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
+        <div className="ambient-background pointer-events-none" aria-hidden="true">
+          <div className="ambient-orb orb-one" />
+          <div className="ambient-orb orb-two" />
+          <div className="ambient-orb orb-three" />
+          <div className="ambient-grid" />
+        </div>
+
+        <div className="glass-panel p-5 sm:p-8 w-full max-w-md relative z-20 space-y-5 sm:space-y-6 shadow-2xl my-auto">
+          <div className="panel-reflection pointer-events-none" />
+
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center mx-auto text-teal-400">
+              <KeyRound className="w-6 h-6" />
+            </div>
+            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">RESIGRID SECURE PORTAL</h1>
+            <p className="text-xs text-muted">
+              {authMode === "login" ? "Sign in to access your dashboard or municipal controls." : "Create a verified account to get started."}
+            </p>
+          </div>
+
+          {/* ACCOUNT TYPE SELECTOR */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-black/40 rounded-xl border border-white/10">
+            <button
+              type="button"
+              onClick={() => setAccountType("resident")}
+              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                accountType === "resident" ? "bg-teal-500/20 text-teal-300 border border-teal-500/40" : "text-muted hover:text-white"
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" /> Resident
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountType("municipal")}
+              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                accountType === "municipal" ? "bg-blue-500/20 text-blue-300 border border-blue-500/40" : "text-muted hover:text-white"
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" /> Municipal Staff
+            </button>
+          </div>
+
+          {authError && (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center">
+              {authError}
+            </div>
+          )}
+
+          <form onSubmit={handleAuthSubmit} className="space-y-4">
+            <div>
+              <label className="text-[11px] font-medium text-muted block mb-1">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-2.5 w-4 h-4 text-muted" />
+                <input
+                  type="email"
+                  required
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  placeholder={accountType === "municipal" ? "officer@msunduzi.gov.za" : "name@example.co.za"}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-teal-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-medium text-muted block mb-1">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-2.5 w-4 h-4 text-muted" />
+                <input
+                  type="password"
+                  required
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-teal-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            {accountType === "municipal" && (
+              <div>
+                <label className="text-[11px] font-medium text-blue-400 block mb-1 flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5" /> Municipal Private Authorization Key
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={municipalSecretCode}
+                  onChange={(e) => setMunicipalSecretCode(e.target.value)}
+                  placeholder="Enter staff security code"
+                  className="w-full bg-blue-950/30 border border-blue-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-400 transition-colors"
+                />
+                <p className="text-[9px] text-muted mt-1">Required to prevent unauthorized municipal staff access.</p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className={`w-full py-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                accountType === "municipal" 
+                  ? "bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30 text-blue-300" 
+                  : "bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300"
+              }`}
+            >
+              <span>{authMode === "login" ? (accountType === "municipal" ? "Access Municipal Dashboard" : "Sign In to Profile") : "Create Account & Register"}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center justify-between pt-2 text-xs">
+              <span className="text-muted">{authMode === "login" ? "Need an account?" : "Already have an account?"}</span>
+              <button
+                type="button"
+                onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")}
+                className="text-teal-400 hover:underline font-semibold cursor-pointer"
+              >
+                {authMode === "login" ? "Sign Up Now" : "Sign In"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">

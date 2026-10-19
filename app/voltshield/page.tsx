@@ -31,6 +31,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
+import { supabase } from "@/lib/supabase";
 
 // Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
 declare global {
@@ -77,45 +78,6 @@ interface PowerReportItem {
   assignedDepotUnit?: string;
   estimatedFixTime?: string;
 }
-
-const DEFAULT_POWER_NODES: PowerNode[] = [
-  {
-    id: "power-1",
-    owner: "Solar Inverter Hub",
-    type: "5kW Hybrid Inverter",
-    capacity: "Device Charging & Wi-Fi",
-    price: "Free / Donation",
-    latitude: -29.6006,
-    longitude: 30.3794,
-    location: "Sector 4 - Sunset Ridge",
-    whatsappPhone: "27821234567",
-    isUserCreated: false,
-  },
-  {
-    id: "power-2",
-    owner: "Generator Station Alpha",
-    type: "10kVA Diesel Generator",
-    capacity: "Heavy Appliance Backup",
-    price: "R20 / Hour",
-    latitude: -29.6100,
-    longitude: 30.3850,
-    location: "Block 12 - Main Rd",
-    whatsappPhone: "27839876543",
-    isUserCreated: false,
-  },
-  {
-    id: "power-3",
-    owner: "Kasi UPS Emergency Post",
-    type: "1.5kW Pure Sine UPS",
-    capacity: "Medical & Phone Charging",
-    price: "Free for Residents",
-    latitude: -29.5900,
-    longitude: 30.3600,
-    location: "Community Center",
-    whatsappPhone: "27815550192",
-    isUserCreated: false,
-  },
-];
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -166,7 +128,7 @@ export default function VoltShieldPage() {
 
   // Power Reports & P2P Nodes State
   const [powerReports, setPowerReports] = useState<PowerReportItem[]>([]);
-  const [powerNodesList, setPowerNodesList] = useState<PowerNode[]>(DEFAULT_POWER_NODES);
+  const [powerNodesList, setPowerNodesList] = useState<PowerNode[]>([]);
 
   // Share Backup Node Modal State
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -343,28 +305,78 @@ export default function VoltShieldPage() {
     };
   }, [broadcastTelemetryToGlobal]);
 
-  // Load Initial Persisted Data & Real-Time Sync Listeners
-  useEffect(() => {
+  // Fetch reports and power nodes directly from Supabase with localStorage fallback and BroadcastChannel sync
+  const loadSupabaseData = useCallback(async () => {
     try {
-      const savedReports = localStorage.getItem("resigrid_active_reports");
-      if (savedReports) {
-        const parsed: PowerReportItem[] = JSON.parse(savedReports);
-        const filteredPower = parsed.filter((r) => r.category === "power");
-        setPowerReports(filteredPower);
+      // Fetch power reports from Supabase
+      const { data: reportsData, error: reportsError } = await supabase
+        .from("reports")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (reportsError) {
+        console.error("Error fetching reports from Supabase on VoltShield:", reportsError);
       }
 
-      const savedNodes = localStorage.getItem("resigrid_power_nodes");
-      if (savedNodes) {
-        const parsedNodes = JSON.parse(savedNodes);
-        if (Array.isArray(parsedNodes) && parsedNodes.length > 0) {
-          setPowerNodesList(parsedNodes);
-        }
-      } else {
-        localStorage.setItem("resigrid_power_nodes", JSON.stringify(DEFAULT_POWER_NODES));
+      if (reportsData) {
+        const formattedReports: PowerReportItem[] = reportsData.map((row: any) => ({
+          id: row.report_id || `RPT-${row.id}`,
+          category: row.category || "power",
+          title: row.title || "Untitled Incident",
+          description: row.description || "",
+          locationAddress: row.location_address || "Unknown Location",
+          status: row.status || "Auto-Dispatched",
+          time: row.time_str || "Today",
+          latitude: row.latitude || -29.6006,
+          longitude: row.longitude || 30.3794,
+          ward: row.ward || "Ward 26",
+          priority: row.priority || "High",
+        }));
+        setPowerReports(formattedReports.filter((r) => r.category === "power"));
       }
-    } catch (e) {
-      console.error("Storage read error:", e);
+
+      // Fetch shared power nodes from Supabase if table exists, fallback to localStorage/defaults
+      const { data: nodesData, error: nodesError } = await supabase
+        .from("power_nodes")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (nodesError) {
+        // Table might not exist yet, fallback to localStorage
+        const savedNodes = localStorage.getItem("resigrid_power_nodes");
+        if (savedNodes) {
+          const parsed = JSON.parse(savedNodes);
+          if (Array.isArray(parsed)) setPowerNodesList(parsed);
+        }
+      } else if (nodesData && nodesData.length > 0) {
+        const mappedNodes: PowerNode[] = nodesData.map((row: any) => ({
+          id: row.node_id || `power-${row.id}`,
+          owner: row.owner || "Solar Inverter Hub",
+          type: row.type || "5kW Hybrid Inverter",
+          capacity: row.capacity || "Device Charging & Wi-Fi",
+          price: row.price || "Free / Donation",
+          latitude: row.latitude || -29.6006,
+          longitude: row.longitude || 30.3794,
+          location: row.location || "Sector 4",
+          whatsappPhone: row.whatsapp_phone || "27821234567",
+          isUserCreated: row.is_user_created ?? true,
+        }));
+        setPowerNodesList(mappedNodes);
+        localStorage.setItem("resigrid_power_nodes", JSON.stringify(mappedNodes));
+      } else {
+        const savedNodes = localStorage.getItem("resigrid_power_nodes");
+        if (savedNodes) {
+          setPowerNodesList(JSON.parse(savedNodes));
+        }
+      }
+    } catch (err) {
+      console.error("Supabase exception on VoltShield fetch:", err);
     }
+  }, []);
+
+  useEffect(() => {
+    loadSupabaseData();
+    const interval = setInterval(loadSupabaseData, 10000);
 
     if (typeof window !== "undefined" && "getBattery" in navigator) {
       (navigator as any).getBattery().then((battery: any) => {
@@ -388,47 +400,26 @@ export default function VoltShieldPage() {
       broadcastChannel.onmessage = (event) => {
         const { type, payload } = event.data || {};
 
-        if (type === "NEW_REPORT" && payload && payload.category === "power") {
-          setPowerReports((prev) => {
-            const exists = prev.some((r) => r.id === payload.id);
-            if (exists) return prev;
-            return [payload, ...prev];
-          });
-        }
-
-        if (type === "STATUS_UPDATE" && payload?.id) {
-          setPowerReports((prev) =>
-            prev.map((r) => (r.id === payload.id ? { ...r, status: payload.status } : r))
-          );
+        if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
+          loadSupabaseData();
         }
       };
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" && e.newValue) {
-        try {
-          const parsed: PowerReportItem[] = JSON.parse(e.newValue);
-          setPowerReports(parsed.filter((r) => r.category === "power"));
-        } catch (err) {
-          console.error("Storage parse error:", err);
-        }
-      }
-      if (e.key === "resigrid_power_nodes" && e.newValue) {
-        try {
-          setPowerNodesList(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error("Nodes parse error:", err);
-        }
+      if (e.key === "resigrid_active_reports" || e.key === "resigrid_power_nodes") {
+        loadSupabaseData();
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
 
     return () => {
+      clearInterval(interval);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, []);
+  }, [loadSupabaseData]);
 
   const stopShuntScan = useCallback(() => {
     if (scanIntervalRef.current) {
@@ -500,7 +491,7 @@ export default function VoltShieldPage() {
     window.open(whatsappUrl, "_blank");
   };
 
-  const handleAddNode = (e: React.FormEvent) => {
+  const handleAddNode = async (e: React.FormEvent) => {
     e.preventDefault();
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Power Node") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
@@ -523,6 +514,25 @@ export default function VoltShieldPage() {
     setPowerNodesList(updatedNodes);
     localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
 
+    try {
+      await supabase.from("power_nodes").insert([
+        {
+          node_id: newNode.id,
+          owner: newNode.owner,
+          type: newNode.type,
+          capacity: newNode.capacity,
+          price: newNode.price,
+          latitude: newNode.latitude,
+          longitude: newNode.longitude,
+          location: newNode.location,
+          whatsapp_phone: newNode.whatsappPhone,
+          is_user_created: true,
+        },
+      ]);
+    } catch (err) {
+      console.error("Failed to insert power node into Supabase:", err);
+    }
+
     setIsShareModalOpen(false);
     setNewOwner("");
     setNewType("5kW Hybrid Inverter");
@@ -533,11 +543,17 @@ export default function VoltShieldPage() {
     setNewPhone("");
   };
 
-  const handleRemoveNode = (nodeId: string, isUserCreated?: boolean) => {
+  const handleRemoveNode = async (nodeId: string, isUserCreated?: boolean) => {
     if (!isUserCreated) return;
     const updatedNodes = powerNodesList.filter((node) => node.id !== nodeId);
     setPowerNodesList(updatedNodes);
     localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
+
+    try {
+      await supabase.from("power_nodes").delete().eq("node_id", nodeId);
+    } catch (err) {
+      console.error("Failed to delete power node from Supabase:", err);
+    }
   };
 
   // Determine Outage Risk Level from Grid Stability Score

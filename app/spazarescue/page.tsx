@@ -525,7 +525,7 @@ export default function SpazaRescuePage() {
                     </div>
 
                     <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-between gap-2">
-                      <span className="text-[9px] font-mono px-2.5 py-1 rounded-full border font-bold bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
+                      <span className="text-[11px] font-mono px-3.5 py-1.5 rounded-full border font-extrabold bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
                         Food Store
                       </span>
                       <button
@@ -605,15 +605,15 @@ export default function SpazaRescuePage() {
                     </div>
 
                     <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex items-center justify-between gap-2">
-                      <span className="text-[9px] font-mono px-2.5 py-1 rounded-full border font-bold bg-blue-500/15 text-blue-300 border-blue-500/30">
-                        food aid
+                      <span className="text-[11px] font-mono px-3.5 py-1.5 rounded-full border font-extrabold bg-blue-500/20 text-blue-300 border-blue-500/40">
+                        Food Aid
                       </span>
                       <button
                         type="button"
                         onClick={() => handleContactWhatsApp(aid.contactPhone, aid.title)}
                         className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                       >
-                        <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>Coordinate via WhatsApp</span>
+                        <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>WhatsApp</span>
                       </button>
                     </div>
                   </div>

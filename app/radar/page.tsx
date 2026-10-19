@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
+import { supabase } from "@/lib/supabase";
 
 interface IncidentMarker {
   id: string;
@@ -155,70 +156,73 @@ export default function RadarPage() {
     }
   }, []);
 
-  // Load Active Incident Reports with Industrial-Grade Radar Coordinate Mapping (10km Max Radius Scope)
-  const loadReports = useCallback(() => {
+  // Fetch active reports strictly and exclusively from Supabase database table
+  const loadReports = useCallback(async () => {
     try {
-      const saved = localStorage.getItem("resigrid_active_reports");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const mapped: IncidentMarker[] = parsed.map((item: any, idx: number) => {
-            const lat = item.latitude ?? item.coords?.lat ?? (userLat + (idx * 0.003 - 0.0015));
-            const lng = item.longitude ?? item.coords?.lng ?? (userLng + (idx * 0.003 - 0.0015));
-            
-            const distKm = calculateDistanceKm(userLat, userLng, lat, lng);
-            
-            // Industrial Precision Mapping: 10km radius maps exactly across a normalized ±0.095 degree delta
-            // dx and dy calculate proportional offset from center (user location) scaled to fit the 100% grid view (0% to 100%)
-            const latDiffKm = (lat - userLat) * 111; // ~111km per degree latitude
-            const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
+      const { data, error } = await supabase
+        .from("reports")
+        .select("*")
+        .order("id", { ascending: false });
 
-            // Scale factor: 10km radius boundary corresponds to 40% offset from center (50%)
-            const maxRadiusKm = 10.0;
-            const x = Math.min(92, Math.max(8, 50 + (lngDiffKm / maxRadiusKm) * 40));
-            const y = Math.min(92, Math.max(8, 50 - (latDiffKm / maxRadiusKm) * 40));
+      if (error) {
+        console.error("Supabase fetch error on Radar:", error);
+        setLiveIncidents([]);
+        return;
+      }
 
-            const cat = item.category || item.type || "other";
-            const normalizedType = cat === "power" || cat === "water" ? cat : "other";
+      if (data && data.length > 0) {
+        const mapped: IncidentMarker[] = data.map((row: any, idx: number) => {
+          const lat = row.latitude ?? (userLat + (idx * 0.003 - 0.0015));
+          const lng = row.longitude ?? (userLng + (idx * 0.003 - 0.0015));
+          
+          const distKm = calculateDistanceKm(userLat, userLng, lat, lng);
+          
+          const latDiffKm = (lat - userLat) * 111;
+          const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
 
-            return {
-              id: item.id || `INC-${100 + idx}`,
-              type: normalizedType as "power" | "water" | "other",
-              category: cat,
-              title: item.title || "Community Hazard Report",
-              location: item.locationAddress || item.location || streetAddress,
-              locationAddress: item.locationAddress || item.location,
-              severity: item.priority ? (item.priority.toLowerCase() as any) : "high",
-              time: item.time || "Recently",
-              latitude: lat,
-              longitude: lng,
-              coordinates: { x, y },
-              description: item.description || "No additional hazard details provided.",
-              status: item.status || "Active",
-              distanceKm: distKm,
-              formattedDistance: item.formattedDistance || `${distKm.toFixed(1)} km`,
-            };
-          });
+          const maxRadiusKm = 10.0;
+          const x = Math.min(92, Math.max(8, 50 + (lngDiffKm / maxRadiusKm) * 40));
+          const y = Math.min(92, Math.max(8, 50 - (latDiffKm / maxRadiusKm) * 40));
 
-          setLiveIncidents(mapped);
-          setSelectedIncident((prev) => {
-            if (!prev) return mapped[0];
-            return mapped.find((m) => m.id === prev.id) || mapped[0];
-          });
-        } else {
-          setLiveIncidents([]);
-        }
+          const cat = row.category || "other";
+          const normalizedType = cat === "power" || cat === "water" ? cat : "other";
+
+          return {
+            id: row.report_id || `RPT-${row.id}`,
+            type: normalizedType as "power" | "water" | "other",
+            category: cat,
+            title: row.title || "Community Hazard Report",
+            location: row.location_address || streetAddress,
+            locationAddress: row.location_address,
+            severity: row.priority ? (row.priority.toLowerCase() as any) : "high",
+            time: row.time_str || "Recently",
+            latitude: lat,
+            longitude: lng,
+            coordinates: { x, y },
+            description: row.description || "No additional hazard details provided.",
+            status: row.status || "Active",
+            distanceKm: distKm,
+            formattedDistance: `${distKm.toFixed(1)} km`,
+          };
+        });
+
+        setLiveIncidents(mapped);
+        setSelectedIncident((prev) => {
+          if (!prev) return mapped[0];
+          return mapped.find((m) => m.id === prev.id) || mapped[0];
+        });
       } else {
         setLiveIncidents([]);
       }
     } catch (e) {
-      console.error("Error reading active reports:", e);
+      console.error("Error reading active reports for radar from Supabase:", e);
+      setLiveIncidents([]);
     }
   }, [userLat, userLng, streetAddress]);
 
   useEffect(() => {
     loadReports();
-    const interval = setInterval(loadReports, 15000);
+    const interval = setInterval(loadReports, 10000);
 
     let channel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -228,15 +232,9 @@ export default function RadarPage() {
       };
     }
 
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports") loadReports();
-    };
-    window.addEventListener("storage", handleStorage);
-
     return () => {
       clearInterval(interval);
       if (channel) channel.close();
-      window.removeEventListener("storage", handleStorage);
     };
   }, [loadReports]);
 
@@ -282,7 +280,7 @@ export default function RadarPage() {
                 RADAR
               </h1>
               <p className="text-[9px] sm:text-[10px] tracking-wider text-muted mt-0.5 truncate">
-                10KM AREA RADIUS
+                10KM AREA RADIUS • SUPABASE LIVE SYNC
               </p>
             </div>
           </div>
@@ -450,7 +448,7 @@ export default function RadarPage() {
             </div>
           </div>
 
-          {/* ALL INCIDENT DETAILS PANEL */}
+          {/* ALL INCIDENT DETAILS PANEL (SANITIZED: NO PERSONAL INFO) */}
           <div className="glass-panel p-4 sm:p-6 flex flex-col justify-between relative pointer-events-auto">
             <div className="panel-reflection pointer-events-none" />
 

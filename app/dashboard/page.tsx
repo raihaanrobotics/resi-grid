@@ -16,8 +16,11 @@ import {
   AlertOctagon,
   PhoneCall,
   X,
-  ExternalLink,
+  User,
+  Hash,
+  Home,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 interface ReportItem {
   id: string;
@@ -27,102 +30,245 @@ interface ReportItem {
   locationAddress: string;
   status: "Auto-Dispatched" | "Pending Review" | "Resolved";
   time: string;
+  province?: string;
+  municipality?: string;
   ward?: string;
-  priority?: "High" | "Medium" | "Low" | "Critical";
+  reporterName?: string;
   reporterPhone?: string;
+  accountNumber?: string;
+  standNumber?: string;
   assignedDepotUnit?: string;
   estimatedFixTime?: string;
   coords?: { lat: number; lng: number };
 }
 
-// Initial dataset structured around Msunduzi Municipal Wards
-const INITIAL_REPORTS: ReportItem[] = [
-  {
-    id: "RPT-101",
-    category: "water",
-    title: "Burst Water Main",
-    description: "Severe leak flooding roadway and affecting water pressure.",
-    locationAddress: "Chief Albert Luthuli St, Pietermaritzburg",
-    ward: "Ward 26 (CBD / Central)",
-    priority: "Critical",
-    status: "Auto-Dispatched",
-    time: "Today, 10:14 SAST",
-    reporterPhone: "+27 82 123 4567",
-    assignedDepotUnit: "Water Rapid Response Crew #4",
-    estimatedFixTime: "4 Hours",
-    coords: { lat: -29.6006, lng: 30.3794 },
+// South African Provinces, Cities, and Wards Hierarchy Dataset
+const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string[]>> = {
+  "KwaZulu-Natal": {
+    "Pietermaritzburg (Msunduzi)": [
+      "Ward 1: Phayiphini, Laduma, Komkhulu, Mbutshane, Ntokozweni, Kwamafindo, Mbuncwane, and Mpumuza",
+      "Ward 2: KwaMbanjwa, Mkangala, Zayeka, Nadi, and Sweetwaters/Mbubu",
+      "Ward 3: Gezubuso, Inadi, and parts of Sweetwaters",
+      "Ward 4: KwaNxamalala, Mbubu, Taylor’s Halt, and surrounding rural communities",
+      "Ward 5: Smero, Henley-on-Klip, and parts of Edendale",
+      "Ward 6: Caluza, Mpumuza, and surrounding sectors of Edendale",
+      "Ward 7: Willowfontein East, Khanya Village, and surrounding hillsides",
+      "Ward 8: Machibisa, Dambuza, and central Edendale zones",
+      "Ward 9: Harewood, Willowfontein West, and parts of the greater Edendale area",
+      "Ward 10: Azalea, Imbali Unit 1, and Imbali Unit 2",
+      "Ward 11: Imbali Unit 13, Unit 14, and Unit 15",
+      "Ward 12: Imbali Stage 2, Unit 3, and Unit 4",
+      "Ward 13: Imbali Unit BB, Unit CC, and parts of Unit J",
+      "Ward 14: Imbali Unit 18, Unit 19, and Tindi Village",
+      "Ward 15: Imbali Unit 14, Slangspruit, and surrounding informal settlements",
+      "Ward 16: Ashdown, Buffer, and parts of Edendale",
+      "Ward 17: France township, Ridge Park, and Unit H (Imbali)",
+      "Ward 18: Grange, Westgate, Ridge Park, and Bisley Heights",
+      "Ward 19: Pelham, Scottsville (West), Oribi, and the University of KwaZulu-Natal (UKZN) campus",
+      "Ward 20: Camperdown side boundaries, Ashburton, Lynnfield Park, and Cleland",
+      "Ward 21: Epworth, Hayfields, Lincoln Meade, and Bellevue",
+      "Ward 22: Pietermaritzburg Central Business District (CBD Central), and central loops",
+      "Ward 23: Signal Hill, Richmond Crest, and parts of the western CBD",
+      "Ward 24: Napierville, Prestbury, Clarendon, and Wembley",
+      "Ward 25: Montrose, Chase Valley, Woodlands, Oak Park, and Town Bush Valley",
+      "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands",
+      "Ward 27: Allandale, Raisethorpe, and Newholme",
+      "Ward 28: Northdale (Sections including Bombay Heights, Springfields)",
+      "Ward 29: Copesville, Swapo, and Jadeite sections",
+      "Ward 30: Haniville, Claridge rural margins, and portions of upper Copesville",
+      "Ward 31: Northdale (Lower blocks), Truro, and Dunveria",
+      "Ward 32: Woodlands (Main extension), Glenwood, and mountain rises",
+      "Ward 33: Manor, Sobantu (West), and the KwaJika Joe informal settlement",
+      "Ward 34: Mountain Rise Industrial Area, Willowton, and parts of the inner city fringes",
+      "Ward 35: Sobantu Township (Central and East), and adjacent community zones",
+      "Ward 36: Imbali Unit 14 (Upper limits) and parts of greater Dambuza",
+      "Ward 37: Greater Edendale Hospital areas and Georgetown",
+      "Ward 38: Esigodini and upper regions of the Edendale valley corridor",
+      "Ward 39: Plessisslaer, Imbali Unit AA, and lower Westgate buffers",
+      "Ward 40: Whispers, Thembalihle, and newly expanded settlement nodes near the outer city boundary",
+      "Ward 41: Khobonina, Vulindlela fringes, and deep traditional authorities flanking the western municipality rim",
+    ],
+    "Durban (eThekwini)": [
+      "Ward 26 (Durban CBD / South Beach / North Beach)",
+      "Ward 31 (Morningside / Glenwood / Musgrave)",
+      "Ward 33 (Umhlanga / Durban North)",
+      "Ward 73 (Phoenix / Verulam)",
+      "Ward 75 (Chatsworth / Umlazi)",
+    ],
+    "Richards Bay (uMhlathuze)": [
+      "Ward 1 (Arboretum / Meerensee)",
+      "Ward 2 (CBD / Veldenvlei)",
+      "Ward 4 (Brackenham)",
+      "Ward 23 (Esikhaleni)",
+    ],
   },
-  {
-    id: "RPT-102",
-    category: "power",
-    title: "Substation Transformer Trip",
-    description: "Total power blackout across Sector 3 grid block.",
-    locationAddress: "Dr Chota Motala Rd, Raisethorpe",
-    ward: "Ward 28 (Raisethorpe / Newholme)",
-    priority: "High",
-    status: "Pending Review",
-    time: "Today, 09:48 SAST",
-    reporterPhone: "+27 83 987 6543",
-    assignedDepotUnit: "Electricity Depot - Unit B",
-    estimatedFixTime: "6 Hours",
-    coords: { lat: -29.5823, lng: 30.4021 },
+  "Gauteng": {
+    "Johannesburg (City of Joburg)": [
+      "Ward 23 (Auckland Park / Melville / Westdene)",
+      "Ward 64 (Braamfontein / Newtown / Marshalltown)",
+      "Ward 90 (Sandton / Rosebank / Hyde Park)",
+      "Ward 117 (Randburg / Ferndale / Blairgowrie)",
+      "Ward 126 (Roodepoort / Constantia Kloof)",
+      "Ward 54 (Soweto / Diepkloof)",
+      "Ward 29 (Soweto / Orlando West)",
+    ],
+    "Pretoria (Tshwane)": [
+      "Ward 59 (Pretoria CBD / Arcadia / Sunnyside)",
+      "Ward 57 (Hatfield / Brooklyn / Lynnwood)",
+      "Ward 44 (Centurion / Lyttelton)",
+      "Ward 16 (Pretoria North / Akasia)",
+    ],
+    "Ekurhuleni (East Rand)": [
+      "Ward 20 (Kempton Park Central)",
+      "Ward 32 (Benoni CBD)",
+      "Ward 73 (Boksburg West)",
+      "Ward 37 (Germiston Central)",
+    ],
   },
-  {
-    id: "RPT-103",
-    category: "roads",
-    title: "Deep Stormwater Pothole",
-    description: "Hazardous road crater causing vehicle rim damage.",
-    locationAddress: "Durban Rd, Scottsville",
-    ward: "Ward 33 (Scottsville / University)",
-    priority: "Medium",
-    status: "Pending Review",
-    time: "Today, 09:12 SAST",
-    reporterPhone: "+27 81 555 0192",
-    assignedDepotUnit: "Roads & Stormwater Unit #12",
-    estimatedFixTime: "24 Hours",
-    coords: { lat: -29.6152, lng: 30.3951 },
+  "Western Cape": {
+    "Cape Town (City of Cape Town)": [
+      "Ward 54 (Cape Town CBD / Green Point / Waterfront)",
+      "Ward 115 (Sea Point / Camps Bay / Hout Bay)",
+      "Ward 59 (Claremont / Rondebosch / Newlands)",
+      "Ward 71 (Mitchells Plain / Strandfontein)",
+      "Ward 108 (Khayelitsha / Harare)",
+      "Ward 16 (Bellville / Durbanville)",
+    ],
+    "Stellenbosch": [
+      "Ward 1 (Stellenbosch Central / Idas Valley)",
+      "Ward 2 (Kayamandi)",
+      "Ward 4 (Franschhoek)",
+    ],
+    "George": [
+      "Ward 14 (George Central / Pacaltsdorp)",
+      "Ward 16 (Heatherlands / Blanco)",
+    ],
   },
-  {
-    id: "RPT-104",
-    category: "water",
-    title: "Low Water Pressure",
-    description: "Feed pressure dropped below 1.2 Bar across residential line.",
-    locationAddress: "Greytown Rd, Northern Areas",
-    ward: "Ward 30 (Northdale / Woodlands)",
-    priority: "Low",
-    status: "Resolved",
-    time: "Today, 08:30 SAST",
-    reporterPhone: "+27 84 222 3344",
-    assignedDepotUnit: "Water Maintenance Crew #2",
-    estimatedFixTime: "Completed",
-    coords: { lat: -29.5631, lng: 30.3982 },
+  "Eastern Cape": {
+    "Gqeberha (Nelson Mandela Bay)": [
+      "Ward 5 (Central / Richmond Hill / Humewood)",
+      "Ward 6 (Walmer / Springfield)",
+      "Ward 8 (Summerstrand / Humewood)",
+      "Ward 31 (Motherwell / New Brighton)",
+    ],
+    "East London (Buffalo City)": [
+      "Ward 1 (Quigney / CBD)",
+      "Ward 2 (Berea / Vincent)",
+      "Ward 4 (Mdantsane)",
+    ],
   },
-];
+  "Free State": {
+    "Bloemfontein (Mangaung)": [
+      "Ward 21 (Bloemfontein CBD / Westdene)",
+      "Ward 15 (Universitas / Brandwag)",
+      "Ward 48 (Botshabelo)",
+      "Ward 40 (Thaba Nchu)",
+    ],
+  },
+  "Mpumalanga": {
+    "Nelspruit (Mbombela)": [
+      "Ward 14 (Nelspruit CBD / West Acres)",
+      "Ward 16 (Sonpark / Nelspruit Ext)",
+      "Ward 30 (White River)",
+    ],
+    "Witbank (Emalahleni)": [
+      "Ward 21 (Witbank Central / Tasbet Park)",
+      "Ward 23 (Klarinet)",
+    ],
+  },
+  "Limpopo": {
+    "Polokwane": [
+      "Ward 20 (Polokwane Central / Annadale)",
+      "Ward 21 (Bendor / Fauna Park)",
+      "Ward 10 (Seshego)",
+    ],
+  },
+  "North West": {
+    "Rustenburg": [
+      "Ward 18 (Rustenburg CBD / Cashan)",
+      "Ward 19 (Tlhabane)",
+    ],
+    "Mahikeng": [
+      "Ward 12 (Mahikeng Central / Mmabatho)",
+    ],
+  },
+  "Northern Cape": {
+    "Kimberley (Sol Plaatje)": [
+      "Ward 1 (Kimberley CBD / Belgravia)",
+      "Ward 15 (Ritchie / Galeshewe)",
+    ],
+  },
+};
 
 export default function MunicipalDashboardPage() {
-  const [reports, setReports] = useState<ReportItem[]>(INITIAL_REPORTS);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
+  const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
   const [selectedWard, setSelectedWard] = useState<string>("ALL");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeReportDetail, setActiveReportDetail] = useState<ReportItem | null>(null);
 
-  // Sync state from LocalStorage & BroadcastChannel
-  useEffect(() => {
+  // Handle Province Change to update cities and reset ward
+  const handleProvinceChange = (province: string) => {
+    setSelectedProvince(province);
+    const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[province] || {};
+    const firstCity = Object.keys(citiesInProv)[0] || "";
+    setSelectedCity(firstCity);
+    setSelectedWard("ALL");
+  };
+
+  // Handle City Change
+  const handleCityChange = (city: string) => {
+    setSelectedCity(city);
+    setSelectedWard("ALL");
+  };
+
+  // Fetch reports exclusively from Supabase and sync with BroadcastChannel
+  const fetchSupabaseReports = async () => {
     try {
-      const saved = localStorage.getItem("resigrid_active_reports");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setReports(parsed);
-        }
-      } else {
-        localStorage.setItem("resigrid_active_reports", JSON.stringify(INITIAL_REPORTS));
+      const { data, error } = await supabase
+        .from("reports")
+        .select("*")
+        .order("id", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching reports from Supabase:", error);
+        return;
+      }
+
+      if (data) {
+        const formattedReports: ReportItem[] = data.map((row: any) => ({
+          id: row.report_id || `RPT-${row.id}`,
+          category: row.category || "water",
+          title: row.title || "Untitled Incident",
+          description: row.description || "",
+          locationAddress: row.location_address || "Unknown Location",
+          status: row.status || "Auto-Dispatched",
+          time: row.time_str || "Today",
+          province: row.province || "KwaZulu-Natal",
+          municipality: row.municipality || "Pietermaritzburg (Msunduzi)",
+          ward: row.ward || "Ward 26 (CBD / Central)",
+          reporterName: row.reporter_name || "Anonymous",
+          reporterPhone: row.reporter_phone || "N/A",
+          accountNumber: row.account_number || "N/A",
+          standNumber: row.stand_number || "N/A",
+          assignedDepotUnit: row.assigned_depot || "Depot Rapid Response Queue",
+          estimatedFixTime: row.estimated_fix_time || "Pending Triage",
+          coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
+        }));
+
+        setReports(formattedReports);
       }
     } catch (err) {
-      console.error("Failed to load initial storage:", err);
+      console.error("Supabase connection exception:", err);
     }
+  };
+
+  useEffect(() => {
+    // Initial fetch from Supabase
+    fetchSupabaseReports();
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -131,59 +277,37 @@ export default function MunicipalDashboardPage() {
       broadcastChannel.onmessage = (event) => {
         const { type, payload } = event.data || {};
         if (type === "NEW_REPORT" && payload) {
-          setReports((prev) => {
-            const exists = prev.some((r) => r.id === payload.id);
-            if (exists) return prev;
-            
-            const timestamp = new Date().toLocaleTimeString("en-ZA", {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-
-            const updatedReport: ReportItem = {
-              ...payload,
-              ward: payload.ward || "Ward 26 (CBD / Central)",
-              priority: payload.priority || "High",
-              reporterPhone: payload.reporterPhone || "Citizen Portal Log",
-              assignedDepotUnit: payload.assignedDepotUnit || "Depot Triage Assigned",
-              estimatedFixTime: payload.estimatedFixTime || "TBD",
-              time: payload.time || `Today, ${timestamp} SAST`,
-            };
-
-            const updated = [updatedReport, ...prev];
-            localStorage.setItem("resigrid_active_reports", JSON.stringify(updated));
-            return updated;
-          });
+          fetchSupabaseReports();
+        }
+        if (type === "STATUS_UPDATE" && payload) {
+          setReports((prev) =>
+            prev.map((r) => (r.id === payload.id ? { ...r, status: payload.status } : r))
+          );
         }
       };
     }
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" && e.newValue) {
-        try {
-          setReports(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error("Error parsing sync storage:", err);
-        }
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
     return () => {
       if (broadcastChannel) broadcastChannel.close();
-      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
-  // Update Status & Broadcast Back to Resident App Pages
-  const updateReportStatus = (reportId: string, newStatus: "Auto-Dispatched" | "Pending Review" | "Resolved") => {
+  // Update Status & Sync with Supabase and BroadcastChannel
+  const updateReportStatus = async (reportId: string, newStatus: "Auto-Dispatched" | "Pending Review" | "Resolved") => {
     const updatedReports = reports.map((item) =>
       item.id === reportId ? { ...item, status: newStatus } : item
     );
 
     setReports(updatedReports);
-    localStorage.setItem("resigrid_active_reports", JSON.stringify(updatedReports));
+
+    try {
+      await supabase
+        .from("reports")
+        .update({ status: newStatus })
+        .eq("report_id", reportId);
+    } catch (err) {
+      console.error("Failed to update status in Supabase:", err);
+    }
 
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       const bc = new BroadcastChannel("resigrid_reports_dispatch");
@@ -195,31 +319,30 @@ export default function MunicipalDashboardPage() {
     }
   };
 
-  const handleManualRefresh = () => {
+  const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    setTimeout(() => {
-      try {
-        const saved = localStorage.getItem("resigrid_active_reports");
-        if (saved) setReports(JSON.parse(saved));
-      } catch (err) {
-        console.error("Refresh error:", err);
-      }
-      setIsRefreshing(false);
-    }, 500);
+    await fetchSupabaseReports();
+    setIsRefreshing(false);
   };
 
-  // Filtered dataset calculation
+  const currentCities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
+  const currentWards = currentCities[selectedCity] || [];
+
+  // Filtered dataset calculation based on province, municipality, ward, category, and search query
   const filteredReports = reports.filter((item) => {
-    const matchesWard = selectedWard === "ALL" || (item.ward && item.ward.includes(selectedWard));
+    const matchesProvince = !item.province || item.province === selectedProvince;
+    const matchesMunicipality = !item.municipality || item.municipality === selectedCity;
+    const matchesWard = selectedWard === "ALL" || (item.ward && item.ward.includes(selectedWard.split(":")[0]));
     const matchesCategory = selectedCategory === "ALL" || item.category === selectedCategory;
-    const matchesPriority = selectedPriority === "ALL" || item.priority === selectedPriority;
     const matchesSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.locationAddress.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.id.toLowerCase().includes(searchQuery.toLowerCase());
+      item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.reporterName && item.reporterName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.accountNumber && item.accountNumber.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesWard && matchesCategory && matchesPriority && matchesSearch;
+    return matchesProvince && matchesMunicipality && matchesWard && matchesCategory && matchesSearch;
   });
 
   return (
@@ -245,7 +368,7 @@ export default function MunicipalDashboardPage() {
                   MUNICIPAL DISPATCH CONTROL
                 </h1>
                 <span className="rounded-full border border-teal-500/20 bg-teal-500/10 px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-teal-400">
-                  MSUNDUZI DISTRICT MESH
+                  SUPABASE LIVE SYNC
                 </span>
               </div>
               <p className="mt-0.5 text-[9px] tracking-[0.15em] text-muted">
@@ -258,7 +381,7 @@ export default function MunicipalDashboardPage() {
             <button
               onClick={handleManualRefresh}
               title="Refresh Feed"
-              className="glass-action px-3 py-1.5 text-xs text-teal-400 border-teal-500/30 hover:bg-teal-500/20 transition-all flex items-center gap-2"
+              className="glass-action px-3 py-1.5 text-xs text-teal-400 border-teal-500/30 hover:bg-teal-500/20 transition-all flex items-center gap-2 cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
               <span>Sync System</span>
@@ -323,65 +446,84 @@ export default function MunicipalDashboardPage() {
           </div>
         </div>
 
-        {/* SEARCH & WARD FILTER CONTROLS */}
-        <div className="glass-panel p-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-md bg-black/40 border border-white/10 rounded-xl px-3.5 py-2">
-            <Search className="h-4 w-4 text-teal-400 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by ID, street address, or issue..."
-              className="bg-transparent w-full text-xs text-white focus:outline-none placeholder:text-muted"
-            />
+        {/* SEARCH & PROVINCE/WARD FILTER CONTROLS */}
+        <div className="glass-panel p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-md bg-black/40 border border-white/10 rounded-xl px-3.5 py-2">
+              <Search className="h-4 w-4 text-teal-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by ID, name, account number, or street..."
+                className="bg-transparent w-full text-xs text-white focus:outline-none placeholder:text-muted"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="flex items-center gap-2 flex-1 md:flex-initial">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                <span className="text-xs text-muted">Category:</span>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full md:w-auto cursor-pointer"
+                >
+                  <option value="ALL" className="bg-neutral-900 text-white">All Categories</option>
+                  <option value="water" className="bg-neutral-900 text-white">Water & Sanitation</option>
+                  <option value="power" className="bg-neutral-900 text-white">Electricity & Power</option>
+                  <option value="roads" className="bg-neutral-900 text-white">Roads & Stormwater</option>
+                  <option value="civic" className="bg-neutral-900 text-white">Civic / Infrastructure</option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-white/10">
             <div className="flex items-center gap-2">
-              <Filter className="h-3.5 w-3.5 text-teal-400" />
-              <span className="text-xs text-muted">Ward:</span>
+              <span className="text-xs text-muted shrink-0">Province:</span>
+              <select
+                value={selectedProvince}
+                onChange={(e) => handleProvinceChange(e.target.value)}
+                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full cursor-pointer"
+              >
+                {Object.keys(SOUTH_AFRICAN_PROVINCES_CITIES_WARDS).map((prov) => (
+                  <option key={prov} value={prov} className="bg-neutral-900 text-white">
+                    {prov}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted shrink-0">Municipality:</span>
+              <select
+                value={selectedCity}
+                onChange={(e) => handleCityChange(e.target.value)}
+                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full cursor-pointer"
+              >
+                {Object.keys(currentCities).map((city) => (
+                  <option key={city} value={city} className="bg-neutral-900 text-white">
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Filter className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+              <span className="text-xs text-muted shrink-0">Ward:</span>
               <select
                 value={selectedWard}
                 onChange={(e) => setSelectedWard(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50"
+                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full cursor-pointer"
               >
-                <option value="ALL">All Municipal Wards</option>
-                <option value="Ward 26">Ward 26 (CBD / Central)</option>
-                <option value="Ward 28">Ward 28 (Raisethorpe)</option>
-                <option value="Ward 30">Ward 30 (Northdale)</option>
-                <option value="Ward 33">Ward 33 (Scottsville)</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <AlertOctagon className="h-3.5 w-3.5 text-teal-400" />
-              <span className="text-xs text-muted">Priority:</span>
-              <select
-                value={selectedPriority}
-                onChange={(e) => setSelectedPriority(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50"
-              >
-                <option value="ALL">All Urgency Levels</option>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-teal-400" />
-              <span className="text-xs text-muted">Category:</span>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50"
-              >
-                <option value="ALL">All Categories</option>
-                <option value="water">Water & Sanitation</option>
-                <option value="power">Electricity & Power</option>
-                <option value="roads">Roads & Stormwater</option>
-                <option value="civic">Civic / Infrastructure</option>
+                <option value="ALL" className="bg-neutral-900 text-white">All Municipal Wards</option>
+                {currentWards.map((ward) => (
+                  <option key={ward} value={ward} className="bg-neutral-900 text-white">
+                    {ward}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -403,10 +545,10 @@ export default function MunicipalDashboardPage() {
           <div className="space-y-3">
             {filteredReports.length === 0 ? (
               <div className="text-center py-12 text-muted text-xs">
-                No incident reports matched the selected ward or category filters.
+                No incident reports matched the selected province, municipality, ward, or category filters.
               </div>
             ) : (
-              filteredReports.map((item, index) => (
+              filteredReports.map((item) => (
                 <div
                   key={item.id}
                   className="p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
@@ -430,19 +572,6 @@ export default function MunicipalDashboardPage() {
                       <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white font-medium">
                         {item.ward || "Ward 26 (CBD / Central)"}
                       </span>
-                      {item.priority && (
-                        <span
-                          className={`text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded border ${
-                            item.priority === "Critical"
-                              ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                              : item.priority === "High"
-                              ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                              : "bg-teal-500/20 text-teal-300 border-teal-500/40"
-                          }`}
-                        >
-                          {item.priority} Urgency
-                        </span>
-                      )}
                     </div>
 
                     <h3 className="text-sm font-bold text-white">{item.title}</h3>
@@ -452,31 +581,27 @@ export default function MunicipalDashboardPage() {
                       <span className="flex items-center gap-1 text-teal-300 font-mono">
                         <MapPin className="h-3 w-3 text-teal-400" /> {item.locationAddress}
                       </span>
-                      <span>• {item.time}</span>
-                      {item.assignedDepotUnit && (
-                        <span className="text-muted font-mono text-[10px]">
-                          [Unit: {item.assignedDepotUnit}]
+                      {item.reporterName && (
+                        <span className="flex items-center gap-1 text-white">
+                          <User className="h-3 w-3 text-teal-400" /> {item.reporterName}
                         </span>
                       )}
+                      <span>• {item.time}</span>
                     </div>
                   </div>
 
                   {/* STATUS UPDATE & INSPECT CONTROLS */}
                   <div className="flex items-center gap-2 border-t md:border-t-0 border-white/10 pt-3 md:pt-0 shrink-0 flex-wrap">
-                    <span className={`text-[9px] font-mono px-2.5 py-1 rounded-full border font-bold ${index % 2 === 0 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : "bg-blue-500/15 text-blue-300 border-blue-500/30"}`}>
-                      {index % 2 === 0 ? "food aid" : "food stores"}
-                    </span>
-
                     <button
                       onClick={() => setActiveReportDetail(item)}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1"
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <FileSpreadsheet className="h-3.5 w-3.5 text-teal-400" /> Inspect
+                      <FileSpreadsheet className="h-3.5 w-3.5 text-teal-400" /> Inspect Details
                     </button>
 
                     <button
                       onClick={() => updateReportStatus(item.id, "Pending Review")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                         item.status === "Pending Review"
                           ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                           : "bg-white/5 text-muted hover:text-white border border-white/10"
@@ -487,7 +612,7 @@ export default function MunicipalDashboardPage() {
 
                     <button
                       onClick={() => updateReportStatus(item.id, "Auto-Dispatched")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                         item.status === "Auto-Dispatched"
                           ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
                           : "bg-white/5 text-muted hover:text-white border border-white/10"
@@ -498,7 +623,7 @@ export default function MunicipalDashboardPage() {
 
                     <button
                       onClick={() => updateReportStatus(item.id, "Resolved")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                         item.status === "Resolved"
                           ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
                           : "bg-white/5 text-muted hover:text-white border border-white/10"
@@ -515,10 +640,10 @@ export default function MunicipalDashboardPage() {
 
       </div>
 
-      {/* DETAILED MUNICIPAL INSPECTION MODAL */}
+      {/* DETAILED MUNICIPAL INSPECTION MODAL SHOWING EVERY SINGLE FIELD */}
       {activeReportDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="glass-panel w-full max-w-lg p-6 relative border-teal-500/30 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="glass-panel w-full max-w-xl p-6 relative border-teal-500/30 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <span className="text-xs font-mono text-teal-400 font-bold">
@@ -530,68 +655,86 @@ export default function MunicipalDashboardPage() {
               </div>
               <button
                 onClick={() => setActiveReportDetail(null)}
-                className="text-muted hover:text-white"
+                className="text-muted hover:text-white cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <div>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Reporter Full Name</span>
+                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
+                    <User className="h-3.5 w-3.5 text-teal-400" />
+                    {activeReportDetail.reporterName || "N/A"}
+                  </p>
+                </div>
+
+                <div>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Contact Phone Number</span>
+                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
+                    <PhoneCall className="h-3.5 w-3.5 text-teal-400" />
+                    {activeReportDetail.reporterPhone || "N/A"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <div>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipal Account Number</span>
+                  <p className="text-teal-300 font-mono font-medium mt-0.5 flex items-center gap-1">
+                    <Hash className="h-3.5 w-3.5 text-teal-400" />
+                    {activeReportDetail.accountNumber || "N/A"}
+                  </p>
+                </div>
+
+                <div>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Stand / Erf Number</span>
+                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
+                    <Home className="h-3.5 w-3.5 text-teal-400" />
+                    {activeReportDetail.standNumber || "N/A"}
+                  </p>
+                </div>
+              </div>
+
               <div>
-                <span className="text-muted block text-[10px] uppercase tracking-wider">
-                  Full Location / Street Address
-                </span>
-                <p className="text-white font-medium mt-0.5 flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-teal-400" />
+                <span className="text-muted block text-[10px] uppercase tracking-wider">Full Street Address / Location</span>
+                <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2.5 rounded-xl border border-white/5">
+                  <MapPin className="h-3.5 w-3.5 text-teal-400 shrink-0" />
                   {activeReportDetail.locationAddress}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">
-                    Municipal Ward
-                  </span>
-                  <p className="text-white font-medium mt-0.5">
-                    {activeReportDetail.ward || "Ward 26 (CBD / Central)"}
-                  </p>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Province</span>
+                  <p className="text-white font-medium mt-0.5">{activeReportDetail.province || "KwaZulu-Natal"}</p>
                 </div>
-
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">
-                    Log Timestamp
-                  </span>
-                  <p className="text-white font-medium mt-0.5">
-                    {activeReportDetail.time}
-                  </p>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipality / City</span>
+                  <p className="text-white font-medium mt-0.5">{activeReportDetail.municipality || "Msunduzi"}</p>
+                </div>
+                <div>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipal Ward</span>
+                  <p className="text-white font-medium mt-0.5">{activeReportDetail.ward || "Ward 26"}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">
-                    Assigned Depot Crew
-                  </span>
-                  <p className="text-teal-300 font-medium mt-0.5">
-                    {activeReportDetail.assignedDepotUnit || "Depot Triage Unit"}
-                  </p>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Assigned Depot Unit</span>
+                  <p className="text-teal-300 font-medium mt-0.5">{activeReportDetail.assignedDepotUnit}</p>
                 </div>
 
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">
-                    Citizen Contact
-                  </span>
-                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
-                    <PhoneCall className="h-3 w-3 text-teal-400" />
-                    {activeReportDetail.reporterPhone || "Direct Log"}
-                  </p>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">Estimated Fix Time</span>
+                  <p className="text-white font-medium mt-0.5">{activeReportDetail.estimatedFixTime}</p>
                 </div>
               </div>
 
               <div>
-                <span className="text-muted block text-[10px] uppercase tracking-wider">
-                  Incident Description
-                </span>
+                <span className="text-muted block text-[10px] uppercase tracking-wider">Issue Description & Impact</span>
                 <p className="text-muted leading-relaxed mt-0.5 bg-black/40 p-3 rounded-xl border border-white/5">
                   {activeReportDetail.description}
                 </p>
@@ -599,11 +742,9 @@ export default function MunicipalDashboardPage() {
 
               {activeReportDetail.coords && (
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">
-                    GPS Coordinates
-                  </span>
+                  <span className="text-muted block text-[10px] uppercase tracking-wider">GPS Coordinates</span>
                   <p className="text-xs font-mono text-teal-300 mt-0.5">
-                    {activeReportDetail.coords.lat}, {activeReportDetail.coords.lng}
+                    Lat: {activeReportDetail.coords.lat}, Lng: {activeReportDetail.coords.lng}
                   </p>
                 </div>
               )}
@@ -612,7 +753,7 @@ export default function MunicipalDashboardPage() {
             <div className="pt-2 border-t border-white/10 flex items-center justify-end">
               <button
                 onClick={() => setActiveReportDetail(null)}
-                className="px-4 py-2 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all"
+                className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer"
               >
                 Close Inspection
               </button>

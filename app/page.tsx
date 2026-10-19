@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Info,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 // Native Android Hardware & Push Notification Bridge Declaration
 declare global {
@@ -198,7 +199,7 @@ export default function HomePage() {
 
     // Live relative timestamp updater ticker every 5 seconds for instant updates
     const tickerInterval = setInterval(() => {
-      syncStatusFromData();
+      syncStatusFromSupabase();
       setNotifications((prev) =>
         prev.map((n) => ({
           ...n,
@@ -292,24 +293,30 @@ export default function HomePage() {
     setGreetingPrefix(timeOfDayGreeting);
     setUserName(savedName);
 
-    // Real-time Status Sync from localStorage
-    const syncStatusFromData = () => {
+    // Real-time Status Sync directly from Supabase reports table
+    const syncStatusFromSupabase = async () => {
       try {
-        const saved = localStorage.getItem("resigrid_active_reports");
+        const { data, error } = await supabase
+          .from("reports")
+          .select("*")
+          .order("id", { ascending: false });
+
+        if (error) {
+          console.error("Error fetching reports from Supabase for home summary:", error);
+          return;
+        }
+
         let hasWaterIssue = false;
         let hasPowerIssue = false;
 
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            parsed.forEach((report: any) => {
-              const cat = (report.category || "").toLowerCase();
-              if (cat === "water" || cat.includes("water")) hasWaterIssue = true;
-              if (cat === "power" || cat.includes("power") || cat.includes("electricity")) hasPowerIssue = true;
-            });
-            if (!hasWaterIssue && !hasPowerIssue && parsed.length > 0) {
-              hasWaterIssue = true;
-            }
+        if (data && data.length > 0) {
+          data.forEach((report: any) => {
+            const cat = (report.category || "").toLowerCase();
+            if (cat === "water" || cat.includes("water")) hasWaterIssue = true;
+            if (cat === "power" || cat.includes("power") || cat.includes("electricity")) hasPowerIssue = true;
+          });
+          if (!hasWaterIssue && !hasPowerIssue && data.length > 0) {
+            hasWaterIssue = true;
           }
         }
 
@@ -319,7 +326,7 @@ export default function HomePage() {
         setWaterStatus(newWater);
         setEnergyStatus(newEnergy);
 
-        if (hasWaterIssue || hasPowerIssue || (saved && JSON.parse(saved).length > 0)) {
+        if (hasWaterIssue || hasPowerIssue || (data && data.length > 0)) {
           setSummaryText("Issues have been reported in your area.");
         } else {
           setSummaryText("No issues reported in your area today.");
@@ -327,11 +334,11 @@ export default function HomePage() {
 
         loadGlobalNotifications();
       } catch (e) {
-        console.error("Error reading status data:", e);
+        console.error("Supabase connection exception on home sync:", e);
       }
     };
 
-    syncStatusFromData();
+    syncStatusFromSupabase();
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -339,7 +346,7 @@ export default function HomePage() {
       broadcastChannel.onmessage = (event) => {
         const { type, payload } = event.data || {};
         if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
-          syncStatusFromData();
+          syncStatusFromSupabase();
 
           if (payload && payload.title) {
             triggerNativeDeviceNotification(
@@ -353,19 +360,19 @@ export default function HomePage() {
     }
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" || e.key === "resigrid_global_notifications") {
-        syncStatusFromData();
+      if (e.key === "resigrid_global_notifications") {
+        loadGlobalNotifications();
       }
     };
 
     window.addEventListener("storage", handleStorageChange);
-    window.addEventListener("focus", syncStatusFromData);
+    window.addEventListener("focus", syncStatusFromSupabase);
 
     return () => {
       window.removeEventListener("resigrid_theme_change", handleThemeEvent);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener("focus", syncStatusFromData);
+      window.removeEventListener("focus", syncStatusFromSupabase);
       clearInterval(tickerInterval);
     };
   }, []);

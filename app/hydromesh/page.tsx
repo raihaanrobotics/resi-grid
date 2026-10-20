@@ -695,8 +695,7 @@ export default function HydroMeshPage() {
             {/* ACOUSTIC SCANNER INTERFACE */}
             <section
               id="acoustic-scanner-section"
-              onClick={isScanning ? stopAcousticScan : startAcousticScan}
-              className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
+              className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
               style={{
                 borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
                 backgroundColor: `color-mix(in srgb, ${accentColor} 5%, transparent)`,
@@ -713,7 +712,7 @@ export default function HydroMeshPage() {
                       Test Your Tap Flow
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Hold your phone microphone on your tap spout to test water line pressure.
+                      Click the button below to allow microphone access and test water line pressure near your tap spout.
                     </p>
                   </div>
                 </div>
@@ -724,7 +723,7 @@ export default function HydroMeshPage() {
                   {scanPhase === "idle" && (
                     <div className="text-center py-3">
                       <div 
-                        className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border animate-pulse"
+                        className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border"
                         style={{
                           borderColor: `color-mix(in srgb, ${accentColor} 50%, transparent)`,
                           backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
@@ -733,9 +732,9 @@ export default function HydroMeshPage() {
                       >
                         <Mic className="h-6 w-6" />
                       </div>
-                      <p className="text-xs sm:text-sm font-semibold text-white">Tap here to start test</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Ready to Test Tap Flow</p>
                       <p className="mt-1 text-[11px]" style={{ color: `color-mix(in srgb, ${accentColor} 80%, white)` }}>
-                        Hold phone near your running tap
+                        Hold phone near your running tap after clicking start
                       </p>
                     </div>
                   )}
@@ -788,7 +787,7 @@ export default function HydroMeshPage() {
                       </h3>
                       <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
                         {scanResultStatus
-                          ? "Acoustic signature recorded successfully. Tap again to test anytime."
+                          ? "Acoustic signature recorded successfully. Click button below to test again."
                           : "Microphone audio was captured. A calibrated pressure sensor is required to measure actual water pressure."}
                       </p>
                     </div>
@@ -803,18 +802,31 @@ export default function HydroMeshPage() {
                       <p className="text-xs font-medium text-rose-300 max-w-xs mx-auto">
                         {errorMessage}
                       </p>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void startAcousticScan();
-                        }}
-                        className="mt-3 rounded-lg border border-rose-300/30 px-3 py-2 text-[11px] text-white hover:bg-rose-500/10"
-                      >
-                        Retry microphone permission
-                      </button>
                     </div>
                   )}
+                </div>
+
+                {/* EXPLICIT TEST BUTTON INTERACTION */}
+                <div className="mt-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isScanning) {
+                        stopAcousticScan();
+                      } else {
+                        void startAcousticScan();
+                      }
+                    }}
+                    className="px-6 py-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation shadow-lg"
+                    style={{
+                      borderColor: `color-mix(in srgb, ${accentColor} 50%, transparent)`,
+                      backgroundColor: `color-mix(in srgb, ${accentColor} 25%, transparent)`,
+                      color: accentColor,
+                    }}
+                  >
+                    <Mic className={`h-4 w-4 ${isScanning ? "animate-pulse" : ""}`} />
+                    <span>{isScanning ? "Stop Testing" : scanPhase === "complete" ? "Test Again" : "Allow Mic & Test Tap Now"}</span>
+                  </button>
                 </div>
 
                 {/* OUTAGE PRE-WARNING BANNER */}

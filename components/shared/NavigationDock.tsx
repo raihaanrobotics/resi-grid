@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -14,7 +13,9 @@ import {
   Zap, 
   Shield, 
   CloudSun, 
-  Landmark 
+  Landmark,
+  Building2,
+  Wrench
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -53,15 +54,17 @@ const subFeaturesGroup3 = [
 
 export default function NavigationDock() {
   const pathname = usePathname();
-
   const isFeatureActive = featureRoutes.some((route) => pathname.startsWith(route));
-  
-  // Dock state: "main" | "sub1" (Water/Power) | "sub2" (Weather/Report) | "sub3" (Spaza/Blank)
-  const [activeDockView, setActiveDockView] = useState<"main" | "sub1" | "sub2" | "sub3">("main");
+  const isMunicipalContext = pathname.startsWith("/dashboard") || pathname.startsWith("/profile2");
+  const isCrewContext = pathname.startsWith("/crew") || pathname.startsWith("/profile3");
+  const [activeDockView, setActiveDockView] = useState<"main" | "sub1" | "sub2" | "sub3" | "staff">("main");
 
-  // Automatically switch sub-dock view based on active feature route
   useEffect(() => {
-    if (isFeatureActive) {
+    if (isMunicipalContext) {
+      setActiveDockView("staff");
+    } else if (isCrewContext) {
+      setActiveDockView("staff");
+    } else if (isFeatureActive) {
       if (pathname.startsWith("/weather") || pathname.startsWith("/civic")) {
         setActiveDockView("sub2");
       } else if (pathname.startsWith("/spazarescue")) {
@@ -72,7 +75,7 @@ export default function NavigationDock() {
     } else {
       setActiveDockView("main");
     }
-  }, [isFeatureActive, pathname]);
+  }, [isFeatureActive, pathname, isMunicipalContext, isCrewContext]);
 
   const handleReturnToMain = () => {
     setActiveDockView("main");
@@ -93,9 +96,25 @@ export default function NavigationDock() {
   return (
     <nav className="floating-dock w-[96%] max-w-xl mx-auto">
       <div className="floating-dock-inner overflow-x-auto no-scrollbar px-2 sm:px-3 py-2 flex items-center justify-between">
-        {activeDockView === "sub1" ? (
+        {activeDockView === "staff" ? (
+          <div className="flex items-center justify-around gap-2 w-full">
+            <Link
+              href={isMunicipalContext ? "/dashboard" : "/crew"}
+              className={`dock-item shrink-0 px-4 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/dashboard") || (isCrewContext && pathname === "/crew") ? "dock-active" : ""}`}
+            >
+              {isMunicipalContext ? <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} /> : <Wrench className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />}
+              <span className="truncate">Home</span>
+            </Link>
+            <Link
+              href={isMunicipalContext ? "/profile2" : "/profile3"}
+              className={`dock-item shrink-0 px-4 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/profile2") || (isCrewContext && pathname === "/profile3") ? "dock-active" : ""}`}
+            >
+              <UserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />
+              <span className="truncate">Profile</span>
+            </Link>
+          </div>
+        ) : activeDockView === "sub1" ? (
           <div className="flex items-center justify-between gap-1 w-full">
-            {/* Left Arrow: Returns to Main Navigation */}
             <button
               type="button"
               onClick={handleReturnToMain}
@@ -105,11 +124,7 @@ export default function NavigationDock() {
             >
               <ArrowLeft className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
             </button>
-
-            {/* Vertical Line Divider */}
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
-
-            {/* Sub-Feature Items Group 1 (Water & Power) */}
             <div className="flex items-center justify-around gap-1 sm:gap-2 w-full overflow-x-auto no-scrollbar">
               {subFeaturesGroup1.map((sub) => {
                 const SubIcon = sub.icon;
@@ -126,11 +141,7 @@ export default function NavigationDock() {
                 );
               })}
             </div>
-
-            {/* Vertical Line Divider */}
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
-
-            {/* Right Arrow: Switches to Sub-Feature Group 2 (Weather & Report) */}
             <button
               type="button"
               onClick={handleSwitchToGroup2}
@@ -143,7 +154,6 @@ export default function NavigationDock() {
           </div>
         ) : activeDockView === "sub2" ? (
           <div className="flex items-center justify-between gap-1 w-full">
-            {/* Left Arrow: Switches back to Sub-Feature Group 1 */}
             <button
               type="button"
               onClick={handleSwitchToGroup1}
@@ -153,11 +163,7 @@ export default function NavigationDock() {
             >
               <ArrowLeft className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
             </button>
-
-            {/* Vertical Line Divider */}
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
-
-            {/* Sub-Feature Items Group 2 (Weather & Report) */}
             <div className="flex items-center justify-around gap-1 sm:gap-2 w-full overflow-x-auto no-scrollbar">
               {subFeaturesGroup2.map((sub) => {
                 const SubIcon = sub.icon;
@@ -174,11 +180,7 @@ export default function NavigationDock() {
                 );
               })}
             </div>
-
-            {/* Vertical Line Divider */}
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
-
-            {/* Right Arrow: Switches to Sub-Feature Group 3 (Spaza & Blank Slot) */}
             <button
               type="button"
               onClick={handleSwitchToGroup3}
@@ -191,7 +193,6 @@ export default function NavigationDock() {
           </div>
         ) : activeDockView === "sub3" ? (
           <div className="flex items-center justify-between gap-1 w-full">
-            {/* Left Arrow: Switches back to Sub-Feature Group 2 */}
             <button
               type="button"
               onClick={handleSwitchToGroup2}
@@ -201,11 +202,7 @@ export default function NavigationDock() {
             >
               <ArrowLeft className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
             </button>
-
-            {/* Vertical Line Divider */}
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
-
-            {/* Sub-Feature Items Group 3 (Spaza + Completely Blank Reserved Slot) */}
             <div className="flex items-center justify-around gap-1 sm:gap-2 w-full overflow-x-auto no-scrollbar">
               {subFeaturesGroup3.map((sub) => {
                 const SubIcon = sub.icon;
@@ -221,8 +218,6 @@ export default function NavigationDock() {
                   </Link>
                 );
               })}
-
-              {/* Clean Blank Slot */}
               <div className="dock-item shrink-0 px-3 py-1 h-7 w-20 pointer-events-none opacity-0" aria-hidden="true" />
             </div>
           </div>
@@ -230,7 +225,6 @@ export default function NavigationDock() {
           navItems.map((item) => {
             const Icon = item.icon;
             let active = false;
-
             if (item.href === "/") {
               active = pathname === "/";
             } else if (item.label === "Features") {
@@ -238,7 +232,6 @@ export default function NavigationDock() {
             } else {
               active = pathname.startsWith(item.href);
             }
-
             return (
               <Link
                 key={item.label}

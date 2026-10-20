@@ -337,7 +337,12 @@ export default function VoltShieldPage() {
   const startShuntScan = async () => {
     setErrorMessage(null);
     setIsScanning(true);
+    setScanPhase("analyzing");
+    
     try {
+      // Small artificial delay for visual feedback of testing animation
+      await new Promise((resolve) => setTimeout(resolve, 800));
+
       const info = await Device.getBatteryInfo();
       if (
         typeof info.batteryLevel !== "number" ||
@@ -346,12 +351,14 @@ export default function VoltShieldPage() {
       ) {
         throw new Error("This device does not expose battery and charging status.");
       }
+      
+      const resolvedLevel = Math.round(info.batteryLevel * 100);
       setBatteryInfo({
         charging: info.isCharging,
-        level: Math.round(info.batteryLevel * 100),
+        level: resolvedLevel,
         supported: true,
       });
-      setScanPhase("analyzing");
+      
       setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       setScanPhase("complete");
     } catch (error) {
@@ -549,11 +556,7 @@ export default function VoltShieldPage() {
             
             {/* PHONE CHARGING TEST INTERFACE */}
             <section
-              onClick={() => {
-                if (!isScanning) void startShuntScan();
-              }}
-              aria-busy={isScanning}
-              className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
+              className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
               style={{
                 borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
                 backgroundColor: "color-mix(in srgb, var(--accent) 5%, transparent)",
@@ -568,7 +571,7 @@ export default function VoltShieldPage() {
                       Phone Battery &amp; Charging Status
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Tap below to read your phone's battery level and charging state. Phones do not expose household grid voltage, charger current, or neighborhood outage risk.
+                      Click the button below to read your phone's battery level and charging state. Phones do not expose household grid voltage, charger current, or neighborhood outage risk.
                     </p>
                   </div>
                 </div>
@@ -579,7 +582,7 @@ export default function VoltShieldPage() {
                   {scanPhase === "idle" && (
                     <div className="text-center py-3">
                       <div 
-                        className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border animate-pulse"
+                        className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border"
                         style={{
                           borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
                           backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
@@ -588,7 +591,7 @@ export default function VoltShieldPage() {
                       >
                         <Gauge className="h-6 w-6" />
                       </div>
-                      <p className="text-xs sm:text-sm font-semibold text-white">Tap to Read Phone Battery</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Ready to Read Phone Battery</p>
                       <p className="mt-1 text-[11px]" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>
                         Reads the phone battery and charging state using the native device API.
                       </p>
@@ -602,7 +605,7 @@ export default function VoltShieldPage() {
                         {Array.from({ length: 16 }, (_, index) => index).map((index) => (
                           <div
                             key={index}
-                            className="w-1.5 sm:w-2 rounded-t transition-all duration-75"
+                            className="w-1.5 sm:w-2 rounded-t transition-all duration-75 animate-pulse"
                             style={{ 
                               height: batteryInfo.level !== null && index < batteryInfo.level / 100 * 16 ? "80%" : "20%",
                               backgroundColor: "var(--accent)",
@@ -638,7 +641,7 @@ export default function VoltShieldPage() {
                         {batteryInfo.level}% Battery — {batteryInfo.charging ? "Charging" : "Not Charging"}
                       </h3>
                       <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
-                        Test is finished. Tap again to re-test.
+                        Test is finished. Click button below to re-test.
                       </p>
                     </div>
                   )}
@@ -654,6 +657,26 @@ export default function VoltShieldPage() {
                       </p>
                     </div>
                   )}
+                </div>
+
+                {/* EXPLICIT TEST BUTTON INTERACTION */}
+                <div className="mt-4 flex justify-center">
+                  <button
+                    type="button"
+                    disabled={isScanning}
+                    onClick={() => {
+                      if (!isScanning) void startShuntScan();
+                    }}
+                    className="px-6 py-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation shadow-lg disabled:opacity-50"
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
+                      backgroundColor: "color-mix(in srgb, var(--accent) 25%, transparent)",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isScanning ? "animate-spin" : ""}`} />
+                    <span>{isScanning ? "Reading Status..." : scanPhase === "complete" ? "Test Again" : "Test Phone Battery Now"}</span>
+                  </button>
                 </div>
 
                 {/* OUTAGE PRE-WARNING BANNER */}

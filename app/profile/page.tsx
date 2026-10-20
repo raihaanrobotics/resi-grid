@@ -193,14 +193,6 @@ const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string
   },
 };
 
-const DEPOT_UNITS = [
-  "Msunduzi Water Rapid Response - Unit 1",
-  "Msunduzi Electricity & High Voltage - Unit 4",
-  "Msunduzi Roads & Stormwater - Unit 2",
-  "Edendale Service Center - Unit 3",
-  "Northdale Infrastructure Depot - Unit 5",
-];
-
 export default function ProfilePage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -212,7 +204,6 @@ export default function ProfilePage() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [secretCode, setSecretCode] = useState("");
-  const [assignedDepot, setAssignedDepot] = useState(DEPOT_UNITS[0]);
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
 
@@ -340,7 +331,7 @@ export default function ProfilePage() {
               currentOrigin: window.location.origin,
               isNativePlatform: Capacitor.isNativePlatform(),
             }),
-            data: { role: accountType, assigned_depot: assignedDepot, full_name: fullName, phone }
+            data: { role: accountType, full_name: fullName, phone }
           }
         });
         if (error) {
@@ -432,7 +423,6 @@ export default function ProfilePage() {
       streetAddress,
       accountNumber,
       standNumber,
-      assignedDepot,
     };
 
     try {
@@ -675,13 +665,13 @@ export default function ProfilePage() {
         {/* HEADER */}
         <header className="glass-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 sm:p-5 relative z-20">
           <div className="flex items-center gap-3">
-            <div className={`feature-icon ${accountType === "municipal" ? "feature-energy" : accountType === "crew" ? "feature-water" : "feature-civic"} shrink-0`}>
-              {accountType === "municipal" ? <Building2 className="w-5 h-5 text-accent-dynamic" /> : accountType === "crew" ? <Wrench className="w-5 h-5 text-accent-dynamic" /> : <User className="w-5 h-5 text-accent-dynamic" />}
+            <div className="feature-icon feature-civic shrink-0">
+              <User className="w-5 h-5 text-accent-dynamic" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                  {accountType === "municipal" ? "MUNICIPAL STAFF PROFILE" : accountType === "crew" ? "FIELD CREW PROFILE" : "RESIDENT PROFILE"}
+                  RESIDENT PROFILE
                 </h1>
                 <span 
                   className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-accent-dynamic shrink-0 transition-all"
@@ -690,32 +680,13 @@ export default function ProfilePage() {
                     borderColor: "color-mix(in srgb, var(--accent) 35%, transparent)",
                   }}
                 >
-                  {accountType.toUpperCase()}
+                  RESIDENT
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                {accountType === "municipal" ? "AUTHORIZED MUNICIPAL DISPATCH ADMINISTRATOR" : accountType === "crew" ? "ACTIVE DEPUTY ARTISAN REQUISITION DESK" : "COMMUNITY RESIDENT & CITIZEN ACCOUNT"}
+                COMMUNITY RESIDENT & CITIZEN ACCOUNT
               </p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {accountType === "municipal" && (
-              <a
-                href="/dashboard"
-                className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 transition-all flex items-center gap-1.5"
-              >
-                <Building2 className="w-3.5 h-3.5" /> Open Municipal Dashboard
-              </a>
-            )}
-            {accountType === "crew" && (
-              <a
-                href="/crew"
-                className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all flex items-center gap-1.5"
-              >
-                <Wrench className="w-3.5 h-3.5" /> Open Field Crew Portal
-              </a>
-            )}
           </div>
         </header>
 
@@ -827,7 +798,7 @@ export default function ProfilePage() {
                 <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Account Details &amp; Operational Zone
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                {accountType === "municipal" ? "Manage municipal staff credentials and triage area." : accountType === "crew" ? "Manage field crew unit assignment and artisan contact info." : "Manage personal credentials and ward location."}
+                Manage personal credentials and ward location.
               </p>
             </div>
 

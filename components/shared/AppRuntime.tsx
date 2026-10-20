@@ -11,6 +11,41 @@ import { supabase } from "@/lib/supabase";
 
 let oneSignalInitialization: Promise<void> | null = null;
 
+type AppRole = "resident" | "municipal" | "crew";
+
+function getRoleHome(role: AppRole): string {
+  if (role === "municipal") return "/dashboard";
+  if (role === "crew") return "/crew";
+  return "/";
+}
+
+function isPathWithin(pathname: string, route: string): boolean {
+  return pathname === route || pathname.startsWith(`${route}/`);
+}
+
+function isRouteAllowedForRole(role: AppRole, pathname: string): boolean {
+  if (role === "municipal") {
+    return isPathWithin(pathname, "/dashboard") ||
+      pathname === "/profile2" ||
+      pathname === "/auth/callback";
+  }
+  if (role === "crew") {
+    return isPathWithin(pathname, "/crew") ||
+      pathname === "/profile3" ||
+      pathname === "/auth/callback";
+  }
+  return !isPathWithin(pathname, "/dashboard") &&
+    !isPathWithin(pathname, "/crew") &&
+    !isPathWithin(pathname, "/profile2") &&
+    !isPathWithin(pathname, "/profile3");
+}
+
+function getLoginRoute(pathname: string): string {
+  if (isPathWithin(pathname, "/dashboard") || pathname === "/profile2") return "/profile2";
+  if (isPathWithin(pathname, "/crew") || pathname === "/profile3") return "/profile3";
+  return "/profile";
+}
+
 async function initializeOneSignal(appId: string) {
   oneSignalInitialization ??= OneSignal.initialize(appId).catch((error: unknown) => {
     oneSignalInitialization = null;
@@ -110,9 +145,14 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
   const router = useRouter();
   const [sessionChecked, setSessionChecked] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<AppRole>("resident");
   const [locationPermissionReadyFor, setLocationPermissionReadyFor] = useState<string | null>(null);
   const authenticated = Boolean(userId);
-  const isPublicAuthRoute = pathname === "/profile" || pathname === "/auth/callback";
+  const isPublicAuthRoute = pathname === "/profile" ||
+    pathname === "/profile2" ||
+    pathname === "/profile3" ||
+    pathname === "/auth/callback";
+  const roleRouteAllowed = isRouteAllowedForRole(userRole, pathname);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -128,6 +168,8 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
       authEventReceived = true;
       if (mounted) {
         setUserId(session?.user.id ?? null);
+        const role = session?.user.user_metadata?.role;
+        setUserRole(role === "municipal" || role === "crew" ? role : "resident");
         setSessionChecked(true);
       }
     });
@@ -138,6 +180,8 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
       }
       if (mounted && !authEventReceived) {
         setUserId(data.session?.user.id ?? null);
+        const role = data.session?.user.user_metadata?.role;
+        setUserRole(role === "municipal" || role === "crew" ? role : "resident");
         setSessionChecked(true);
       }
     }).catch((error: unknown) => {
@@ -154,9 +198,13 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!sessionChecked) return;
     if (!authenticated && !isPublicAuthRoute) {
-      router.replace("/profile");
+      router.replace(getLoginRoute(pathname));
+      return;
     }
-  }, [authenticated, isPublicAuthRoute, pathname, router, sessionChecked]);
+    if (authenticated && !roleRouteAllowed) {
+      router.replace(getRoleHome(userRole));
+    }
+  }, [authenticated, isPublicAuthRoute, pathname, roleRouteAllowed, router, sessionChecked, userRole]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -218,7 +266,11 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
     });
   }, [sessionChecked, userId]);
 
-  if (!sessionChecked || (!authenticated && !isPublicAuthRoute)) {
+  if (
+    !sessionChecked ||
+    (!authenticated && !isPublicAuthRoute) ||
+    (authenticated && !roleRouteAllowed)
+  ) {
     return (
       <main className="resigrid-shell flex min-h-screen items-center justify-center text-white">
         <p className="animate-pulse text-xs tracking-[0.2em] text-muted">CHECKING SIGN-IN...</p>

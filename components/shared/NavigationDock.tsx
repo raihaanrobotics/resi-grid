@@ -17,7 +17,7 @@ import {
   Building2,
   Wrench
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 const navItems = [
   { label: "Home", href: "/", icon: Home },
@@ -57,25 +57,18 @@ export default function NavigationDock() {
   const isFeatureActive = featureRoutes.some((route) => pathname.startsWith(route));
   const isMunicipalContext = pathname.startsWith("/dashboard") || pathname.startsWith("/profile2");
   const isCrewContext = pathname.startsWith("/crew") || pathname.startsWith("/profile3");
-  const [activeDockView, setActiveDockView] = useState<"main" | "sub1" | "sub2" | "sub3" | "staff">("main");
-
-  useEffect(() => {
-    if (isMunicipalContext) {
-      setActiveDockView("staff");
-    } else if (isCrewContext) {
-      setActiveDockView("staff");
-    } else if (isFeatureActive) {
-      if (pathname.startsWith("/weather") || pathname.startsWith("/civic")) {
-        setActiveDockView("sub2");
-      } else if (pathname.startsWith("/spazarescue")) {
-        setActiveDockView("sub3");
-      } else {
-        setActiveDockView("sub1");
-      }
-    } else {
-      setActiveDockView("main");
-    }
-  }, [isFeatureActive, pathname, isMunicipalContext, isCrewContext]);
+  const [activeDockView, setActiveDockView] = useState<"main" | "sub1" | "sub2" | "sub3">("main");
+  const dockView = isMunicipalContext || isCrewContext
+    ? "staff"
+    : !isFeatureActive
+      ? "main"
+      : pathname.startsWith("/weather") || pathname.startsWith("/civic")
+        ? "sub2"
+        : pathname.startsWith("/spazarescue")
+          ? "sub3"
+          : pathname.startsWith("/hydromesh") || pathname.startsWith("/voltshield")
+            ? "sub1"
+            : activeDockView;
 
   const handleReturnToMain = () => {
     setActiveDockView("main");
@@ -96,7 +89,7 @@ export default function NavigationDock() {
   return (
     <nav className="floating-dock w-[96%] max-w-xl mx-auto">
       <div className="floating-dock-inner overflow-x-auto no-scrollbar px-2 sm:px-3 py-2 flex items-center justify-between">
-        {activeDockView === "staff" ? (
+        {dockView === "staff" ? (
           <div className="flex items-center justify-around gap-2 w-full">
             <Link
               href={isMunicipalContext ? "/dashboard" : "/crew"}
@@ -113,7 +106,7 @@ export default function NavigationDock() {
               <span className="truncate">Profile</span>
             </Link>
           </div>
-        ) : activeDockView === "sub1" ? (
+        ) : dockView === "sub1" ? (
           <div className="flex items-center justify-between gap-1 w-full">
             <button
               type="button"
@@ -152,7 +145,7 @@ export default function NavigationDock() {
               <ArrowRight className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
             </button>
           </div>
-        ) : activeDockView === "sub2" ? (
+        ) : dockView === "sub2" ? (
           <div className="flex items-center justify-between gap-1 w-full">
             <button
               type="button"
@@ -191,7 +184,7 @@ export default function NavigationDock() {
               <ArrowRight className="h-4 w-4 sm:h-[18px] sm:w-[18px]" strokeWidth={1.8} />
             </button>
           </div>
-        ) : activeDockView === "sub3" ? (
+        ) : dockView === "sub3" ? (
           <div className="flex items-center justify-between gap-1 w-full">
             <button
               type="button"

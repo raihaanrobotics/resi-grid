@@ -186,6 +186,7 @@ export default function FieldCrewPortalPage() {
 
   useEffect(() => {
     fetchCrewJobs();
+    const refreshInterval = window.setInterval(fetchCrewJobs, 20000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -193,14 +194,27 @@ export default function FieldCrewPortalPage() {
 
       broadcastChannel.onmessage = (event) => {
         const { type } = event.data || {};
-        if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
+        if (type === "NEW_REPORT" || type === "STATUS_UPDATE" || type === "CREW_ASSIGNED") {
           fetchCrewJobs();
         }
       };
     }
 
+    const reportChannel = supabase
+      .channel("crew-report-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => {
+        void fetchCrewJobs();
+      })
+      .subscribe((status, error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("Crew live report sync unavailable:", error ?? status);
+        }
+      });
+
     return () => {
+      window.clearInterval(refreshInterval);
       if (broadcastChannel) broadcastChannel.close();
+      void supabase.removeChannel(reportChannel);
     };
   }, []);
 
@@ -211,29 +225,44 @@ export default function FieldCrewPortalPage() {
   };
 
   // Update Status in Supabase & Dispatch Sync
-  const updateJobStatus = async (reportId: string, newStatus: ReportItem["status"]) => {
-    setReports((prev) =>
-      prev.map((r) => (r.id === reportId ? { ...r, status: newStatus } : r))
-    );
-
-    if (activeJob && activeJob.id === reportId) {
-      setActiveJob({ ...activeJob, status: newStatus });
-    }
-
+  const updateJobStatus = async (
+    reportId: string,
+    newStatus: ReportItem["status"],
+    description?: string
+  ): Promise<boolean> => {
+    const update: { status: ReportItem["status"]; description?: string } = { status: newStatus };
+    if (description !== undefined) update.description = description;
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("reports")
-        .update({ status: newStatus })
-        .eq("report_id", reportId);
+        .update(update)
+        .eq("report_id", reportId)
+        .select("report_id")
+        .maybeSingle();
 
       if (error) {
         console.error("Failed to update status in Supabase:", error);
-        return;
+        window.alert("Could not update this report. Please retry.");
+        return false;
       }
+      if (!data) {
+        window.alert("The report could not be found or you are not allowed to update it.");
+        return false;
+      }
+      setReports((prev) => prev.map((report) =>
+        report.id === reportId
+          ? { ...report, status: newStatus, ...(description !== undefined ? { description } : {}) }
+          : report
+      ));
+      setActiveJob((current) => current?.id === reportId
+        ? { ...current, status: newStatus, ...(description !== undefined ? { description } : {}) }
+        : current
+      );
       void dispatchReportScreenNotification(reportId);
     } catch (err) {
       console.error("Status update error:", err);
-      return;
+      window.alert("Could not update this report. Please retry.");
+      return false;
     }
 
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -244,6 +273,7 @@ export default function FieldCrewPortalPage() {
       });
       bc.close();
     }
+    return true;
   };
 
   // WhatsApp Citizen Dispatch Link
@@ -285,16 +315,8 @@ export default function FieldCrewPortalPage() {
     const updatedDescription = `${activeJob.description}\n\n[FIELD REPAIR LOG]: ${completionNotes || "Repair completed on-site."} | Requisitioned Spares: ${materialsSummary}`;
 
     try {
-      await supabase
-        .from("reports")
-        .update({
-          status: "Resolved",
-          description: updatedDescription,
-        })
-        .eq("report_id", activeJob.id);
-
-      // Auto-update local state
-      updateJobStatus(activeJob.id, "Resolved");
+      const updated = await updateJobStatus(activeJob.id, "Resolved", updatedDescription);
+      if (!updated) return;
 
       // Notify citizen via WhatsApp automatically
       const whatsappMsg = `Hello ${activeJob.reporterName}, Municipal Field Crew ${activeJob.assignedDepotUnit} has marked your ticket (${activeJob.id}) as RESOLVED at ${activeJob.locationAddress}.\n\nWork Done: ${completionNotes || "Site repairs completed successfully."}`;

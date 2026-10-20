@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   User,
-  Shield,
   MapPin,
   Save,
   CheckCircle2,
@@ -18,10 +17,6 @@ import {
   Lock,
   ArrowRight,
   KeyRound,
-  Building2,
-  UserCheck,
-  Wrench,
-  Package,
 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
@@ -198,18 +193,16 @@ export default function ProfilePage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [accountType, setAccountType] = useState<"resident" | "municipal" | "crew">("resident");
+  const accountType = "resident";
 
   // Auth Form States
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [secretCode, setSecretCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
 
   const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
-  const [selectedAccent, setSelectedAccent] = useState<string>("teal");
   const [stagedAccent, setStagedAccent] = useState<string>("teal");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
@@ -229,11 +222,15 @@ export default function ProfilePage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user) {
-          setIsAuthenticated(true);
-          const userEmail = session.user.email || "";
-          setEmail(userEmail);
-          const role = session.user.user_metadata?.role || "resident";
-          setAccountType(role);
+        const role = session.user.user_metadata?.role || "resident";
+        if (role === "municipal" || role === "crew") {
+          router.replace(role === "municipal" ? "/dashboard" : "/crew");
+          return;
+        }
+
+        setIsAuthenticated(true);
+        const userEmail = session.user.email || "";
+        setEmail(userEmail);
 
           // Try fetching stored profile details from Supabase metadata or fallback to local storage
           const meta = session.user.user_metadata || {};
@@ -261,7 +258,6 @@ export default function ProfilePage() {
     try {
       const savedAccent = localStorage.getItem("resigrid_accent_theme");
       if (savedAccent) {
-        setSelectedAccent(savedAccent);
         setStagedAccent(savedAccent);
         const matchedPalette = ACCENT_PALETTES.find((p) => p.id === savedAccent);
         if (matchedPalette) {
@@ -272,7 +268,7 @@ export default function ProfilePage() {
     } catch (e) {
       console.error("Error reading saved preferences:", e);
     }
-  }, []);
+  }, [router]);
 
   // Hide or show bottom navigation dock based on authentication state
   useEffect(() => {
@@ -307,20 +303,6 @@ export default function ProfilePage() {
     setAuthError("");
     setAuthMessage("");
 
-    if (accountType === "municipal") {
-      const validMunicipalKey = "MUNI-SECURE-2026";
-      if (secretCode !== validMunicipalKey) {
-        setAuthError("Invalid Municipal Authorization Key. Access restricted to authorized personnel only.");
-        return;
-      }
-    } else if (accountType === "crew") {
-      const validCrewKey = "CREW-ARTISAN-2026";
-      if (secretCode !== validCrewKey) {
-        setAuthError("Invalid Field Crew Security Code. Access restricted to authorized depot units.");
-        return;
-      }
-    }
-
     try {
       if (authMode === "signup") {
         const { data, error } = await supabase.auth.signUp({
@@ -331,7 +313,7 @@ export default function ProfilePage() {
               currentOrigin: window.location.origin,
               isNativePlatform: Capacitor.isNativePlatform(),
             }),
-            data: { role: accountType, full_name: fullName, phone }
+            data: { role: "resident", full_name: fullName, phone }
           }
         });
         if (error) {
@@ -358,24 +340,26 @@ export default function ProfilePage() {
         
         // Load user metadata on successful login
         const meta = data.session.user.user_metadata || {};
+        const role = meta.role || "resident";
+        if (role !== "resident") {
+          await supabase.auth.signOut();
+          setAuthError(
+            role === "municipal"
+              ? "This is a municipal account. Sign in through the Municipal Portal."
+              : "This is a crew account. Sign in through the Field Crew Portal."
+          );
+          return;
+        }
         setEmail(data.session.user.email || authEmail);
         setFullName(meta.full_name || "");
         setPhone(meta.phone || "");
       }
 
       setEmail(authEmail);
-      localStorage.setItem("resigrid_account_role", accountType);
-      
-      // Role-Based Redirection matching user instruction:
-      if (accountType === "municipal") {
-        router.replace("/dashboard");
-      } else if (accountType === "crew") {
-        router.replace("/crew");
-      } else {
-        setIsAuthenticated(true);
-      }
-    } catch (err: any) {
-      setAuthError(err.message || "Authentication failed");
+      localStorage.setItem("resigrid_account_role", "resident");
+      router.replace("/");
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : "Authentication failed");
     }
   };
 
@@ -402,7 +386,6 @@ export default function ProfilePage() {
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
-    setSelectedAccent(stagedAccent);
     const matchedPalette = ACCENT_PALETTES.find((p) => p.id === stagedAccent);
     if (matchedPalette) {
       localStorage.setItem("resigrid_accent_theme", stagedAccent);
@@ -508,39 +491,15 @@ export default function ProfilePage() {
               <KeyRound className="w-6 h-6" />
             </div>
             <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">RESIGRID SECURE LOGIN</h1>
-            <p className="text-xs text-muted">
-              Select your role to access your dedicated portal and profile.
-            </p>
+            <p className="text-xs text-muted">Sign in or create your resident account.</p>
           </div>
 
-          {/* 3-ROLE SELECTOR TABS */}
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10">
-            <button
-              type="button"
-              onClick={() => setAccountType("resident")}
-              className={`py-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                accountType === "resident" ? "bg-teal-500/20 text-teal-300 border border-teal-500/40" : "text-muted hover:text-white"
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" /> Resident
+          <div className="flex justify-center gap-4 text-[11px]">
+            <button type="button" onClick={() => router.push("/profile2")} className="text-blue-300 hover:underline">
+              Municipal portal
             </button>
-            <button
-              type="button"
-              onClick={() => setAccountType("municipal")}
-              className={`py-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                accountType === "municipal" ? "bg-blue-500/20 text-blue-300 border border-blue-500/40" : "text-muted hover:text-white"
-              }`}
-            >
-              <Building2 className="w-3.5 h-3.5" /> Municipal
-            </button>
-            <button
-              type="button"
-              onClick={() => setAccountType("crew")}
-              className={`py-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                accountType === "crew" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "text-muted hover:text-white"
-              }`}
-            >
-              <Wrench className="w-3.5 h-3.5" /> Field Crew
+            <button type="button" onClick={() => router.push("/profile3")} className="text-amber-300 hover:underline">
+              Field crew portal
             </button>
           </div>
 
@@ -565,7 +524,7 @@ export default function ProfilePage() {
                   required
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder={accountType === "municipal" ? "officer@msunduzi.gov.za" : accountType === "crew" ? "artisan@msunduzi.gov.za" : "name@example.co.za"}
+                  placeholder="name@example.co.za"
                   className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-teal-500 transition-colors"
                 />
               </div>
@@ -586,51 +545,11 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {accountType === "municipal" && (
-              <div>
-                <label className="text-[11px] font-medium text-blue-400 block mb-1 flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5" /> Municipal Private Authorization Key
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={secretCode}
-                  onChange={(e) => setSecretCode(e.target.value)}
-                  placeholder="Enter staff security code"
-                  className="w-full bg-blue-950/30 border border-blue-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-400 transition-colors"
-                />
-                <p className="text-[9px] text-muted mt-1">Routes directly to Municipal Dispatch Dashboard upon login.</p>
-              </div>
-            )}
-
-            {accountType === "crew" && (
-              <div>
-                <label className="text-[11px] font-medium text-amber-400 block mb-1 flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5" /> Field Crew Security Code
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={secretCode}
-                  onChange={(e) => setSecretCode(e.target.value)}
-                  placeholder="Enter crew authorization code"
-                  className="w-full bg-amber-950/30 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 transition-colors"
-                />
-                <p className="text-[9px] text-muted mt-1">Routes directly to Field Crew Operations Portal upon login.</p>
-              </div>
-            )}
-
             <button
               type="submit"
-              className={`w-full py-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
-                accountType === "municipal" 
-                  ? "bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30 text-blue-300" 
-                  : accountType === "crew"
-                  ? "bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30 text-amber-300"
-                  : "bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300"
-              }`}
+              className="w-full py-3 rounded-xl border bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg"
             >
-              <span>{authMode === "login" ? (accountType === "municipal" ? "Access Municipal Dashboard" : accountType === "crew" ? "Access Field Crew Portal" : "Sign In to Profile") : "Create Account & Register"}</span>
+              <span>{authMode === "login" ? "Sign In to Resident App" : "Create Resident Account"}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 

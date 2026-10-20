@@ -281,6 +281,7 @@ export default function MunicipalDashboardPage() {
 
   useEffect(() => {
     fetchSupabaseReports();
+    const refreshInterval = window.setInterval(fetchSupabaseReports, 20000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -294,30 +295,50 @@ export default function MunicipalDashboardPage() {
       };
     }
 
+    const reportChannel = supabase
+      .channel("municipal-report-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => {
+        void fetchSupabaseReports();
+      })
+      .subscribe((status, error) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error("Municipal live report sync unavailable:", error ?? status);
+        }
+      });
+
     return () => {
+      window.clearInterval(refreshInterval);
       if (broadcastChannel) broadcastChannel.close();
+      void supabase.removeChannel(reportChannel);
     };
   }, []);
 
   // Update Status & Sync with Supabase & BroadcastChannel
   const updateReportStatus = async (reportId: string, newStatus: ReportItem["status"]) => {
-    setReports((prev) =>
-      prev.map((r) => (r.id === reportId ? { ...r, status: newStatus } : r))
-    );
-
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("reports")
         .update({ status: newStatus })
-        .eq("report_id", reportId);
+        .eq("report_id", reportId)
+        .select("report_id")
+        .maybeSingle();
 
       if (error) {
         console.error("Failed to update status in Supabase:", error);
+        window.alert("Could not update this report. Please retry.");
         return;
       }
+      if (!data) {
+        window.alert("The report could not be found or you are not allowed to update it.");
+        return;
+      }
+      setReports((prev) =>
+        prev.map((report) => report.id === reportId ? { ...report, status: newStatus } : report)
+      );
       void dispatchReportScreenNotification(reportId);
     } catch (err) {
       console.error("Failed to update status in Supabase:", err);
+      window.alert("Could not update this report. Please retry.");
       return;
     }
 
@@ -337,16 +358,23 @@ export default function MunicipalDashboardPage() {
     if (!assigningJob) return;
 
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("reports")
         .update({
           assigned_depot: selectedCrewUnit,
           status: "Auto-Dispatched",
         })
-        .eq("report_id", assigningJob.id);
+        .eq("report_id", assigningJob.id)
+        .select("report_id")
+        .maybeSingle();
 
       if (error) {
         console.error("Failed to assign crew in Supabase:", error);
+        window.alert("Could not assign this report. Please retry.");
+        return;
+      }
+      if (!data) {
+        window.alert("The report could not be found or you are not allowed to assign it.");
         return;
       }
 
@@ -368,6 +396,7 @@ export default function MunicipalDashboardPage() {
       setAssigningJob(null);
     } catch (err) {
       console.error("Crew assignment exception:", err);
+      window.alert("Could not assign this report. Please retry.");
     }
   };
 

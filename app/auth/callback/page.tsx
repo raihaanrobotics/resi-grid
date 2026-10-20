@@ -36,7 +36,7 @@ export default function AuthCallbackPage() {
         ? "/dashboard"
         : role === "crew"
           ? "/crew"
-          : "/profile";
+          : "/";
       if (active) router.replace(destination);
     })().catch((error: unknown) => {
       console.error("Could not complete email confirmation:", error);

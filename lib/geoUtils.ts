@@ -44,7 +44,10 @@ export function filterWithinRadius<T extends { latitude: number; longitude: numb
   items: T[],
   radiusKm = 10.0
 ): (T & { distanceKm: number; formattedDistance: string })[] {
+  if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) return [];
+
   return items
+    .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
     .map((item) => {
       const rawDistance = getDistanceInKm(userLat, userLng, item.latitude, item.longitude);
       const distanceKm = Number(rawDistance.toFixed(3)); // Sub-meter mathematical accuracy

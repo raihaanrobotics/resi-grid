@@ -74,7 +74,8 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
 
   // Industrial-Grade Geolocation Handler: Fetches real-time location on initial load and locks in, preventing background loops unless manually triggered.
   useEffect(() => {
-    if (location?.latitude && location?.longitude && (!hasFetchedOnce.current || manualTrigger > 0)) {
+    if (location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude) &&
+      (!hasFetchedOnce.current || manualTrigger > 0)) {
       hasFetchedOnce.current = true;
       performReverseGeocoding(location.latitude, location.longitude);
     }

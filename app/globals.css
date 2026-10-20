@@ -898,6 +898,14 @@ a {
 /* FLOATING DOCK */
 /* ========================================================= */
 
+/* Strictly hide the floating navigation dock on /dashboard and /crew routes */
+body:has(main[data-route="dashboard"]),
+body:has(main[data-route="crew"]) {
+  .floating-dock {
+    display: none !important;
+  }
+}
+
 .floating-dock {
   position: fixed;
   z-index: 50;

@@ -13,22 +13,25 @@ import {
   UserCheck,
   SlidersHorizontal,
   FileSpreadsheet,
-  AlertOctagon,
   PhoneCall,
   X,
   User,
   Hash,
   Home,
+  Wrench,
+  MessageCircle,
+  Send,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 
 interface ReportItem {
   id: string;
-  category: "water" | "power" | "roads" | "civic";
+  category: "water" | "power" | "other";
   title: string;
   description: string;
   locationAddress: string;
-  status: "Auto-Dispatched" | "Pending Review" | "Resolved";
+  status: "Auto-Dispatched" | "Pending Review" | "On Site" | "In Progress" | "Resolved";
   time: string;
   province?: string;
   municipality?: string;
@@ -41,6 +44,14 @@ interface ReportItem {
   estimatedFixTime?: string;
   coords?: { lat: number; lng: number };
 }
+
+const DEPOT_UNITS = [
+  "Msunduzi Water Rapid Response - Unit 1",
+  "Msunduzi Electricity & High Voltage - Unit 4",
+  "Msunduzi Roads & Stormwater - Unit 2",
+  "Edendale Service Center - Unit 3",
+  "Northdale Infrastructure Depot - Unit 5",
+];
 
 // South African Provinces, Cities, and Wards Hierarchy Dataset
 const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string[]>> = {
@@ -210,7 +221,10 @@ export default function MunicipalDashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeReportDetail, setActiveReportDetail] = useState<ReportItem | null>(null);
 
-  // Handle Province Change to update cities and reset ward
+  // Crew Assignment Modal State
+  const [assigningJob, setAssigningJob] = useState<ReportItem | null>(null);
+  const [selectedCrewUnit, setSelectedCrewUnit] = useState<string>(DEPOT_UNITS[0]);
+
   const handleProvinceChange = (province: string) => {
     setSelectedProvince(province);
     const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[province] || {};
@@ -219,13 +233,11 @@ export default function MunicipalDashboardPage() {
     setSelectedWard("ALL");
   };
 
-  // Handle City Change
   const handleCityChange = (city: string) => {
     setSelectedCity(city);
     setSelectedWard("ALL");
   };
 
-  // Fetch reports exclusively from Supabase and sync with BroadcastChannel
   const fetchSupabaseReports = async () => {
     try {
       const { data, error } = await supabase
@@ -254,8 +266,8 @@ export default function MunicipalDashboardPage() {
           reporterPhone: row.reporter_phone || "N/A",
           accountNumber: row.account_number || "N/A",
           standNumber: row.stand_number || "N/A",
-          assignedDepotUnit: row.assigned_depot || "Depot Rapid Response Queue",
-          estimatedFixTime: row.estimated_fix_time || "Pending Triage",
+          assignedDepotUnit: row.assigned_depot || DEPOT_UNITS[0],
+          estimatedFixTime: row.estimated_fix_time || "4 Hours Target",
           coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
         }));
 
@@ -267,7 +279,6 @@ export default function MunicipalDashboardPage() {
   };
 
   useEffect(() => {
-    // Initial fetch from Supabase
     fetchSupabaseReports();
 
     let broadcastChannel: BroadcastChannel | null = null;
@@ -276,13 +287,8 @@ export default function MunicipalDashboardPage() {
 
       broadcastChannel.onmessage = (event) => {
         const { type, payload } = event.data || {};
-        if (type === "NEW_REPORT" && payload) {
+        if (type === "NEW_REPORT" || type === "STATUS_UPDATE" || type === "CREW_ASSIGNED") {
           fetchSupabaseReports();
-        }
-        if (type === "STATUS_UPDATE" && payload) {
-          setReports((prev) =>
-            prev.map((r) => (r.id === payload.id ? { ...r, status: payload.status } : r))
-          );
         }
       };
     }
@@ -292,21 +298,26 @@ export default function MunicipalDashboardPage() {
     };
   }, []);
 
-  // Update Status & Sync with Supabase and BroadcastChannel
-  const updateReportStatus = async (reportId: string, newStatus: "Auto-Dispatched" | "Pending Review" | "Resolved") => {
-    const updatedReports = reports.map((item) =>
-      item.id === reportId ? { ...item, status: newStatus } : item
+  // Update Status & Sync with Supabase & BroadcastChannel
+  const updateReportStatus = async (reportId: string, newStatus: ReportItem["status"]) => {
+    setReports((prev) =>
+      prev.map((r) => (r.id === reportId ? { ...r, status: newStatus } : r))
     );
 
-    setReports(updatedReports);
-
     try {
-      await supabase
+      const { error } = await supabase
         .from("reports")
         .update({ status: newStatus })
         .eq("report_id", reportId);
+
+      if (error) {
+        console.error("Failed to update status in Supabase:", error);
+        return;
+      }
+      void dispatchReportScreenNotification(reportId);
     } catch (err) {
       console.error("Failed to update status in Supabase:", err);
+      return;
     }
 
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -319,6 +330,53 @@ export default function MunicipalDashboardPage() {
     }
   };
 
+  // Assign Specific Crew Unit and Sync to Supabase & /crew portal
+  const handleConfirmCrewAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assigningJob) return;
+
+    try {
+      const { error } = await supabase
+        .from("reports")
+        .update({
+          assigned_depot: selectedCrewUnit,
+          status: "Auto-Dispatched",
+        })
+        .eq("report_id", assigningJob.id);
+
+      if (error) {
+        console.error("Failed to assign crew in Supabase:", error);
+        return;
+      }
+
+      setReports((prev) =>
+        prev.map((r) =>
+          r.id === assigningJob.id ? { ...r, assignedDepotUnit: selectedCrewUnit, status: "Auto-Dispatched" } : r
+        )
+      );
+
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("resigrid_reports_dispatch");
+        bc.postMessage({
+          type: "CREW_ASSIGNED",
+          payload: { id: assigningJob.id, unit: selectedCrewUnit },
+        });
+        bc.close();
+      }
+
+      setAssigningJob(null);
+    } catch (err) {
+      console.error("Crew assignment exception:", err);
+    }
+  };
+
+  // WhatsApp Dispatch Helper
+  const handleWhatsAppNotify = (job: ReportItem) => {
+    const phone = (job.reporterPhone || "27821234567").replace(/[^0-9]/g, "");
+    const text = `Hello ${job.reporterName}, Municipal Dispatch has assigned *${job.assignedDepotUnit}* to your report (${job.id}: ${job.title}) at ${job.locationAddress}. Status: *${job.status}*.`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+  };
+
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await fetchSupabaseReports();
@@ -328,7 +386,6 @@ export default function MunicipalDashboardPage() {
   const currentCities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
   const currentWards = currentCities[selectedCity] || [];
 
-  // Filtered dataset calculation based on province, municipality, ward, category, and search query
   const filteredReports = reports.filter((item) => {
     const matchesProvince = !item.province || item.province === selectedProvince;
     const matchesMunicipality = !item.municipality || item.municipality === selectedCity;
@@ -346,7 +403,7 @@ export default function MunicipalDashboardPage() {
   });
 
   return (
-    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
+    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] pb-28 pt-4 px-3 sm:px-6 lg:px-10 max-w-[1920px] mx-auto space-y-5 selection:bg-teal-500/30 selection:text-teal-200">
       <div className="ambient-background" aria-hidden="true">
         <div className="ambient-orb orb-one" />
         <div className="ambient-orb orb-two" />
@@ -354,91 +411,88 @@ export default function MunicipalDashboardPage() {
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-6 px-4 pb-32 pt-5 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
+      <div className="relative z-10 space-y-6">
         
         {/* HEADER */}
-        <header className="glass-header flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
+        <header className="glass-header flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-5">
           <div className="flex items-center gap-3">
             <div className="feature-icon feature-civic">
               <Building2 className="h-5 w-5 text-teal-400" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-sm font-semibold tracking-[0.2em] text-white">
+                <h1 className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-white">
                   MUNICIPAL DISPATCH CONTROL
                 </h1>
-                <span className="rounded-full border border-teal-500/20 bg-teal-500/10 px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-teal-400">
-                  SUPABASE LIVE SYNC
-                </span>
               </div>
-              <p className="mt-0.5 text-[9px] tracking-[0.15em] text-muted">
-                REAL-TIME WARD TRIAGE & CREW DEPLOYMENT DASHBOARD
+              <p className="mt-0.5 text-[8px] sm:text-[9px] tracking-[0.15em] text-muted">
+                REAL-TIME WARD TRIAGE &amp; CREW DEPLOYMENT DASHBOARD
               </p>
             </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             <button
               onClick={handleManualRefresh}
               title="Refresh Feed"
               className="glass-action px-3 py-1.5 text-xs text-teal-400 border-teal-500/30 hover:bg-teal-500/20 transition-all flex items-center gap-2 cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span>Sync System</span>
+              <span className="hidden sm:inline">Sync System</span>
             </button>
           </div>
         </header>
 
         {/* METRICS & WARD OVERVIEW */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="glass-panel p-5 relative">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
               <span className="eyebrow text-teal-400">TOTAL DISPATCHES</span>
               <Building2 className="h-4 w-4 text-teal-400" />
             </div>
             <div className="my-2">
-              <span className="text-3xl font-extrabold text-white">{reports.length}</span>
+              <span className="text-2xl sm:text-3xl font-extrabold text-white">{reports.length}</span>
               <span className="text-xs text-muted block mt-0.5">Across All Municipal Wards</span>
             </div>
           </div>
 
-          <div className="glass-panel p-5 relative">
+          <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
               <span className="eyebrow text-amber-400">PENDING CREW REVIEW</span>
               <Clock className="h-4 w-4 text-amber-400" />
             </div>
             <div className="my-2">
-              <span className="text-3xl font-extrabold text-white">
+              <span className="text-2xl sm:text-3xl font-extrabold text-white">
                 {reports.filter((r) => r.status === "Pending Review").length}
               </span>
               <span className="text-xs text-muted block mt-0.5">Awaiting Triage Confirmation</span>
             </div>
           </div>
 
-          <div className="glass-panel p-5 relative">
+          <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
               <span className="eyebrow text-teal-400">DISPATCHED CREWS</span>
               <UserCheck className="h-4 w-4 text-teal-400" />
             </div>
             <div className="my-2">
-              <span className="text-3xl font-extrabold text-white">
+              <span className="text-2xl sm:text-3xl font-extrabold text-white">
                 {reports.filter((r) => r.status === "Auto-Dispatched").length}
               </span>
               <span className="text-xs text-muted block mt-0.5">Active Depot Work Orders</span>
             </div>
           </div>
 
-          <div className="glass-panel p-5 relative">
+          <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
               <span className="eyebrow text-cyan-400">RESOLVED TODAY</span>
               <CheckCircle2 className="h-4 w-4 text-cyan-400" />
             </div>
             <div className="my-2">
-              <span className="text-3xl font-extrabold text-white">
+              <span className="text-2xl sm:text-3xl font-extrabold text-white">
                 {reports.filter((r) => r.status === "Resolved").length}
               </span>
               <span className="text-xs text-muted block mt-0.5">Confirmed Repairs</span>
@@ -446,9 +500,9 @@ export default function MunicipalDashboardPage() {
           </div>
         </div>
 
-        {/* SEARCH & PROVINCE/WARD FILTER CONTROLS */}
+        {/* SEARCH & FILTER CONTROLS */}
         <div className="glass-panel p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-md bg-black/40 border border-white/10 rounded-xl px-3.5 py-2">
               <Search className="h-4 w-4 text-teal-400 shrink-0" />
               <input
@@ -472,8 +526,7 @@ export default function MunicipalDashboardPage() {
                   <option value="ALL" className="bg-neutral-900 text-white">All Categories</option>
                   <option value="water" className="bg-neutral-900 text-white">Water & Sanitation</option>
                   <option value="power" className="bg-neutral-900 text-white">Electricity & Power</option>
-                  <option value="roads" className="bg-neutral-900 text-white">Roads & Stormwater</option>
-                  <option value="civic" className="bg-neutral-900 text-white">Civic / Infrastructure</option>
+                  <option value="other" className="bg-neutral-900 text-white">Other Infrastructure</option>
                 </select>
               </div>
             </div>
@@ -530,15 +583,15 @@ export default function MunicipalDashboardPage() {
         </div>
 
         {/* INCIDENT TABLE AND WARD MANAGEMENT */}
-        <div className="glass-panel p-6 relative">
+        <div className="glass-panel p-4 sm:p-6 relative">
           <div className="panel-reflection" />
 
-          <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
-            <h2 className="text-base font-semibold text-white flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 text-teal-400" /> Municipal Ward Incident Queue
+          <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3 gap-2">
+            <h2 className="text-xs sm:text-base font-semibold text-white flex items-center gap-2 truncate">
+              <ShieldAlert className="h-4 w-4 text-teal-400 shrink-0" /> <span className="truncate">Municipal Ward Incident Queue</span>
             </h2>
-            <span className="text-xs font-mono text-teal-400">
-              {filteredReports.length} Reports Listed
+            <span className="text-xs font-mono text-teal-400 shrink-0">
+              {filteredReports.length} Reports
             </span>
           </div>
 
@@ -553,8 +606,8 @@ export default function MunicipalDashboardPage() {
                   key={item.id}
                   className="p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
                 >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono font-bold text-teal-400">{item.id}</span>
                       <span
                         className={`text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border ${
@@ -562,66 +615,54 @@ export default function MunicipalDashboardPage() {
                             ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20"
                             : item.category === "power"
                             ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                            : item.category === "roads"
-                            ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-                            : "bg-teal-500/10 text-teal-400 border-teal-500/20"
+                            : "bg-purple-500/10 text-purple-400 border-purple-500/20"
                         }`}
                       >
                         {item.category}
                       </span>
                       <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white font-medium">
-                        {item.ward || "Ward 26 (CBD / Central)"}
+                        {item.ward || "Ward 26"}
+                      </span>
+                      <span className="text-[10px] bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded text-teal-300 font-medium">
+                        Crew: {item.assignedDepotUnit?.split(" - ")[0]}
                       </span>
                     </div>
 
                     <h3 className="text-sm font-bold text-white">{item.title}</h3>
-                    <p className="text-xs text-muted leading-relaxed">{item.description}</p>
+                    <p className="text-xs text-muted leading-relaxed line-clamp-2">{item.description}</p>
 
-                    <div className="flex items-center gap-4 text-[11px] text-muted pt-1 flex-wrap">
-                      <span className="flex items-center gap-1 text-teal-300 font-mono">
-                        <MapPin className="h-3 w-3 text-teal-400" /> {item.locationAddress}
+                    <div className="flex items-center gap-3 text-[11px] text-muted pt-1 flex-wrap">
+                      <span className="flex items-center gap-1 text-teal-300 font-mono truncate max-w-full">
+                        <MapPin className="h-3 w-3 text-teal-400 shrink-0" /> {item.locationAddress}
                       </span>
                       {item.reporterName && (
-                        <span className="flex items-center gap-1 text-white">
-                          <User className="h-3 w-3 text-teal-400" /> {item.reporterName}
+                        <span className="flex items-center gap-1 text-white truncate">
+                          <User className="h-3 w-3 text-teal-400 shrink-0" /> {item.reporterName}
                         </span>
                       )}
-                      <span>• {item.time}</span>
                     </div>
                   </div>
 
-                  {/* STATUS UPDATE & INSPECT CONTROLS */}
+                  {/* STATUS UPDATE & ASSIGNMENT CONTROLS */}
                   <div className="flex items-center gap-2 border-t md:border-t-0 border-white/10 pt-3 md:pt-0 shrink-0 flex-wrap">
                     <button
+                      type="button"
+                      onClick={() => setAssigningJob(item)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-500/20 text-teal-300 hover:bg-teal-500/30 border border-teal-500/40 transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Wrench className="h-3.5 w-3.5" /> Assign Crew
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setActiveReportDetail(item)}
                       className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <FileSpreadsheet className="h-3.5 w-3.5 text-teal-400" /> Inspect Details
+                      <FileSpreadsheet className="h-3.5 w-3.5 text-teal-400" /> Inspect
                     </button>
 
                     <button
-                      onClick={() => updateReportStatus(item.id, "Pending Review")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        item.status === "Pending Review"
-                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                          : "bg-white/5 text-muted hover:text-white border border-white/10"
-                      }`}
-                    >
-                      Pending
-                    </button>
-
-                    <button
-                      onClick={() => updateReportStatus(item.id, "Auto-Dispatched")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        item.status === "Auto-Dispatched"
-                          ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
-                          : "bg-white/5 text-muted hover:text-white border border-white/10"
-                      }`}
-                    >
-                      Dispatched
-                    </button>
-
-                    <button
+                      type="button"
                       onClick={() => updateReportStatus(item.id, "Resolved")}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                         item.status === "Resolved"
@@ -629,7 +670,16 @@ export default function MunicipalDashboardPage() {
                           : "bg-white/5 text-muted hover:text-white border border-white/10"
                       }`}
                     >
-                      Resolved
+                      Resolve
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleWhatsAppNotify(item)}
+                      title="WhatsApp Resident"
+                      className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                    >
+                      <MessageCircle className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -640,10 +690,68 @@ export default function MunicipalDashboardPage() {
 
       </div>
 
-      {/* DETAILED MUNICIPAL INSPECTION MODAL SHOWING EVERY SINGLE FIELD */}
+      {/* ASSIGN CREW MODAL */}
+      {assigningJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="glass-panel w-full max-w-md p-5 relative border-teal-500/30 space-y-4 rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <span className="text-xs font-mono text-teal-400 font-bold">{assigningJob.id}</span>
+                <h3 className="text-sm font-bold text-white">Assign Field Crew Unit</h3>
+              </div>
+              <button onClick={() => setAssigningJob(null)} className="text-muted hover:text-white cursor-pointer">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmCrewAssignment} className="space-y-4 text-xs">
+              <div className="bg-black/40 p-3 rounded-xl border border-white/5 space-y-1">
+                <span className="text-muted text-[10px] uppercase">Incident</span>
+                <p className="text-white font-medium">{assigningJob.title}</p>
+                <p className="text-teal-300 font-mono text-[11px]">{assigningJob.locationAddress}</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase tracking-wider text-teal-400 font-semibold block">
+                  Select Specialized Depot Unit
+                </label>
+                <select
+                  value={selectedCrewUnit}
+                  onChange={(e) => setSelectedCrewUnit(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-teal-500/50 cursor-pointer"
+                >
+                  {DEPOT_UNITS.map((unit) => (
+                    <option key={unit} value={unit} className="bg-neutral-900 text-white">
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 border-t border-white/10 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAssigningJob(null)}
+                  className="px-4 py-2 rounded-xl bg-white/5 text-muted hover:text-white text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Send className="h-3.5 w-3.5" /> Dispatch to Crew
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DETAILED INSPECTION MODAL */}
       {activeReportDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="glass-panel w-full max-w-xl p-6 relative border-teal-500/30 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="glass-panel w-full max-w-xl p-6 relative border-teal-500/30 space-y-4 max-h-[90vh] overflow-y-auto rounded-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <span className="text-xs font-mono text-teal-400 font-bold">
@@ -706,21 +814,6 @@ export default function MunicipalDashboardPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Province</span>
-                  <p className="text-white font-medium mt-0.5">{activeReportDetail.province || "KwaZulu-Natal"}</p>
-                </div>
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipality / City</span>
-                  <p className="text-white font-medium mt-0.5">{activeReportDetail.municipality || "Msunduzi"}</p>
-                </div>
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipal Ward</span>
-                  <p className="text-white font-medium mt-0.5">{activeReportDetail.ward || "Ward 26"}</p>
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <span className="text-muted block text-[10px] uppercase tracking-wider">Assigned Depot Unit</span>
@@ -739,15 +832,6 @@ export default function MunicipalDashboardPage() {
                   {activeReportDetail.description}
                 </p>
               </div>
-
-              {activeReportDetail.coords && (
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">GPS Coordinates</span>
-                  <p className="text-xs font-mono text-teal-300 mt-0.5">
-                    Lat: {activeReportDetail.coords.lat}, Lng: {activeReportDetail.coords.lng}
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="pt-2 border-t border-white/10 flex items-center justify-end">

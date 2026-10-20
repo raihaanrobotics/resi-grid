@@ -19,6 +19,8 @@ import {
   KeyRound,
   Building2,
   UserCheck,
+  Wrench,
+  Package,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -188,16 +190,25 @@ const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string
   },
 };
 
+const DEPOT_UNITS = [
+  "Msunduzi Water Rapid Response - Unit 1",
+  "Msunduzi Electricity & High Voltage - Unit 4",
+  "Msunduzi Roads & Stormwater - Unit 2",
+  "Edendale Service Center - Unit 3",
+  "Northdale Infrastructure Depot - Unit 5",
+];
+
 export default function ProfilePage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [accountType, setAccountType] = useState<"resident" | "municipal">("resident");
+  const [accountType, setAccountType] = useState<"resident" | "municipal" | "crew">("resident");
 
   // Auth Form States
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [municipalSecretCode, setMunicipalSecretCode] = useState("");
+  const [secretCode, setSecretCode] = useState("");
+  const [assignedDepot, setAssignedDepot] = useState(DEPOT_UNITS[0]);
   const [authError, setAuthError] = useState("");
 
   const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
@@ -216,11 +227,7 @@ export default function ProfilePage() {
   const [accountNumber, setAccountNumber] = useState("800459201");
   const [standNumber, setStandNumber] = useState("Erf 1452 Scottsville");
 
-  // App Preference Toggles
-  const [emergencyAlerts, setEmergencyAlerts] = useState(true);
-  const [communityBroadcasts, setCommunityBroadcasts] = useState(true);
-
-  // Check Supabase Auth Session on Mount & hide global navigation if unauthenticated
+  // Check Supabase Auth Session on Mount
   useEffect(() => {
     async function checkSession() {
       try {
@@ -229,16 +236,15 @@ export default function ProfilePage() {
           setIsAuthenticated(true);
           if (session.user?.email) {
             setEmail(session.user.email);
-            if (session.user.email.endsWith("@gov.za") || session.user.user_metadata?.role === "municipal") {
-              setAccountType("municipal");
-            }
+            const role = session.user.user_metadata?.role || "resident";
+            setAccountType(role);
           }
         } else {
           const savedProfile = localStorage.getItem("resigrid_user_profile");
-          const savedRole = localStorage.getItem("resigrid_account_role");
+          const savedRole = localStorage.getItem("resigrid_account_role") as any;
           if (savedProfile) {
             setIsAuthenticated(true);
-            if (savedRole === "municipal") setAccountType("municipal");
+            if (savedRole) setAccountType(savedRole);
           }
         }
       } catch (err) {
@@ -275,6 +281,7 @@ export default function ProfilePage() {
         if (parsed.streetAddress) setStreetAddress(parsed.streetAddress);
         if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
         if (parsed.standNumber) setStandNumber(parsed.standNumber);
+        if (parsed.assignedDepot) setAssignedDepot(parsed.assignedDepot);
       }
     } catch (e) {
       console.error("Error reading saved preferences:", e);
@@ -294,26 +301,32 @@ export default function ProfilePage() {
     };
   }, [isAuthenticated]);
 
-  // Handle Authentication (Login / Signup) via Supabase
+  // Handle Authentication (Login / Signup) via Supabase with Role-Based Routing
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
 
     if (accountType === "municipal") {
       const validMunicipalKey = "MUNI-SECURE-2026";
-      if (municipalSecretCode !== validMunicipalKey) {
+      if (secretCode !== validMunicipalKey) {
         setAuthError("Invalid Municipal Authorization Key. Access restricted to authorized personnel only.");
+        return;
+      }
+    } else if (accountType === "crew") {
+      const validCrewKey = "CREW-ARTISAN-2026";
+      if (secretCode !== validCrewKey) {
+        setAuthError("Invalid Field Crew Security Code. Access restricted to authorized depot units.");
         return;
       }
     }
 
     try {
       if (authMode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email: authEmail,
           password: authPassword,
           options: {
-            data: { role: accountType }
+            data: { role: accountType, assigned_depot: assignedDepot }
           }
         });
         if (error) {
@@ -321,7 +334,7 @@ export default function ProfilePage() {
           return;
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email: authEmail,
           password: authPassword,
         });
@@ -333,10 +346,13 @@ export default function ProfilePage() {
 
       setEmail(authEmail);
       localStorage.setItem("resigrid_account_role", accountType);
-      localStorage.setItem("resigrid_user_profile", JSON.stringify({ fullName, email: authEmail, phone, selectedProvince, selectedCity, selectedWard, streetAddress, accountNumber, standNumber }));
+      localStorage.setItem("resigrid_user_profile", JSON.stringify({ fullName, email: authEmail, phone, selectedProvince, selectedCity, selectedWard, streetAddress, accountNumber, standNumber, assignedDepot }));
       
+      // Role-Based Redirection matching user instruction:
       if (accountType === "municipal") {
-        window.location.href = "/municipal";
+        window.location.href = "/dashboard";
+      } else if (accountType === "crew") {
+        window.location.href = "/crew";
       } else {
         setIsAuthenticated(true);
       }
@@ -345,34 +361,26 @@ export default function ProfilePage() {
     }
   };
 
-  // Handle Province Change to update available cities and wards
   const handleProvinceChange = (province: string) => {
     setSelectedProvince(province);
     const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[province] || {};
     const firstCity = Object.keys(citiesInProv)[0] || "";
     setSelectedCity(firstCity);
     const wards = citiesInProv[firstCity] || [];
-    if (wards.length > 0) {
-      setSelectedWard(wards[0]);
-    }
+    if (wards.length > 0) setSelectedWard(wards[0]);
   };
 
-  // Handle City Change to update available wards
   const handleCityChange = (city: string) => {
     setSelectedCity(city);
     const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
     const wards = citiesInProv[city] || [];
-    if (wards.length > 0) {
-      setSelectedWard(wards[0]);
-    }
+    if (wards.length > 0) setSelectedWard(wards[0]);
   };
 
-  // Staged Accent Selection Handler (Does not apply globally until save)
   const handleSelectAccent = (accentId: string) => {
     setStagedAccent(accentId);
   };
 
-  // Save All Profile Settings & Apply Accent Theme with Supabase sync
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
 
@@ -397,46 +405,16 @@ export default function ProfilePage() {
       streetAddress,
       accountNumber,
       standNumber,
-      emergencyAlerts,
-      communityBroadcasts,
+      assignedDepot,
     };
 
     localStorage.setItem("resigrid_user_profile", JSON.stringify(profileData));
-
-    try {
-      await supabase.from("reports").insert([
-        {
-          report_id: `PROF-${Date.now()}`,
-          category: "civic",
-          title: `Profile Update: ${fullName}`,
-          description: `Account settings and municipal profile synchronized for ward ${selectedWard}.`,
-          location_address: streetAddress,
-          province: selectedProvince,
-          municipality: selectedCity,
-          ward: selectedWard,
-          priority: "Low",
-          status: "Resolved",
-          time_str: "Just now",
-          reporter_name: fullName,
-          reporter_phone: phone,
-          account_number: accountNumber,
-          stand_number: standNumber,
-          assigned_depot: "Municipal Administration Desk",
-          estimated_fix_time: "Completed",
-          latitude: -29.6006,
-          longitude: 30.3794,
-        }
-      ]);
-    } catch (err) {
-      console.error("Failed to push profile sync record to Supabase:", err);
-    }
 
     setSuccessMessage("Preferences saved successfully and synced with cloud database");
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  // Sign Out Session Handler
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -448,7 +426,6 @@ export default function ProfilePage() {
     setIsAuthenticated(false);
   };
 
-  // Delete App Data Handler
   const handleDeleteAllData = async () => {
     if (window.confirm("Are you sure you want to delete all ResiGrid data across the app and remote databases? This action cannot be undone.")) {
       try {
@@ -477,7 +454,7 @@ export default function ProfilePage() {
     );
   }
 
-  // RENDER LOGIN / SIGNUP SCREEN IF NOT AUTHENTICATED WITH FULL MOBILE RESPONSIVENESS AND HIDDEN DOCK
+  // UNAUTHENTICATED: 3-ROLE SELECTOR AUTHENTICATION SCREEN
   if (!isAuthenticated) {
     return (
       <main className="resigrid-shell min-h-screen flex items-center justify-center p-3 sm:p-6 text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
@@ -495,18 +472,18 @@ export default function ProfilePage() {
             <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center mx-auto text-teal-400">
               <KeyRound className="w-6 h-6" />
             </div>
-            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">RESIGRID SECURE PORTAL</h1>
+            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">RESIGRID SECURE LOGIN</h1>
             <p className="text-xs text-muted">
-              {authMode === "login" ? "Sign in to access your dashboard or municipal controls." : "Create a verified account to get started."}
+              Select your role to access your dedicated portal and profile.
             </p>
           </div>
 
-          {/* ACCOUNT TYPE SELECTOR */}
-          <div className="grid grid-cols-2 gap-2 p-1 bg-black/40 rounded-xl border border-white/10">
+          {/* 3-ROLE SELECTOR TABS */}
+          <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/10">
             <button
               type="button"
               onClick={() => setAccountType("resident")}
-              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                 accountType === "resident" ? "bg-teal-500/20 text-teal-300 border border-teal-500/40" : "text-muted hover:text-white"
               }`}
             >
@@ -515,11 +492,20 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => setAccountType("municipal")}
-              className={`py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              className={`py-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
                 accountType === "municipal" ? "bg-blue-500/20 text-blue-300 border border-blue-500/40" : "text-muted hover:text-white"
               }`}
             >
-              <Building2 className="w-3.5 h-3.5" /> Municipal Staff
+              <Building2 className="w-3.5 h-3.5" /> Municipal
+            </button>
+            <button
+              type="button"
+              onClick={() => setAccountType("crew")}
+              className={`py-2 rounded-lg text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                accountType === "crew" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "text-muted hover:text-white"
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" /> Field Crew
             </button>
           </div>
 
@@ -539,7 +525,7 @@ export default function ProfilePage() {
                   required
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder={accountType === "municipal" ? "officer@msunduzi.gov.za" : "name@example.co.za"}
+                  placeholder={accountType === "municipal" ? "officer@msunduzi.gov.za" : accountType === "crew" ? "artisan@msunduzi.gov.za" : "name@example.co.za"}
                   className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-teal-500 transition-colors"
                 />
               </div>
@@ -568,12 +554,29 @@ export default function ProfilePage() {
                 <input
                   type="password"
                   required
-                  value={municipalSecretCode}
-                  onChange={(e) => setMunicipalSecretCode(e.target.value)}
+                  value={secretCode}
+                  onChange={(e) => setSecretCode(e.target.value)}
                   placeholder="Enter staff security code"
                   className="w-full bg-blue-950/30 border border-blue-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-400 transition-colors"
                 />
-                <p className="text-[9px] text-muted mt-1">Required to prevent unauthorized municipal staff access.</p>
+                <p className="text-[9px] text-muted mt-1">Routes directly to Municipal Dispatch Dashboard upon login.</p>
+              </div>
+            )}
+
+            {accountType === "crew" && (
+              <div>
+                <label className="text-[11px] font-medium text-amber-400 block mb-1 flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5" /> Field Crew Security Code
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={secretCode}
+                  onChange={(e) => setSecretCode(e.target.value)}
+                  placeholder="Enter crew authorization code"
+                  className="w-full bg-amber-950/30 border border-amber-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-400 transition-colors"
+                />
+                <p className="text-[9px] text-muted mt-1">Routes directly to Field Crew Operations Portal upon login.</p>
               </div>
             )}
 
@@ -582,10 +585,12 @@ export default function ProfilePage() {
               className={`w-full py-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
                 accountType === "municipal" 
                   ? "bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30 text-blue-300" 
+                  : accountType === "crew"
+                  ? "bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30 text-amber-300"
                   : "bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300"
               }`}
             >
-              <span>{authMode === "login" ? (accountType === "municipal" ? "Access Municipal Dashboard" : "Sign In to Profile") : "Create Account & Register"}</span>
+              <span>{authMode === "login" ? (accountType === "municipal" ? "Access Municipal Dashboard" : accountType === "crew" ? "Access Field Crew Portal" : "Sign In to Profile") : "Create Account & Register"}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
@@ -605,9 +610,9 @@ export default function ProfilePage() {
     );
   }
 
+  // AUTHENTICATED PROFILE VIEW TAILORED TO ACCOUNT TYPE
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
-      {/* Dynamic Ambient Blur Background Orbs */}
       <div className="ambient-background pointer-events-none" aria-hidden="true">
         <div className="ambient-orb orb-one" />
         <div className="ambient-orb orb-two" />
@@ -617,16 +622,16 @@ export default function ProfilePage() {
 
       <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-4 px-3 pb-32 pt-4 sm:space-y-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
         
-        {/* TOP NAVIGATION HEADER */}
+        {/* HEADER */}
         <header className="glass-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 sm:p-5 relative z-20">
           <div className="flex items-center gap-3">
-            <div className="feature-icon feature-civic shrink-0">
-              <User className="w-5 h-5 text-accent-dynamic" />
+            <div className={`feature-icon ${accountType === "municipal" ? "feature-energy" : accountType === "crew" ? "feature-water" : "feature-civic"} shrink-0`}>
+              {accountType === "municipal" ? <Building2 className="w-5 h-5 text-accent-dynamic" /> : accountType === "crew" ? <Wrench className="w-5 h-5 text-accent-dynamic" /> : <User className="w-5 h-5 text-accent-dynamic" />}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                  PROFILE
+                  {accountType === "municipal" ? "MUNICIPAL STAFF PROFILE" : accountType === "crew" ? "FIELD CREW PROFILE" : "RESIDENT PROFILE"}
                 </h1>
                 <span 
                   className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-accent-dynamic shrink-0 transition-all"
@@ -635,22 +640,40 @@ export default function ProfilePage() {
                     borderColor: "color-mix(in srgb, var(--accent) 35%, transparent)",
                   }}
                 >
-                  RESIDENT
+                  {accountType.toUpperCase()}
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                MANAGE PERSONAL CREDENTIALS
+                {accountType === "municipal" ? "AUTHORIZED MUNICIPAL DISPATCH ADMINISTRATOR" : accountType === "crew" ? "ACTIVE DEPUTY ARTISAN REQUISITION DESK" : "COMMUNITY RESIDENT & CITIZEN ACCOUNT"}
               </p>
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            {accountType === "municipal" && (
+              <a
+                href="/dashboard"
+                className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-semibold hover:bg-blue-500/30 transition-all flex items-center gap-1.5"
+              >
+                <Building2 className="w-3.5 h-3.5" /> Open Municipal Dashboard
+              </a>
+            )}
+            {accountType === "crew" && (
+              <a
+                href="/crew"
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all flex items-center gap-1.5"
+              >
+                <Wrench className="w-3.5 h-3.5" /> Open Field Crew Portal
+              </a>
+            )}
+          </div>
         </header>
 
-        {/* PROFILE SUMMARY HERO CARD */}
+        {/* HERO CARD */}
         <div className="glass-panel p-4 sm:p-6 relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 pointer-events-auto z-20 w-full">
           <div className="panel-reflection pointer-events-none" />
 
           <div className="flex items-center gap-4 min-w-0">
-            {/* PROFILE AVATAR WITH SUBTLE AMBIENT GLOW */}
             <div 
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-white/20 flex items-center justify-center text-lg sm:text-xl font-black text-white shrink-0 transition-all shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
               style={{ backgroundColor: "var(--accent)" }}
@@ -673,7 +696,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* CENTERED SUCCESS NOTIFICATION MODAL TOAST */}
+        {/* SUCCESS TOAST */}
         {savedSuccess && (
           <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none px-4 animate-fadeIn">
             <div className="p-4 bg-black/90 border border-white/30 rounded-2xl text-white text-xs sm:text-sm font-semibold flex items-center gap-3 shadow-[0_0_50px_rgba(0,0,0,0.8)] backdrop-blur-xl">
@@ -683,10 +706,10 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* MAIN SETTINGS PANELS - STRETCHED FULL WIDTH */}
+        {/* SETTINGS PANELS */}
         <div className="space-y-5 relative z-20 w-full">
           
-          {/* FEATURE THEME COLOR ACCENT SELECTOR */}
+          {/* THEME ACCENT SELECTOR */}
           <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
             <div className="panel-reflection pointer-events-none" />
 
@@ -695,7 +718,7 @@ export default function ProfilePage() {
                 <Palette className="w-4 h-4 text-accent-dynamic shrink-0" /> System Theme
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Select your primary accent color.
+                Select your primary accent color across modules.
               </p>
             </div>
 
@@ -714,17 +737,13 @@ export default function ProfilePage() {
                     }`}
                     style={{ touchAction: "manipulation" }}
                   >
-                    {/* LIQUID GLASS DOCK STYLE CIRCLE SWATCH */}
                     <div className="relative flex items-center justify-center p-1 pointer-events-none">
-                      {/* Subtle Ambient Liquid Underglow */}
                       <span 
                         className={`absolute inset-0 rounded-full blur-[3px] transition-opacity duration-300 pointer-events-none ${
                           isSelected ? "opacity-45 scale-105" : "opacity-15"
                         }`}
                         style={{ backgroundColor: pal.hex }}
                       />
-
-                      {/* Liquid Glass Orb Container */}
                       <span 
                         className="w-7 h-7 rounded-full relative flex items-center justify-center overflow-hidden transition-all duration-300 border border-white/20 shadow-inner pointer-events-none"
                         style={{
@@ -734,7 +753,6 @@ export default function ProfilePage() {
                             : `inset 0 1px 1px rgba(255,255,255,0.3)`
                         }}
                       >
-                        {/* Fluid Reflection Highlighting */}
                         <span 
                           className="absolute inset-0 rounded-full pointer-events-none"
                           style={{
@@ -743,7 +761,6 @@ export default function ProfilePage() {
                         />
                       </span>
                     </div>
-
                     <span className="text-[10px] font-semibold text-white pointer-events-none">{pal.name}</span>
                   </button>
                 );
@@ -751,16 +768,16 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* PERSONAL & MUNICIPAL LOCATION DETAILS */}
+          {/* PERSONAL & ROLE DETAILS */}
           <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
             <div className="panel-reflection pointer-events-none" />
 
             <div className="border-b border-white/10 pb-3">
               <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Personal & Municipal Details
+                <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Account Details &amp; Operational Zone
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Update your information.
+                {accountType === "municipal" ? "Manage municipal staff credentials and triage area." : accountType === "crew" ? "Manage field crew unit assignment and artisan contact info." : "Manage personal credentials and ward location."}
               </p>
             </div>
 
@@ -843,31 +860,35 @@ export default function ProfilePage() {
                 </select>
               </div>
 
-              <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Hash className="h-3 w-3 text-accent-dynamic shrink-0" /> Municipal Account Number
-                </label>
-                <input
-                  type="text"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  placeholder="e.g. 800459201"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono"
-                />
-              </div>
+              {accountType === "resident" && (
+                <>
+                  <div>
+                    <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                      <Hash className="h-3 w-3 text-accent-dynamic shrink-0" /> Municipal Account Number
+                    </label>
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      placeholder="e.g. 800459201"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono"
+                    />
+                  </div>
 
-              <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Home className="h-3 w-3 text-accent-dynamic shrink-0" /> Stand / Erf Number
-                </label>
-                <input
-                  type="text"
-                  value={standNumber}
-                  onChange={(e) => setStandNumber(e.target.value)}
-                  placeholder="e.g. Erf 1452 Scottsville"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
-                />
-              </div>
+                  <div>
+                    <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                      <Home className="h-3 w-3 text-accent-dynamic shrink-0" /> Stand / Erf Number
+                    </label>
+                    <input
+                      type="text"
+                      value={standNumber}
+                      onChange={(e) => setStandNumber(e.target.value)}
+                      placeholder="e.g. Erf 1452 Scottsville"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="sm:col-span-2">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Default Street Address</label>
@@ -881,7 +902,7 @@ export default function ProfilePage() {
             </form>
           </div>
 
-          {/* SAVE PREFERENCES BUTTON AT THE END */}
+          {/* SAVE BUTTON */}
           <div className="flex justify-end pt-2">
             <button
               type="button"
@@ -904,7 +925,7 @@ export default function ProfilePage() {
 
             <div className="border-b border-white/10 pb-3">
               <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                Session & Security
+                Session &amp; Security
               </h2>
             </div>
 
@@ -912,7 +933,7 @@ export default function ProfilePage() {
               <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5">
                 <Smartphone className="w-4 h-4 text-accent-dynamic shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-xs font-medium text-white truncate">Active Web Session</p>
+                  <p className="text-xs font-medium text-white truncate">Active Web Session ({accountType.toUpperCase()})</p>
                   <p className="text-[10px] text-muted truncate">South Africa • Verified</p>
                 </div>
               </div>

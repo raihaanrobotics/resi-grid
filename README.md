@@ -20,6 +20,19 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Android screen alerts
+
+ResiGrid uses Web Push to show report and alert notifications in the Android notification tray when the website is closed. The user must enable **Turn on screen alerts** from the home-page Notifications panel. Android and browser notification settings control lock-screen visibility and whether the display wakes.
+
+Before deploying:
+
+1. Generate one VAPID key pair with `npx web-push generate-vapid-keys` and keep it stable.
+2. Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (for example `mailto:alerts@example.com`), and `SUPABASE_SERVICE_ROLE_KEY` in the server environment. Keep the private and service-role keys server-only.
+3. Apply [`supabase/migrations/20261020090000_web_push.sql`](./supabase/migrations/20261020090000_web_push.sql) to the Supabase project.
+4. Deploy the site over HTTPS. Users must grant notification permission on their Android browser or installed PWA.
+
+This configures Android Web Push. A native Android app still needs an Android project and its own Firebase Cloud Messaging setup.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

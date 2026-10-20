@@ -32,6 +32,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
+import { upsertGlobalNotification } from "@/lib/notifications/globalNotifications";
+import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 
 // Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
 declare global {
@@ -217,62 +219,27 @@ export default function VoltShieldPage() {
     }
     return acc;
   }, []);
+  const hasNearbyPowerReport = deduplicatedPowerReports.some(
+    (report) => report.category === "power" &&
+      (report.status === "Pending Review" || report.status === "Auto-Dispatched")
+  );
 
   // Broadcast out verified telemetry ONLY when a low voltage stability drop or high ripple is genuinely detected
   const broadcastTelemetryToGlobal = useCallback((stability: number, ripple: number) => {
-    try {
-      const isUnstable = stability < 85 || ripple > 25;
-      if (!isUnstable) return;
+    const isUnstable = stability < 85 || ripple > 25;
+    if (!isUnstable || hasNearbyPowerReport) return;
 
-      const existingNotifs = JSON.parse(localStorage.getItem("resigrid_global_notifications") || "[]");
-      const alertId = `power-sag-${Math.floor(Date.now() / 3600000)}`; // Hourly deduplication key
-      const alreadyLogged = existingNotifs.some((n: any) => n.id === alertId);
-
-      if (!alreadyLogged) {
-        const newNotif = {
-          id: alertId,
-          title: "Power voltage sag detected",
-          description: `A voltage sag/ripple drop was recorded near you at ${streetAddress}. Tap your phone while charging to test your stability as well.`,
-          time: "Just now",
-          type: "warning",
-          category: "power"
-        };
-        localStorage.setItem("resigrid_global_notifications", JSON.stringify([newNotif, ...existingNotifs]));
-      }
-    } catch (err) {
-      console.error("Failed to broadcast telemetry notification:", err);
-    }
-  }, [streetAddress]);
-
-  // Check nearby reports within 10km to trigger proactive test prompt if an outage is confirmed nearby
-  useEffect(() => {
-    if (deduplicatedPowerReports.length > 0) {
-      const hasNearbyOutage = deduplicatedPowerReports.some(
-        (r) => r.category === "power" && (r.status === "Pending Review" || r.status === "Auto-Dispatched")
-      );
-
-      if (hasNearbyOutage) {
-        try {
-          const existingNotifs = JSON.parse(localStorage.getItem("resigrid_global_notifications") || "[]");
-          const alreadyNotified = existingNotifs.some((n: any) => n.id === "outage-prompt-nearby-power");
-
-          if (!alreadyNotified) {
-            const promptNotif = {
-              id: "outage-prompt-nearby-power",
-              title: "Power outage reported nearby",
-              description: "A power outage was reported within 10km of your location. Plug in your phone and test line stability now as you could be affected next.",
-              time: "Just now",
-              type: "warning",
-              category: "power"
-            };
-            localStorage.setItem("resigrid_global_notifications", JSON.stringify([promptNotif, ...existingNotifs]));
-          }
-        } catch (e) {
-          console.error("Error setting nearby outage prompt notification:", e);
-        }
-      }
-    }
-  }, [deduplicatedPowerReports]);
+    upsertGlobalNotification({
+      dedupeKey: "telemetry:power-stability",
+      title: "Power stability issue",
+      description: "Voltage instability detected nearby.",
+      type: "warning",
+      category: "power",
+      status: "active",
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+    });
+  }, [hasNearbyPowerReport, location]);
 
   // Automated 15-Minute Industrial Telemetry Background Check Loop (Using accurate bridge data or stable nominal fallbacks)
   useEffect(() => {
@@ -327,12 +294,17 @@ export default function VoltShieldPage() {
           locationAddress: row.location_address || "Unknown Location",
           status: row.status || "Auto-Dispatched",
           time: row.time_str || "Today",
-          latitude: row.latitude || -29.6006,
-          longitude: row.longitude || 30.3794,
+          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           ward: row.ward || "Ward 26",
           priority: row.priority || "High",
         }));
-        setPowerReports(formattedReports.filter((r) => r.category === "power"));
+        const powerReportsOnly = formattedReports.filter((r) => r.category === "power");
+        setPowerReports(powerReportsOnly);
+        writeOfflineData("resigrid_power_reports", powerReportsOnly);
+      } else {
+        const cachedReports = readOfflineData<PowerReportItem[]>("resigrid_power_reports");
+        if (Array.isArray(cachedReports)) setPowerReports(cachedReports);
       }
 
       // Fetch shared power nodes from Supabase if table exists, fallback to localStorage/defaults
@@ -355,8 +327,8 @@ export default function VoltShieldPage() {
           type: row.type || "5kW Hybrid Inverter",
           capacity: row.capacity || "Device Charging & Wi-Fi",
           price: row.price || "Free / Donation",
-          latitude: row.latitude || -29.6006,
-          longitude: row.longitude || 30.3794,
+          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           location: row.location || "Sector 4",
           whatsappPhone: row.whatsapp_phone || "27821234567",
           isUserCreated: row.is_user_created ?? true,
@@ -502,8 +474,8 @@ export default function VoltShieldPage() {
       type: resolvedType,
       capacity: newCapacity.trim(),
       price: newPrice.trim(),
-      latitude: location?.latitude || -29.6000,
-      longitude: location?.longitude || 30.3800,
+      latitude: location?.latitude ?? Number.NaN,
+      longitude: location?.longitude ?? Number.NaN,
       distance: "0.1 km away",
       location: streetAddress,
       whatsappPhone: newPhone.replace(/[^0-9]/g, ""),
@@ -522,8 +494,8 @@ export default function VoltShieldPage() {
           type: newNode.type,
           capacity: newNode.capacity,
           price: newNode.price,
-          latitude: newNode.latitude,
-          longitude: newNode.longitude,
+          latitude: Number.isFinite(newNode.latitude) ? newNode.latitude : null,
+          longitude: Number.isFinite(newNode.longitude) ? newNode.longitude : null,
           location: newNode.location,
           whatsapp_phone: newNode.whatsappPhone,
           is_user_created: true,

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Store,
@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
+import { supabase } from "@/lib/supabase";
+import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 
 interface SpazaFoodStore {
   id: string;
@@ -58,76 +60,8 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
-const DEFAULT_FOOD_STORES: SpazaFoodStore[] = [
-  {
-    id: "SPAZA-FOOD-1",
-    shopName: "Mam' Rose Dry Goods & Maize Depot",
-    ownerName: "Rose Dlamini",
-    location: "144 Victoria Road, PMB",
-    isOperating: true,
-    hasDryStock: true,
-    spoilageClearanceAlert: "Fresh bread & milk 50% off before 3 PM power outage window!",
-    foodEssentials: ["Maize Meal (10kg/25kg)", "Samp & Beans", "Canned Pilchards", "Long-life Milk", "Fresh Bread"],
-    contactPhone: "27821234567",
-    latitude: -29.6006,
-    longitude: 30.3794,
-  },
-  {
-    id: "SPAZA-FOOD-2",
-    shopName: "Sipho's Community Groceries",
-    ownerName: "Sipho Khumalo",
-    location: "Block C, Section 4, Edendale",
-    isOperating: true,
-    hasDryStock: true,
-    foodEssentials: ["Rice (5kg)", "Cooking Oil 2L", "Sugar & Tea", "Canned Baked Beans", "Soup Mix"],
-    contactPhone: "27839876543",
-    latitude: -29.6100,
-    longitude: 30.3850,
-  },
-  {
-    id: "SPAZA-FOOD-3",
-    shopName: "Edendale Essential Pantry",
-    ownerName: "David Naidoo",
-    location: "Main Road, Edendale",
-    isOperating: true,
-    hasDryStock: true,
-    spoilageClearanceAlert: "Surplus fresh vegetables discounted for immediate household use.",
-    foodEssentials: ["Mealie Meal", "Dry Lentils", "Porridge", "Salt & Spices", "Fresh Tomatoes"],
-    contactPhone: "27815550192",
-    latitude: -29.5900,
-    longitude: 30.3600,
-  },
-];
-
-const DEFAULT_FOOD_AID: CommunityFoodAid[] = [
-  {
-    id: "AID-801",
-    title: "Sunset Ridge Community Soup Kitchen",
-    aidType: "Soup Kitchen",
-    location: "Sector 4 Community Hall",
-    coordinator: "Pastor Thabo Mokoena",
-    description: "Providing warm nutritious meals daily from 12 PM to 2 PM for families affected by utility disruptions.",
-    operatingHours: "Daily: 12:00 PM - 2:00 PM",
-    contactPhone: "27821234567",
-    latitude: -29.6006,
-    longitude: 30.3794,
-  },
-  {
-    id: "AID-802",
-    title: "Edendale Emergency Food Pantry",
-    aidType: "Community Pantry",
-    location: "Main Road Resource Centre",
-    coordinator: "Zinhle Dube",
-    description: "Emergency dry food parcels (maize, beans, cooking oil) available for vulnerable households.",
-    operatingHours: "Mon-Fri: 9:00 AM - 4:00 PM",
-    contactPhone: "27839876543",
-    latitude: -29.5950,
-    longitude: 30.3700,
-  },
-];
-
 export default function SpazaRescuePage() {
-  const { streetAddress, location, refreshLocation, loading: geoLoading } = useGeo();
+  const { streetAddress, location, filterByRadius, refreshLocation, loading: geoLoading } = useGeo();
 
   // Theme Accent Persistence
   const [accentColor, setAccentColor] = useState<string>("#38bdf8");
@@ -167,8 +101,8 @@ export default function SpazaRescuePage() {
     };
   }, []);
 
-  const [stores, setStores] = useState<SpazaFoodStore[]>(DEFAULT_FOOD_STORES);
-  const [foodAidList, setFoodAidList] = useState<CommunityFoodAid[]>(DEFAULT_FOOD_AID);
+  const [stores, setStores] = useState<SpazaFoodStore[]>([]);
+  const [foodAidList, setFoodAidList] = useState<CommunityFoodAid[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "stores" | "aid">("all");
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -199,46 +133,80 @@ export default function SpazaRescuePage() {
     if (streetAddress && !aidAddress) setAidAddress(streetAddress);
   }, [streetAddress, storeAddress, aidAddress]);
 
-  // Storage sync
+  // Fetch live stores and food aid data directly from Supabase tables
   useEffect(() => {
-    try {
-      const savedStores = localStorage.getItem("resigrid_spaza_food_stores");
-      if (savedStores) {
-        const parsed = JSON.parse(savedStores);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setStores(
-            parsed.map((item: any) => ({
-              ...item,
-              latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
-              longitude: typeof item.longitude === "number" ? item.longitude : 30.3794,
-            }))
-          );
+    async function fetchSupabaseData() {
+      try {
+        const [storesRes, aidRes] = await Promise.all([
+          supabase.from("spaza_stores").select("*"),
+          supabase.from("community_food_aid").select("*")
+        ]);
+
+        if (storesRes.error || aidRes.error) {
+          if (storesRes.error) console.error("Could not fetch nearby stores:", storesRes.error);
+          if (aidRes.error) console.error("Could not fetch nearby food aid:", aidRes.error);
+          const cachedStores = readOfflineData<SpazaFoodStore[]>("resigrid_spaza_stores");
+          const cachedAid = readOfflineData<CommunityFoodAid[]>("resigrid_community_food_aid");
+          if (Array.isArray(cachedStores)) setStores(cachedStores);
+          if (Array.isArray(cachedAid)) setFoodAidList(cachedAid);
+          return;
         }
-      }
-      const savedAid = localStorage.getItem("resigrid_community_food_aid");
-      if (savedAid) {
-        const parsed = JSON.parse(savedAid);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setFoodAidList(
-            parsed.map((item: any) => ({
-              ...item,
-              latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
-              longitude: typeof item.longitude === "number" ? item.longitude : 30.3794,
-            }))
-          );
+
+        if (storesRes.data) {
+          const mappedStores: SpazaFoodStore[] = storesRes.data.map((item: any) => ({
+              id: item.store_id || `SPAZA-${item.id}`,
+              shopName: item.shop_name,
+              ownerName: item.owner_name,
+              location: item.location,
+              isOperating: item.is_operating ?? true,
+              hasDryStock: item.has_dry_stock ?? true,
+              spoilageClearanceAlert: item.spoilage_clearance_alert,
+              foodEssentials: Array.isArray(item.food_essentials) ? item.food_essentials : ["Maize Meal", "Canned Goods"],
+              contactPhone: item.contact_phone,
+              latitude: typeof item.latitude === "number" ? item.latitude : Number.NaN,
+              longitude: typeof item.longitude === "number" ? item.longitude : Number.NaN,
+            }));
+          setStores(mappedStores);
+          writeOfflineData("resigrid_spaza_stores", mappedStores);
         }
+
+        if (aidRes.data) {
+          const mappedAid: CommunityFoodAid[] = aidRes.data.map((item: any) => ({
+              id: item.aid_id || `AID-${item.id}`,
+              title: item.title,
+              aidType: item.aid_type,
+              location: item.location,
+              coordinator: item.coordinator,
+              description: item.description,
+              operatingHours: item.operating_hours,
+              contactPhone: item.contact_phone,
+              spoilageClearanceAlert: item.spoilage_clearance_alert,
+              foodEssentials: Array.isArray(item.food_essentials) ? item.food_essentials : undefined,
+              latitude: typeof item.latitude === "number" ? item.latitude : Number.NaN,
+              longitude: typeof item.longitude === "number" ? item.longitude : Number.NaN,
+            }));
+          setFoodAidList(mappedAid);
+          writeOfflineData("resigrid_community_food_aid", mappedAid);
+        }
+      } catch (err) {
+        console.error("Failed to load SpazaRescue data from Supabase:", err);
+        const cachedStores = readOfflineData<SpazaFoodStore[]>("resigrid_spaza_stores");
+        const cachedAid = readOfflineData<CommunityFoodAid[]>("resigrid_community_food_aid");
+        if (Array.isArray(cachedStores)) setStores(cachedStores);
+        if (Array.isArray(cachedAid)) setFoodAidList(cachedAid);
       }
-    } catch (e) {
-      console.error("Error loading local storage:", e);
     }
+
+    fetchSupabaseData();
   }, []);
 
-  const handleRegisterStore = (e: React.FormEvent) => {
+  const handleRegisterStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shopName || !ownerName || !storeAddress) return;
 
+    const storeId = `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newStore: SpazaFoodStore = {
-      id: `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`,
+      id: storeId,
       shopName: shopName.trim(),
       ownerName: ownerName.trim(),
       location: storeAddress.trim(),
@@ -246,13 +214,32 @@ export default function SpazaRescuePage() {
       hasDryStock: true,
       foodEssentials: ["Maize Meal", "Canned Goods", "Bread"],
       contactPhone: shopPhone.replace(/[^0-9]/g, "") || "27821234567",
-      latitude: location?.latitude ?? -29.6000,
-      longitude: location?.longitude ?? 30.3800,
+      latitude: location?.latitude ?? Number.NaN,
+      longitude: location?.longitude ?? Number.NaN,
     };
 
-    const updated = [newStore, ...stores];
-    setStores(updated);
-    localStorage.setItem("resigrid_spaza_food_stores", JSON.stringify(updated));
+    try {
+      await supabase.from("spaza_stores").insert([
+        {
+          store_id: storeId,
+          shop_name: newStore.shopName,
+          owner_name: newStore.ownerName,
+          location: newStore.location,
+          is_operating: true,
+          has_dry_stock: true,
+          food_essentials: newStore.foodEssentials,
+          contact_phone: newStore.contactPhone,
+          latitude: Number.isFinite(newStore.latitude) ? newStore.latitude : null,
+          longitude: Number.isFinite(newStore.longitude) ? newStore.longitude : null,
+        }
+      ]);
+    } catch (err) {
+      console.error("Failed to sync spaza store to Supabase:", err);
+    }
+
+    const updatedStores = [newStore, ...stores];
+    setStores(updatedStores);
+    writeOfflineData("resigrid_spaza_stores", updatedStores);
 
     setIsStoreModalOpen(false);
     setShopName("");
@@ -261,7 +248,7 @@ export default function SpazaRescuePage() {
     setShopPhone("");
   };
 
-  const handlePostAid = (e: React.FormEvent) => {
+  const handlePostAid = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!aidTitle || !aidCoordinator || !aidAddress) return;
     if (aidListingChoice === "relief" && !aidDesc) return;
@@ -270,8 +257,9 @@ export default function SpazaRescuePage() {
       ? "Spaza Store" 
       : (aidTypeOption === "Other" ? (customAidType.trim() || "Community Aid") : aidTypeOption);
 
+    const aidId = `AID-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newAid: CommunityFoodAid = {
-      id: `AID-${Math.floor(Math.random() * 8999 + 1000)}`,
+      id: aidId,
       title: aidTitle.trim(),
       aidType: finalAidType,
       location: aidAddress.trim(),
@@ -281,13 +269,34 @@ export default function SpazaRescuePage() {
       contactPhone: aidPhone.replace(/[^0-9]/g, "") || "27821234567",
       spoilageClearanceAlert: spoilageAlert.trim() || undefined,
       foodEssentials: essentialsInput ? essentialsInput.split(",").map((s) => s.trim()) : (aidListingChoice === "spaza" ? ["Maize Meal", "Canned Goods"] : undefined),
-      latitude: location?.latitude ?? -29.6000,
-      longitude: location?.longitude ?? 30.3800,
+      latitude: location?.latitude ?? Number.NaN,
+      longitude: location?.longitude ?? Number.NaN,
     };
 
-    const updated = [newAid, ...foodAidList];
-    setFoodAidList(updated);
-    localStorage.setItem("resigrid_community_food_aid", JSON.stringify(updated));
+    try {
+      await supabase.from("community_food_aid").insert([
+        {
+          aid_id: aidId,
+          title: newAid.title,
+          aid_type: newAid.aidType,
+          location: newAid.location,
+          coordinator: newAid.coordinator,
+          description: newAid.description,
+          operating_hours: newAid.operatingHours,
+          contact_phone: newAid.contactPhone,
+          spoilage_clearance_alert: newAid.spoilageClearanceAlert || null,
+          food_essentials: newAid.foodEssentials || null,
+          latitude: Number.isFinite(newAid.latitude) ? newAid.latitude : null,
+          longitude: Number.isFinite(newAid.longitude) ? newAid.longitude : null,
+        }
+      ]);
+    } catch (err) {
+      console.error("Failed to sync community food aid to Supabase:", err);
+    }
+
+    const updatedAid = [newAid, ...foodAidList];
+    setFoodAidList(updatedAid);
+    writeOfflineData("resigrid_community_food_aid", updatedAid);
 
     setIsAidModalOpen(false);
     setAidTitle("");
@@ -307,7 +316,10 @@ export default function SpazaRescuePage() {
     window.open(`https://wa.me/${cleanNum}?text=${msg}`, "_blank");
   };
 
-  const filteredStores = stores.filter((s) => {
+  const nearbyStores = filterByRadius(stores, 10);
+  const nearbyAid = filterByRadius(foodAidList, 10);
+
+  const filteredStores = nearbyStores.filter((s) => {
     const matchesSearch =
       s.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.foodEssentials.some((item) => item.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -315,7 +327,7 @@ export default function SpazaRescuePage() {
     return matchesSearch;
   });
 
-  const filteredAid = foodAidList.filter((a) =>
+  const filteredAid = nearbyAid.filter((a) =>
     a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
     a.location.toLowerCase().includes(searchQuery.toLowerCase()) ||

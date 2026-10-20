@@ -23,6 +23,7 @@ import {
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
+import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -390,7 +391,7 @@ export default function CivicAIPage() {
 
     // Full Payload containing every single detail (for Municipal Dashboard & Supabase matching table schema)
     const fullPayload = {
-      report_id: `RPT-${Math.floor(100 + Math.random() * 900)}`,
+      report_id: `RPT-${crypto.randomUUID()}`,
       category,
       title: reportTitle.trim(),
       description: description.trim(),
@@ -458,6 +459,8 @@ export default function CivicAIPage() {
       if (dbError) {
         console.error("Supabase storage error:", dbError);
         setErrorMessage(`Supabase Error: ${dbError.message || JSON.stringify(dbError)}`);
+      } else {
+        void dispatchReportScreenNotification(fullPayload.report_id);
       }
 
       // 2. API Dispatch Endpoint

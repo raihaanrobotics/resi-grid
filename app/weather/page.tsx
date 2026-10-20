@@ -31,17 +31,7 @@ import {
   Bot,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
-
-export interface ResiGridNotification {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: "warning" | "success" | "info" | "error";
-  category?: string;
-  read?: boolean;
-  timestamp?: number;
-}
+import { upsertGlobalNotification } from "@/lib/notifications/globalNotifications";
 
 interface ProvinceAtmosphericData {
   provinceName: string;
@@ -256,43 +246,17 @@ export default function WeatherClimatePage() {
     }
   };
 
-  const getRelativeTimeString = (timestamp?: number) => {
-    if (!timestamp) return "Just now";
-    const diffMs = Date.now() - timestamp;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
-  };
-
   const pushGlobalNotification = (title: string, description: string, type: "warning" | "success" | "info" | "error") => {
-    try {
-      const existing = localStorage.getItem("resigrid_global_notifications");
-      let notifs: ResiGridNotification[] = existing ? JSON.parse(existing) : [];
-      
-      const exists = notifs.some((n) => n.title === title && n.description === description);
-      if (!exists) {
-        const now = Date.now();
-        const newNotif: ResiGridNotification = {
-          id: `weather-alert-${now}`,
-          title,
-          description,
-          time: getRelativeTimeString(now),
-          type,
-          category: "climate",
-          read: false,
-          timestamp: now,
-        };
-        notifs = [newNotif, ...notifs];
-        localStorage.setItem("resigrid_global_notifications", JSON.stringify(notifs));
-      }
-    } catch (err) {
-      console.error("Error writing global weather notification:", err);
-    }
+    upsertGlobalNotification({
+      dedupeKey: `weather:${userProvince}:${title.toLowerCase()}`,
+      title,
+      description,
+      type,
+      category: "climate",
+      status: "active",
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+    });
   };
 
   useEffect(() => {
@@ -465,21 +429,21 @@ export default function WeatherClimatePage() {
             setAlertHeadline("Severe Storm & Lightning Alert");
             const desc = "Weather warning for your area: There is a risk of severe thunderstorms, lightning, and heavy downpours. Please unplug sensitive electronics and stay indoors if possible.";
             setAlertDetails(desc);
-            pushGlobalNotification("Storm Warning", desc, "warning");
+            pushGlobalNotification("Storm warning", "Severe storms nearby.", "warning");
           } else if (code >= 51 && code <= 67) {
             setWeatherCondition("Rainfall & Wet Weather Advisory");
             setIsAlertActive(false);
             setAlertHeadline("Rainy Weather Update");
             const desc = "Steady rainfall is expected across your area. Take care on slippery roads and consider collecting rainwater for your garden.";
             setAlertDetails(desc);
-            pushGlobalNotification("Rain Advisory", desc, "info");
+            pushGlobalNotification("Rain advisory", "Rain expected in your area.", "info");
           } else if (wind > 35 || gusts > 50) {
             setWeatherCondition("High Wind Advisory");
             setIsAlertActive(true);
             setAlertHeadline("Strong Winds Warning");
             const desc = "Strong wind gusts (>35 km/h) are sweeping across your area. Secure loose outdoor items like bins, patio furniture, and shades.";
             setAlertDetails(desc);
-            pushGlobalNotification("Wind Warning", desc, "warning");
+            pushGlobalNotification("Wind warning", "Strong winds nearby.", "warning");
           } else {
             setWeatherCondition("Normal Weather Conditions");
             setIsAlertActive(activeProvData.threatLevel !== "green");

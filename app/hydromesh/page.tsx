@@ -27,6 +27,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
+import { upsertGlobalNotification } from "@/lib/notifications/globalNotifications";
+import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 
 // Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
 declare global {
@@ -211,61 +213,26 @@ export default function HydroMeshPage() {
     }
     return acc;
   }, []);
+  const hasNearbyWaterReport = deduplicatedWaterReports.some(
+    (report) => report.category === "water" &&
+      (report.status === "Pending Review" || report.status === "Auto-Dispatched")
+  );
 
   // Broadcast out verified telemetry ONLY when genuine low pressure state is detected
   const broadcastTelemetryToGlobal = useCallback((status: "normal" | "low_pressure") => {
-    try {
-      if (status !== "low_pressure") return; // Discard normal readings completely
+    if (status !== "low_pressure" || hasNearbyWaterReport) return;
 
-      const existingNotifs = JSON.parse(localStorage.getItem("resigrid_global_notifications") || "[]");
-      const alertId = `water-pressure-${Math.floor(Date.now() / 3600000)}`; // Hourly deduplication key
-      const alreadyLogged = existingNotifs.some((n: any) => n.id === alertId);
-
-      if (!alreadyLogged) {
-        const newNotif = {
-          id: alertId,
-          title: "Water pressure drop detected",
-          description: `A pressure drop was recorded near you at ${streetAddress}. Tap your line to test your flow as well.`,
-          time: "Just now",
-          type: "warning",
-          category: "water"
-        };
-        localStorage.setItem("resigrid_global_notifications", JSON.stringify([newNotif, ...existingNotifs]));
-      }
-    } catch (err) {
-      console.error("Failed to broadcast telemetry notification:", err);
-    }
-  }, [streetAddress]);
-
-  // Check nearby reports within 10km to trigger proactive test prompt if an outage is confirmed nearby
-  useEffect(() => {
-    if (deduplicatedWaterReports.length > 0) {
-      const hasNearbyOutage = deduplicatedWaterReports.some(
-        (r) => r.category === "water" && (r.status === "Pending Review" || r.status === "Auto-Dispatched")
-      );
-
-      if (hasNearbyOutage) {
-        try {
-          const existingNotifs = JSON.parse(localStorage.getItem("resigrid_global_notifications") || "[]");
-          const alreadyNotified = existingNotifs.some((n: any) => n.id === "outage-prompt-nearby-water");
-
-          if (!alreadyNotified) {
-            const promptNotif = {
-              id: "outage-prompt-nearby-water",
-              title: "Water issue reported nearby",
-              description: "A water issue was reported within 10km of your location. Test your tap pressure now as you could be affected next.",
-              time: "Just now",
-              type: "warning",
-              category: "water"
-            };
-            localStorage.setItem("resigrid_global_notifications", JSON.stringify([promptNotif, ...existingNotifs]));
-          }
-        } catch (e) {
-          console.error("Error setting nearby outage prompt notification:", e);
-        }
-      }
-    }
-  }, [deduplicatedWaterReports]);
+    upsertGlobalNotification({
+      dedupeKey: "telemetry:water-pressure",
+      title: "Water pressure issue",
+      description: "Low pressure detected nearby.",
+      type: "warning",
+      category: "water",
+      status: "active",
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+    });
+  }, [hasNearbyWaterReport, location]);
 
   // Automated 15-Minute Industrial Water Telemetry Background Check Loop (Silent Nominal Poll)
   useEffect(() => {
@@ -314,12 +281,17 @@ export default function HydroMeshPage() {
           locationAddress: row.location_address || "Unknown Location",
           status: row.status || "Auto-Dispatched",
           time: row.time_str || "Today",
-          latitude: row.latitude || -29.6006,
-          longitude: row.longitude || 30.3794,
+          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           ward: row.ward || "Ward 26",
           priority: row.priority || "High",
         }));
-        setWaterReports(formattedReports.filter((r) => r.category === "water"));
+        const waterReportsOnly = formattedReports.filter((r) => r.category === "water");
+        setWaterReports(waterReportsOnly);
+        writeOfflineData("resigrid_water_reports", waterReportsOnly);
+      } else {
+        const cachedReports = readOfflineData<WaterReportItem[]>("resigrid_water_reports");
+        if (Array.isArray(cachedReports)) setWaterReports(cachedReports);
       }
 
       // Fetch shared water nodes from Supabase if table exists, fallback to localStorage/defaults
@@ -342,8 +314,8 @@ export default function HydroMeshPage() {
           type: row.type || "Borehole & Filtration",
           capacity: row.capacity || "1,000 L",
           price: row.price || "Free",
-          latitude: row.latitude || -29.6006,
-          longitude: row.longitude || 30.3794,
+          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           location: row.location || "Sector 4",
           whatsappPhone: row.whatsapp_phone || "27821234567",
           isUserCreated: row.is_user_created ?? true,
@@ -549,8 +521,8 @@ export default function HydroMeshPage() {
       type: resolvedType,
       capacity: newCapacity.trim(),
       price: newPrice.trim(),
-      latitude: location?.latitude || -29.6000,
-      longitude: location?.longitude || 30.3800,
+      latitude: location?.latitude ?? Number.NaN,
+      longitude: location?.longitude ?? Number.NaN,
       location: streetAddress,
       whatsappPhone: newPhone.replace(/[^0-9]/g, ""),
       isUserCreated: true,
@@ -568,8 +540,8 @@ export default function HydroMeshPage() {
           type: newNode.type,
           capacity: newNode.capacity,
           price: newNode.price,
-          latitude: newNode.latitude,
-          longitude: newNode.longitude,
+          latitude: Number.isFinite(newNode.latitude) ? newNode.latitude : null,
+          longitude: Number.isFinite(newNode.longitude) ? newNode.longitude : null,
           location: newNode.location,
           whatsapp_phone: newNode.whatsappPhone,
           is_user_created: true,

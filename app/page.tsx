@@ -19,25 +19,28 @@ import {
   Info,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useGeo } from "@/context/GeoContext";
+import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
+import {
+  getGlobalNotifications,
+  saveGlobalNotifications,
+  syncReportNotifications,
+} from "@/lib/notifications/globalNotifications";
+import type { ResiGridNotification } from "@/lib/notifications/globalNotifications";
+import { filterWithinRadius } from "@/lib/geoUtils";
 
-// Native Android Hardware & Push Notification Bridge Declaration
-declare global {
-  interface Window {
-    AndroidNotificationBridge?: {
-      postSystemNotification?: (title: string, message: string, category: string) => void;
-    };
-  }
-}
-
-export interface ResiGridNotification {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: "warning" | "success" | "info" | "error";
-  category?: string;
-  read?: boolean;
-  timestamp: number; // Required for reliable relative timestamp calculations
+interface HomeReport {
+  report_id: string | null;
+  category: string | null;
+  title: string | null;
+  description: string | null;
+  location_address: string | null;
+  province: string | null;
+  municipality: string | null;
+  ward: string | null;
+  status: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 const modules = [
@@ -88,6 +91,7 @@ const ACCENT_HEX_MAP: Record<string, string> = {
 };
 
 export default function HomePage() {
+  const { location } = useGeo();
   const [greetingPrefix, setGreetingPrefix] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
   const [waterStatus, setWaterStatus] = useState<string>("Normal");
@@ -101,6 +105,8 @@ export default function HomePage() {
   const [notifications, setNotifications] = useState<ResiGridNotification[]>([]);
   const [isNotifModalOpen, setIsNotifModalOpen] = useState<boolean>(false);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [pushStatus, setPushStatus] = useState<"checking" | "enabled" | "disabled" | "denied" | "unsupported" | "unconfigured">("checking");
+  const [pushMessage, setPushMessage] = useState("");
 
   // Lock body scroll and handle mobile viewport when notification modal is active
   useEffect(() => {
@@ -129,75 +135,59 @@ export default function HomePage() {
     return `${diffDays}d ago`;
   };
 
-  // Function to trigger system-level device notification
-  const triggerNativeDeviceNotification = (title: string, message: string, category = "general") => {
-    if (window.AndroidNotificationBridge?.postSystemNotification) {
-      window.AndroidNotificationBridge.postSystemNotification(title, message, category);
-      return;
-    }
-
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "granted") {
-        new Notification(title, {
-          body: message,
-          icon: "/favicon.ico",
-        });
-      } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then((permission) => {
-          if (permission === "granted") {
-            new Notification(title, {
-              body: message,
-              icon: "/favicon.ico",
-            });
-          }
-        });
-      }
-    }
-  };
-
   const loadGlobalNotifications = () => {
-    try {
-      const savedNotifs = localStorage.getItem("resigrid_global_notifications");
-      const now = Date.now();
-      if (savedNotifs) {
-        const parsed: ResiGridNotification[] = JSON.parse(savedNotifs);
-        const updatedTimes = parsed.map((n) => ({
-          ...n,
-          timestamp: n.timestamp || now, // fallback if legacy item lacked timestamp
-          time: getRelativeTimeString(n.timestamp || now),
-        }));
-        setNotifications(updatedTimes);
-        setUnreadCount(updatedTimes.filter((n) => !n.read).length);
-      } else {
-        const defaultNotifs: ResiGridNotification[] = [
-          {
-            id: "notif-init-1",
-            title: "Neighborhood Updates Active",
-            description: "Live alerts for water, power, and community services are enabled.",
-            time: "Just now",
-            type: "info",
-            category: "system",
-            read: false,
-            timestamp: now,
-          },
-        ];
-        setNotifications(defaultNotifs);
-        setUnreadCount(1);
-        localStorage.setItem("resigrid_global_notifications", JSON.stringify(defaultNotifs));
-      }
-    } catch (err) {
-      console.error("Error reading global notifications:", err);
-    }
+    const visibleNotifications = getGlobalNotifications()
+      .filter((notification) => {
+        if (notification.dismissed) return false;
+        if (!notification.dedupeKey?.startsWith("report:")) return true;
+        if (
+          !location ||
+          typeof notification.latitude !== "number" ||
+          typeof notification.longitude !== "number" ||
+          !Number.isFinite(notification.latitude) ||
+          !Number.isFinite(notification.longitude)
+        ) {
+          return false;
+        }
+        return filterWithinRadius(
+          location.latitude,
+          location.longitude,
+          [{ latitude: notification.latitude, longitude: notification.longitude }],
+          10
+        ).length > 0;
+      })
+      .map((notification) => ({
+        ...notification,
+        time: getRelativeTimeString(notification.timestamp),
+      }));
+    setNotifications(visibleNotifications);
+    setUnreadCount(visibleNotifications.filter((notification) => !notification.read).length);
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.register("/sw.js").catch((error: unknown) => {
+        console.error("Could not enable offline app support:", error);
+      });
+    }
+    loadGlobalNotifications();
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setPushStatus("unsupported");
+    } else if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
+      setPushStatus("unconfigured");
+    } else if (Notification.permission === "denied") {
+      setPushStatus("denied");
+    } else {
+      void navigator.serviceWorker.getRegistration("/").then(async (registration) => {
+        const subscription = await registration?.pushManager.getSubscription();
+        setPushStatus(subscription ? "enabled" : "disabled");
+      }).catch((error: unknown) => {
+        console.error("Could not check screen notification status:", error);
+        setPushStatus("disabled");
+      });
     }
 
-    loadGlobalNotifications();
-
-    // Live relative timestamp updater ticker every 5 seconds for instant updates
+    // Refresh issue statuses while keeping relative timestamps current.
     const tickerInterval = setInterval(() => {
       syncStatusFromSupabase();
       setNotifications((prev) =>
@@ -206,7 +196,7 @@ export default function HomePage() {
           time: getRelativeTimeString(n.timestamp),
         }))
       );
-    }, 5000);
+    }, 30000);
 
     // Fetch live local weather from Open-Meteo
     if (typeof window !== "undefined" && navigator.geolocation) {
@@ -298,27 +288,43 @@ export default function HomePage() {
       try {
         const { data, error } = await supabase
           .from("reports")
-          .select("*")
+          .select("report_id, category, title, description, location_address, province, municipality, ward, status, latitude, longitude")
           .order("id", { ascending: false });
 
         if (error) {
           console.error("Error fetching reports from Supabase for home summary:", error);
-          return;
         }
 
-        let hasWaterIssue = false;
-        let hasPowerIssue = false;
+        const cachedReports = readOfflineData<HomeReport[]>("resigrid_home_reports");
+        const reports: HomeReport[] = data
+          ? data as HomeReport[]
+          : Array.isArray(cachedReports) ? cachedReports : [];
+        if (data) writeOfflineData("resigrid_home_reports", data);
 
-        if (data && data.length > 0) {
-          data.forEach((report: any) => {
-            const cat = (report.category || "").toLowerCase();
-            if (cat === "water" || cat.includes("water")) hasWaterIssue = true;
-            if (cat === "power" || cat.includes("power") || cat.includes("electricity")) hasPowerIssue = true;
-          });
-          if (!hasWaterIssue && !hasPowerIssue && data.length > 0) {
-            hasWaterIssue = true;
-          }
-        }
+        const reportsWithCoordinates = reports.filter(
+          (report): report is HomeReport & { latitude: number; longitude: number } =>
+            typeof report.latitude === "number" &&
+            typeof report.longitude === "number" &&
+            Number.isFinite(report.latitude) &&
+            Number.isFinite(report.longitude)
+        );
+        const nearbyReports = location
+          ? filterWithinRadius(location.latitude, location.longitude, reportsWithCoordinates, 10)
+          : [];
+        if (location) syncReportNotifications(nearbyReports);
+        const activeReports = nearbyReports.filter(
+          (report) =>
+            report.category?.toLowerCase() !== "goods" &&
+            !["resolved", "closed", "fixed"].includes((report.status || "").toLowerCase())
+        );
+        const hasWaterIssue = activeReports.some((report: { category?: string | null }) =>
+          (report.category || "").toLowerCase().includes("water")
+        );
+        const hasPowerIssue = activeReports.some((report: { category?: string | null }) =>
+          ["power", "electricity"].some((category) =>
+            (report.category || "").toLowerCase().includes(category)
+          )
+        );
 
         const newWater = hasWaterIssue ? "Issue reported" : "Normal";
         const newEnergy = hasPowerIssue ? "Issue reported" : "Normal";
@@ -326,7 +332,7 @@ export default function HomePage() {
         setWaterStatus(newWater);
         setEnergyStatus(newEnergy);
 
-        if (hasWaterIssue || hasPowerIssue || (data && data.length > 0)) {
+        if (activeReports.length > 0) {
           setSummaryText("Issues have been reported in your area.");
         } else {
           setSummaryText("No issues reported in your area today.");
@@ -344,17 +350,9 @@ export default function HomePage() {
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
       broadcastChannel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
+        const { type } = event.data || {};
         if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
           syncStatusFromSupabase();
-
-          if (payload && payload.title) {
-            triggerNativeDeviceNotification(
-              payload.title,
-              payload.description || "New update reported in your area.",
-              payload.category || "general"
-            );
-          }
         }
       };
     }
@@ -375,27 +373,167 @@ export default function HomePage() {
       window.removeEventListener("focus", syncStatusFromSupabase);
       clearInterval(tickerInterval);
     };
-  }, []);
+  }, [location]);
+
+  useEffect(() => {
+    if (pushStatus !== "enabled" || !location || !("serviceWorker" in navigator)) return;
+
+    let cancelled = false;
+    void navigator.serviceWorker.getRegistration("/").then(async (registration) => {
+      const subscription = await registration?.pushManager.getSubscription();
+      if (!subscription || cancelled) return;
+
+      const response = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...subscription.toJSON(),
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Could not refresh the screen alert location (${response.status}).`);
+      }
+    }).catch((error: unknown) => {
+      console.error("Could not refresh the screen alert location:", error);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location, pushStatus]);
+
+  const handleEnableScreenNotifications = async () => {
+    setPushMessage("");
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidPublicKey) {
+      setPushStatus("unconfigured");
+      setPushMessage("Screen alerts need push keys configured by the app administrator.");
+      return;
+    }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      setPushStatus("unsupported");
+      setPushMessage("This browser does not support screen alerts.");
+      return;
+    }
+    if (!location || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) {
+      setPushStatus("disabled");
+      setPushMessage("Allow location access to enable nearby screen alerts.");
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushStatus(permission === "denied" ? "denied" : "disabled");
+        setPushMessage("Allow notifications in your browser settings to receive screen alerts.");
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      const readyRegistration = await navigator.serviceWorker.ready;
+      const activeRegistration = registration.active ? registration : readyRegistration;
+      let subscription = await activeRegistration.pushManager.getSubscription();
+      if (!subscription) {
+        const padding = "=".repeat((4 - (vapidPublicKey.length % 4)) % 4);
+        const decodedKey = atob(
+          (vapidPublicKey + padding).replace(/-/g, "+").replace(/_/g, "/")
+        );
+        const applicationServerKey = Uint8Array.from(decodedKey, (character) =>
+          character.charCodeAt(0)
+        );
+        subscription = await activeRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+      }
+
+      const response = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...subscription.toJSON(),
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }),
+      });
+      if (!response.ok) {
+        const responseBody = await response.json().catch(() => null);
+        throw new Error(
+          typeof responseBody?.error === "string"
+            ? responseBody.error
+            : `Could not enable screen alerts (${response.status}).`
+        );
+      }
+
+      setPushStatus("enabled");
+      setPushMessage("");
+    } catch (error) {
+      console.error("Could not enable screen alerts:", error);
+      setPushStatus("disabled");
+      setPushMessage(error instanceof Error ? error.message : "Could not enable screen alerts.");
+    }
+  };
+
+  const handleDisableScreenNotifications = async () => {
+    setPushMessage("");
+    try {
+      const registration = await navigator.serviceWorker.getRegistration("/");
+      const subscription = await registration?.pushManager.getSubscription();
+      if (subscription) {
+        const response = await fetch("/api/push/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        if (!response.ok) {
+          const responseBody = await response.json().catch(() => null);
+          throw new Error(
+            typeof responseBody?.error === "string"
+              ? responseBody.error
+              : `Could not turn off screen alerts (${response.status}).`
+          );
+        }
+        await subscription.unsubscribe();
+      }
+      setPushStatus("disabled");
+      setPushMessage("");
+    } catch (error) {
+      console.error("Could not disable screen alerts:", error);
+      setPushMessage(error instanceof Error ? error.message : "Could not turn off screen alerts.");
+    }
+  };
 
   const handleOpenNotificationsModal = () => {
     setIsNotifModalOpen(true);
     const updated = notifications.map((n) => ({ ...n, read: true }));
     setNotifications(updated);
     setUnreadCount(0);
-    localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
+    saveGlobalNotifications(
+      getGlobalNotifications().map((notification) => ({ ...notification, read: true }))
+    );
   };
 
   const handleClearNotifications = () => {
+    const updated = getGlobalNotifications().map((notification) => ({
+      ...notification,
+      dismissed: true,
+    }));
+    saveGlobalNotifications(updated);
     setNotifications([]);
     setUnreadCount(0);
-    localStorage.removeItem("resigrid_global_notifications");
+    setIsNotifModalOpen(false); // Close the modal and go back to home page
   };
 
   const handleDismissSingleNotification = (id: string) => {
-    const updated = notifications.filter((n) => n.id !== id);
-    setNotifications(updated);
-    setUnreadCount(updated.filter((n) => !n.read).length);
-    localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
+    const updated = getGlobalNotifications().map((notification) =>
+      notification.id === id ? { ...notification, dismissed: true } : notification
+    );
+    saveGlobalNotifications(updated);
+    const visibleNotifications = updated.filter((notification) => !notification.dismissed);
+    setNotifications(visibleNotifications);
+    setUnreadCount(visibleNotifications.filter((notification) => !notification.read).length);
   };
 
   const groupedNotifications = notifications.reduce((acc, notif) => {
@@ -578,7 +716,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2.5">
                 <Bell className="h-5 w-5 text-[var(--accent)]" />
                 <h3 className="text-xs sm:text-base font-bold tracking-wider text-white uppercase">
-                  Notifications &amp; Advisories
+                  Notifications
                 </h3>
               </div>
 
@@ -621,18 +759,18 @@ export default function HomePage() {
                         return (
                           <div
                             key={notif.id}
-                            className="p-4 sm:p-5 rounded-3xl border border-white/10 bg-black/60 relative flex items-start justify-between gap-4 transition-all hover:border-white/20 shadow-lg"
+                            className="p-4 sm:p-5 px-6 sm:px-8 rounded-full border border-white/10 bg-black/60 relative flex items-center justify-between gap-4 transition-all hover:border-white/20 shadow-lg"
                           >
-                            <div className="flex items-start gap-3.5 min-w-0">
-                              <NotifIcon className="h-5 w-5 shrink-0 mt-0.5" style={iconColorStyle} />
-                              <div className="space-y-1 min-w-0">
-                                <h4 className="text-xs sm:text-sm font-semibold text-white leading-snug">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <NotifIcon className="h-5 w-5 shrink-0" style={iconColorStyle} />
+                              <div className="space-y-0.5 min-w-0">
+                                <h4 className="text-xs sm:text-sm font-semibold text-white leading-snug truncate">
                                   {notif.title}
                                 </h4>
-                                <p className="text-xs text-muted leading-relaxed">
+                                <p className="text-xs text-muted leading-relaxed truncate">
                                   {notif.description}
                                 </p>
-                                <span className="inline-block text-[10px] font-mono text-muted/70 pt-0.5">
+                                <span className="inline-block text-[10px] font-mono text-muted/70">
                                   {notif.time}
                                 </span>
                               </div>
@@ -642,7 +780,7 @@ export default function HomePage() {
                               type="button"
                               onClick={() => handleDismissSingleNotification(notif.id)}
                               aria-label="Dismiss notification"
-                              className="text-muted hover:text-white transition-colors p-2 shrink-0 cursor-pointer rounded-xl bg-white/5 border border-white/10 touch-manipulation"
+                              className="text-muted hover:text-white transition-colors p-2 shrink-0 cursor-pointer rounded-full bg-white/5 border border-white/10 touch-manipulation"
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -655,15 +793,46 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Footer with Clear All Button */}
-            <div className="pt-4 border-t border-white/10 flex items-center justify-end shrink-0 pb-safe">
+            {/* Footer with Clear Pill Button */}
+            <div className="pt-4 border-t border-white/10 flex items-center justify-between gap-3 shrink-0 pb-safe">
+              <div className="min-w-0">
+                {pushStatus === "enabled" ? (
+                  <button
+                    type="button"
+                    onClick={handleDisableScreenNotifications}
+                    className="text-[11px] text-emerald-400 hover:text-white cursor-pointer touch-manipulation"
+                  >
+                    {pushMessage || "Screen alerts are on · Turn off"}
+                  </button>
+                ) : pushStatus === "unsupported" || pushStatus === "unconfigured" || pushStatus === "denied" ? (
+                  <p className="text-[11px] text-muted">
+                    {pushMessage || (pushStatus === "unconfigured"
+                      ? "Screen alerts need setup."
+                      : pushStatus === "denied"
+                        ? "Allow alerts in browser settings."
+                        : "Screen alerts aren't supported here.")}
+                  </p>
+                ) : (
+                  <div>
+                    {pushMessage && <p className="mb-1 text-[11px] text-muted">{pushMessage}</p>}
+                    <button
+                      type="button"
+                      onClick={handleEnableScreenNotifications}
+                      disabled={pushStatus === "checking"}
+                      className="text-xs font-medium text-[var(--accent)] hover:text-white disabled:opacity-50 cursor-pointer touch-manipulation"
+                    >
+                      Turn on screen alerts
+                    </button>
+                  </div>
+                )}
+              </div>
               {notifications.length > 0 && (
                 <button
                   type="button"
                   onClick={handleClearNotifications}
-                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-3 px-5 rounded-2xl bg-white/5 border border-white/10 touch-manipulation"
+                  className="text-xs text-muted hover:text-rose-400 transition-colors font-medium flex items-center gap-1.5 cursor-pointer py-2.5 px-6 rounded-full bg-white/5 border border-white/10 touch-manipulation"
                 >
-                  <Trash2 className="h-4 w-4" /> Clear All Notifications
+                  <Trash2 className="h-4 w-4" /> Clear
                 </button>
               )}
             </div>

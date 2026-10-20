@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
+import { supabase } from "@/lib/supabase";
+import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 
 interface ListingItem {
   id: string;
@@ -36,57 +38,6 @@ interface ListingItem {
   distanceKm?: number;
   formattedDistance?: string;
 }
-
-const INITIAL_MARKETPLACE_LISTINGS: ListingItem[] = [
-  {
-    id: "MKT-101",
-    title: "Surplus Solar Energy Access (5.2 kWh Batch)",
-    category: "power",
-    price: "R1.20 / kWh",
-    seller: "Solar Inverter Hub",
-    location: "Sector 4 - Sunset Ridge",
-    status: "Available",
-    contactPhone: "27821234567",
-    latitude: -29.6006,
-    longitude: 30.3794,
-  },
-  {
-    id: "MKT-102",
-    title: "Emergency Water Tank Supply (1,000L Reserve)",
-    category: "water",
-    price: "R150 / Fill",
-    seller: "Community Water Depot",
-    location: "Ward 12 - Main Reservoir",
-    status: "Available",
-    contactPhone: "27839876543",
-    latitude: -29.6100,
-    longitude: 30.3850,
-  },
-  {
-    id: "MKT-103",
-    title: "Portable Lithium Power Station (500W)",
-    category: "goods",
-    price: "R3,200",
-    seller: "Sipho M.",
-    location: "4th Avenue",
-    status: "Available",
-    contactPhone: "27815550192",
-    latitude: -29.5900,
-    longitude: 30.3600,
-  },
-  {
-    id: "MKT-104",
-    title: "Inverter & Battery Wiring Installation Tech",
-    category: "services",
-    price: "R450 / hr",
-    seller: "Local Electrical Team",
-    location: "Zone 3",
-    status: "Available",
-    contactPhone: "27829990011",
-    latitude: -29.5800,
-    longitude: 30.3500,
-  },
-];
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -140,7 +91,7 @@ export default function MarketplacePage() {
 
   const [activeCategory, setActiveCategory] = useState<"all" | "power" | "water" | "goods" | "services">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [listings, setListings] = useState<ListingItem[]>(INITIAL_MARKETPLACE_LISTINGS);
+  const [listings, setListings] = useState<ListingItem[]>([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Modal State for New Listing Creation
@@ -152,76 +103,100 @@ export default function MarketplacePage() {
   const [newLocation, setNewLocation] = useState("");
   const [newPhone, setNewPhone] = useState("");
 
-  // Aggregated Feature Load: Pull items from Power & Civic storage modules into Marketplace
+  // Fetch live marketplace, water, and power nodes from Supabase and sync across HydroMesh & VoltShield
   useEffect(() => {
-    try {
-      const savedMarketListings = localStorage.getItem("resigrid_marketplace_listings");
-      let baseListings = INITIAL_MARKETPLACE_LISTINGS;
+    async function fetchSupabaseListings() {
+      try {
+        const [waterRes, powerRes, reportsRes] = await Promise.all([
+          supabase.from("water_nodes").select("*"),
+          supabase.from("power_nodes").select("*"),
+          supabase.from("reports").select("*").eq("category", "goods")
+        ]);
 
-      if (savedMarketListings) {
-        const parsed = JSON.parse(savedMarketListings);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          baseListings = parsed.map((item: any) => ({
-            ...item,
-            latitude: typeof item.latitude === "number" ? item.latitude : -29.6006,
-            longitude: typeof item.longitude === "number" ? item.longitude : 30.3794,
-          }));
+        if (waterRes.error || powerRes.error || reportsRes.error) {
+          if (waterRes.error) console.error("Could not fetch marketplace water listings:", waterRes.error);
+          if (powerRes.error) console.error("Could not fetch marketplace power listings:", powerRes.error);
+          if (reportsRes.error) console.error("Could not fetch marketplace goods listings:", reportsRes.error);
+          const cachedListings = readOfflineData<ListingItem[]>("resigrid_marketplace_listings");
+          if (Array.isArray(cachedListings)) setListings(cachedListings);
+          return;
         }
+
+        const combinedListings: ListingItem[] = [];
+
+        if (waterRes.data) {
+          waterRes.data.forEach((node: any) => {
+            combinedListings.push({
+              id: node.node_id || `WAT-${node.id}`,
+              title: `${node.owner} (${node.type})`,
+              category: "water",
+              price: node.price || "R150 / Fill",
+              seller: node.owner || "Community Water Depot",
+              location: node.location || "Neighborhood",
+              status: "Available",
+              contactPhone: node.whatsapp_phone || "27821234567",
+              latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
+              longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
+              isUserCreated: node.is_user_created,
+            });
+          });
+        }
+
+        if (powerRes.data) {
+          powerRes.data.forEach((node: any) => {
+            combinedListings.push({
+              id: node.node_id || `PWR-${node.id}`,
+              title: `${node.owner} (${node.type})`,
+              category: "power",
+              price: node.price || "R1.20 / kWh",
+              seller: node.owner || "Community Backup Node",
+              location: node.location || "Neighborhood",
+              status: "Available",
+              contactPhone: node.whatsapp_phone || "27821234567",
+              latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
+              longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
+              isUserCreated: node.is_user_created,
+            });
+          });
+        }
+
+        if (reportsRes.data) {
+          reportsRes.data.forEach((rep: any) => {
+            combinedListings.push({
+              id: rep.report_id || `REP-${rep.id}`,
+              title: rep.title,
+              category: "goods",
+              price: rep.estimated_fix_time || "R0",
+              seller: rep.reporter_name || "Resident",
+              location: rep.location_address || "Ward",
+              status: "Available",
+              contactPhone: rep.reporter_phone || "27821234567",
+              latitude: typeof rep.latitude === "number" ? rep.latitude : Number.NaN,
+              longitude: typeof rep.longitude === "number" ? rep.longitude : Number.NaN,
+              isUserCreated: true,
+            });
+          });
+        }
+
+        setListings(combinedListings);
+        writeOfflineData("resigrid_marketplace_listings", combinedListings);
+      } catch (err) {
+        console.error("Failed to load Supabase marketplace data:", err);
+        const cachedListings = readOfflineData<ListingItem[]>("resigrid_marketplace_listings");
+        if (Array.isArray(cachedListings)) setListings(cachedListings);
       }
-
-      // Merge active power backup nodes from VoltShield
-      const savedPowerNodes = localStorage.getItem("resigrid_power_nodes");
-      let aggregatedNodes: ListingItem[] = [];
-
-      if (savedPowerNodes) {
-        const parsedNodes = JSON.parse(savedPowerNodes);
-        if (Array.isArray(parsedNodes)) {
-          aggregatedNodes = parsedNodes.map((node: any) => ({
-            id: node.id || `PWR-${Math.floor(Math.random() * 8999 + 1000)}`,
-            title: `${node.owner} (${node.type})`,
-            category: "power" as const,
-            price: node.price || "Free / Donation",
-            seller: node.owner || "Community Backup Node",
-            location: node.location || "Neighborhood",
-            status: "Available" as const,
-            contactPhone: node.whatsappPhone || "27821234567",
-            latitude: typeof node.latitude === "number" ? node.latitude : -29.6006,
-            longitude: typeof node.longitude === "number" ? node.longitude : 30.3794,
-          }));
-        }
-      }
-
-      // Merge combined list without duplicate IDs
-      const combined = [...baseListings];
-      aggregatedNodes.forEach((nodeItem) => {
-        if (!combined.some((item) => item.id === nodeItem.id)) {
-          combined.push(nodeItem);
-        }
-      });
-
-      setListings(combined);
-      localStorage.setItem("resigrid_marketplace_listings", JSON.stringify(combined));
-    } catch (e) {
-      console.error("Error loading combined marketplace listings:", e);
     }
+
+    fetchSupabaseListings();
   }, []);
 
-  // Sync state changes back to LocalStorage
-  const updateListingsState = (newListings: ListingItem[]) => {
-    setListings(newListings);
-    try {
-      localStorage.setItem("resigrid_marketplace_listings", JSON.stringify(newListings));
-    } catch (e) {
-      console.error("Storage save error:", e);
-    }
-  };
-
-  const handlePostListing = (e: React.FormEvent) => {
+  const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle || !newPrice || !newSeller || !newLocation) return;
 
+    const uniqueId = `MKT-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newListingItem: ListingItem = {
-      id: `MKT-${Math.floor(Math.random() * 8999 + 1000)}`,
+      id: uniqueId,
       title: newTitle.trim(),
       category: newCategory,
       price: newPrice.trim(),
@@ -230,12 +205,71 @@ export default function MarketplacePage() {
       status: "Available",
       contactPhone: newPhone.replace(/[^0-9]/g, "") || "27821234567",
       isUserCreated: true,
-      latitude: location?.latitude ?? -29.6000,
-      longitude: location?.longitude ?? 30.3800,
+      latitude: location?.latitude ?? Number.NaN,
+      longitude: location?.longitude ?? Number.NaN,
     };
 
-    const updated = [newListingItem, ...listings];
-    updateListingsState(updated);
+    // Push to Supabase tables depending on category so HydroMesh and VoltShield stay fully connected & synchronized
+    try {
+      if (newCategory === "water") {
+        await supabase.from("water_nodes").insert([
+          {
+            node_id: uniqueId,
+            owner: newSeller.trim(),
+            type: newTitle.trim(),
+            capacity: "1000L",
+            price: newPrice.trim(),
+            location: newLocation.trim(),
+            whatsapp_phone: newListingItem.contactPhone,
+            is_user_created: true,
+            latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
+            longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
+          }
+        ]);
+      } else if (newCategory === "power") {
+        await supabase.from("power_nodes").insert([
+          {
+            node_id: uniqueId,
+            owner: newSeller.trim(),
+            type: newTitle.trim(),
+            capacity: "5.2 kWh",
+            price: newPrice.trim(),
+            location: newLocation.trim(),
+            whatsapp_phone: newListingItem.contactPhone,
+            is_user_created: true,
+            latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
+            longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
+          }
+        ]);
+      } else {
+        await supabase.from("reports").insert([
+          {
+            report_id: uniqueId,
+            category: "goods",
+            title: newTitle.trim(),
+            description: `Marketplace offering listed by ${newSeller.trim()}.`,
+            location_address: newLocation.trim(),
+            province: "KwaZulu-Natal",
+            municipality: "Msunduzi",
+            ward: "Ward 26",
+            priority: "Low",
+            status: "Available",
+            time_str: "Just now",
+            reporter_name: newSeller.trim(),
+            reporter_phone: newListingItem.contactPhone,
+            estimated_fix_time: newPrice.trim(),
+            latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
+            longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
+          }
+        ]);
+      }
+    } catch (err) {
+      console.error("Failed to sync new listing to Supabase:", err);
+    }
+
+    const updatedListings = [newListingItem, ...listings];
+    setListings(updatedListings);
+    writeOfflineData("resigrid_marketplace_listings", updatedListings);
 
     // Reset Form & Close Modal
     setIsModalOpen(false);
@@ -259,7 +293,7 @@ export default function MarketplacePage() {
     return filterByRadius(listings, 10.0);
   }, [filterByRadius, listings]);
 
-  const displayListings = nearbyListings.length > 0 ? nearbyListings : listings;
+  const displayListings = nearbyListings;
 
   const filteredListings = displayListings.filter((item) => {
     const matchesCategory = activeCategory === "all" || item.category === activeCategory;

@@ -7,10 +7,8 @@ import {
   Zap,
   Droplet,
   FileText,
-  AlertTriangle,
   MapPin,
   RefreshCw,
-  ChevronRight,
   Eye,
   EyeOff,
   Navigation,
@@ -19,6 +17,7 @@ import {
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
+import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 
 interface IncidentMarker {
   id: string;
@@ -118,44 +117,6 @@ export default function RadarPage() {
     };
   }, []);
 
-  // Simple Notification Dispatcher for Nearby Hazards
-  const dispatchSimpleHazardNotifications = useCallback((incidents: IncidentMarker[]) => {
-    try {
-      const existingNotifs = JSON.parse(localStorage.getItem("resigrid_global_notifications") || "[]");
-      let updated = [...existingNotifs];
-      let hasChanges = false;
-
-      incidents.forEach((item) => {
-        const notifId = `radar-alert-${item.id}`;
-        const alreadyExists = updated.some((n: any) => n.id === notifId);
-
-        if (!alreadyExists) {
-          let catTitle = "Community hazard reported nearby";
-          if (item.type === "power") catTitle = "Power fault reported nearby";
-          if (item.type === "water") catTitle = "Water issue reported nearby";
-
-          const newNotif = {
-            id: notifId,
-            title: catTitle,
-            description: `${item.title} at ${item.location}. Check radar feed for details.`,
-            time: "Just now",
-            type: "warning",
-            category: item.type === "power" || item.type === "water" ? item.type : "civic",
-          };
-
-          updated = [newNotif, ...updated];
-          hasChanges = true;
-        }
-      });
-
-      if (hasChanges) {
-        localStorage.setItem("resigrid_global_notifications", JSON.stringify(updated));
-      }
-    } catch (e) {
-      console.error("Error dispatching hazard notification:", e);
-    }
-  }, []);
-
   // Fetch active reports strictly and exclusively from Supabase database table
   const loadReports = useCallback(async () => {
     try {
@@ -166,14 +127,15 @@ export default function RadarPage() {
 
       if (error) {
         console.error("Supabase fetch error on Radar:", error);
-        setLiveIncidents([]);
+        const cachedIncidents = readOfflineData<IncidentMarker[]>("resigrid_radar_incidents");
+        setLiveIncidents(Array.isArray(cachedIncidents) ? cachedIncidents : []);
         return;
       }
 
       if (data && data.length > 0) {
         const mapped: IncidentMarker[] = data.map((row: any, idx: number) => {
-          const lat = row.latitude ?? (userLat + (idx * 0.003 - 0.0015));
-          const lng = row.longitude ?? (userLng + (idx * 0.003 - 0.0015));
+          const lat = typeof row.latitude === "number" ? row.latitude : Number.NaN;
+          const lng = typeof row.longitude === "number" ? row.longitude : Number.NaN;
           
           const distKm = calculateDistanceKm(userLat, userLng, lat, lng);
           
@@ -207,6 +169,7 @@ export default function RadarPage() {
         });
 
         setLiveIncidents(mapped);
+        writeOfflineData("resigrid_radar_incidents", mapped);
         setSelectedIncident((prev) => {
           if (!prev) return mapped[0];
           return mapped.find((m) => m.id === prev.id) || mapped[0];
@@ -243,15 +206,8 @@ export default function RadarPage() {
     return filterByRadius(liveIncidents, 10.0);
   }, [filterByRadius, liveIncidents]);
 
-  const displayIncidents = nearbyIncidents.length > 0 ? nearbyIncidents : liveIncidents;
+  const displayIncidents = nearbyIncidents;
   const filteredIncidents = displayIncidents.filter((inc) => layers[inc.type as keyof typeof layers]);
-
-  // Dispatch Simple Notifications whenever Nearby Incidents update
-  useEffect(() => {
-    if (displayIncidents.length > 0) {
-      dispatchSimpleHazardNotifications(displayIncidents);
-    }
-  }, [displayIncidents, dispatchSimpleHazardNotifications]);
 
   const toggleLayer = (layerKey: keyof typeof layers) => {
     setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));

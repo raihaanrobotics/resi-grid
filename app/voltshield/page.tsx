@@ -633,8 +633,13 @@ export default function VoltShieldPage() {
             {/* PHONE CHARGING TEST INTERFACE */}
             <section
               onClick={isScanning ? stopShuntScan : startShuntScan}
-              className="relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5"
+              className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
+              style={{
+                borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
+                backgroundColor: "color-mix(in srgb, var(--accent) 5%, transparent)",
+              }}
             >
+              <div className="panel-reflection pointer-events-none" />
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>

@@ -3,6 +3,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
 
 export interface GeoLocation {
   latitude: number;
@@ -50,6 +52,34 @@ export function useUserLocation() {
   const hasLockedLocation = useRef(false);
 
   const requestPosition = useCallback((forceFresh = false) => {
+    if (Capacitor.isNativePlatform()) {
+      void Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: forceFresh ? 0 : Infinity,
+      }).then((position) => {
+        const newLoc = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+        setLocation(newLoc);
+        setLoading(false);
+        try {
+          localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(newLoc));
+        } catch (cacheError) {
+          console.error("Could not save the device location for offline use:", cacheError);
+        }
+        if (!forceFresh) hasLockedLocation.current = true;
+      }).catch((nativeError: unknown) => {
+        console.error("Could not read the phone location:", nativeError);
+        setError(nativeError instanceof Error ? nativeError.message : "Location access is unavailable.");
+        setLocation(getCachedLocation());
+        setLoading(false);
+      });
+      return;
+    }
+
     if (!navigator.geolocation) {
       setError("Geolocation is not supported by your browser");
       setLocation(getCachedLocation());

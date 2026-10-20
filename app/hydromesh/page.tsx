@@ -672,8 +672,13 @@ export default function HydroMeshPage() {
             <section
               id="acoustic-scanner-section"
               onClick={isScanning ? stopAcousticScan : startAcousticScan}
-              className="relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5"
+              className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
+              style={{
+                borderColor: `color-mix(in srgb, ${accentColor} 30%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${accentColor} 5%, transparent)`,
+              }}
             >
+              <div className="panel-reflection pointer-events-none" />
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>

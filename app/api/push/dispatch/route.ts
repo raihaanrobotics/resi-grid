@@ -223,7 +223,8 @@ export async function POST(request: Request) {
     const supabase = getPushAdminClient();
     const { data: subscriptions, error: subscriptionsError } = await supabase
       .from("push_subscriptions")
-      .select("endpoint, subscription, latitude, longitude");
+      .select("endpoint, subscription, latitude, longitude")
+      .like("endpoint", "https://%");
 
     if (subscriptionsError) {
       console.error("Failed to load Web Push subscriptions:", subscriptionsError);

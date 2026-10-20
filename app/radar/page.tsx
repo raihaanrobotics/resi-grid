@@ -133,18 +133,37 @@ export default function RadarPage() {
       }
 
       if (data && data.length > 0) {
-        const mapped: IncidentMarker[] = data.map((row: any, idx: number) => {
+        const mapped: IncidentMarker[] = data.map((row: any) => {
           const lat = typeof row.latitude === "number" ? row.latitude : Number.NaN;
           const lng = typeof row.longitude === "number" ? row.longitude : Number.NaN;
           
-          const distKm = calculateDistanceKm(userLat, userLng, lat, lng);
-          
-          const latDiffKm = (lat - userLat) * 111;
-          const lngDiffKm = (lng - userLng) * 111 * Math.cos((userLat * Math.PI) / 180);
+          let x = 50;
+          let y = 50;
+          let distKm = 0;
 
-          const maxRadiusKm = 10.0;
-          const x = Math.min(92, Math.max(8, 50 + (lngDiffKm / maxRadiusKm) * 40));
-          const y = Math.min(92, Math.max(8, 50 - (latDiffKm / maxRadiusKm) * 40));
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            distKm = calculateDistanceKm(userLat, userLng, lat, lng);
+            
+            // Industrial Grade Geodesic Offsets with Precise Mercator Log Scaling
+            const latDiffKm = (lat - userLat) * 111.132;
+            const lngDiffKm = (lng - userLng) * (111.320 * Math.cos((userLat * Math.PI) / 180));
+
+            const maxRadiusKm = 10.0;
+            const actualDistKm = Math.hypot(latDiffKm, lngDiffKm);
+
+            if (actualDistKm < 0.01) {
+              x = 50;
+              y = 50;
+            } else {
+              // Logarithmic visual scaling to preserve precise radar positioning
+              const scaledDistKm = Math.min(maxRadiusKm, Math.pow(actualDistKm / maxRadiusKm, 0.65) * maxRadiusKm);
+              const normX = (lngDiffKm / actualDistKm) * (scaledDistKm / maxRadiusKm) * 44;
+              const normY = (latDiffKm / actualDistKm) * (scaledDistKm / maxRadiusKm) * 44;
+
+              x = Math.min(94, Math.max(6, 50 + normX));
+              y = Math.min(94, Math.max(6, 50 - normY));
+            }
+          }
 
           const cat = row.category || "other";
           const normalizedType = cat === "power" || cat === "water" ? cat : "other";
@@ -404,7 +423,7 @@ export default function RadarPage() {
             </div>
           </div>
 
-          {/* ALL INCIDENT DETAILS PANEL (SANITIZED: NO PERSONAL INFO) */}
+          {/* ALL INCIDENT DETAILS PANEL (SANITIZED: NO URGENCY BADGES) */}
           <div className="glass-panel p-4 sm:p-6 flex flex-col justify-between relative pointer-events-auto">
             <div className="panel-reflection pointer-events-none" />
 
@@ -441,9 +460,6 @@ export default function RadarPage() {
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="text-[10px] font-mono font-bold uppercase tracking-wider truncate" style={{ color: accentColor }}>
                             {incident.category || incident.type} • {incident.id}
-                          </span>
-                          <span className="text-[10px] font-mono uppercase text-amber-400 font-semibold shrink-0">
-                            {incident.severity} priority
                           </span>
                         </div>
 

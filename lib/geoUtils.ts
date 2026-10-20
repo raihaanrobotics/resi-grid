@@ -44,19 +44,37 @@ export function filterWithinRadius<T extends { latitude: number; longitude: numb
   items: T[],
   radiusKm = 10.0
 ): (T & { distanceKm: number; formattedDistance: string })[] {
-  if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) return [];
+  if (
+    !Number.isFinite(userLat) ||
+    !Number.isFinite(userLng) ||
+    Math.abs(userLat) > 90 ||
+    Math.abs(userLng) > 180 ||
+    !Number.isFinite(radiusKm) ||
+    radiusKm < 0
+  ) {
+    return [];
+  }
 
   return items
-    .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude))
-    .map((item) => {
-      const rawDistance = getDistanceInKm(userLat, userLng, item.latitude, item.longitude);
-      const distanceKm = Number(rawDistance.toFixed(3)); // Sub-meter mathematical accuracy
+    .filter(
+      (item) =>
+        Number.isFinite(item.latitude) &&
+        Number.isFinite(item.longitude) &&
+        Math.abs(item.latitude) <= 90 &&
+        Math.abs(item.longitude) <= 180
+    )
+    .map((item) => ({
+      item,
+      exactDistanceKm: getDistanceInKm(userLat, userLng, item.latitude, item.longitude),
+    }))
+    .filter(({ exactDistanceKm }) => exactDistanceKm <= radiusKm)
+    .sort((a, b) => a.exactDistanceKm - b.exactDistanceKm)
+    .map(({ item, exactDistanceKm }) => {
+      const distanceKm = Number(exactDistanceKm.toFixed(3));
       return {
         ...item,
         distanceKm,
         formattedDistance: formatDistance(distanceKm),
       };
-    })
-    .filter((item) => item.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
+    });
 }

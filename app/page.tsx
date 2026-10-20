@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import logoIcon from "@/assets/icon2.png";
 import { useEffect, useState } from "react";
 import {
-  Activity,
   Bell,
   ChevronRight,
   Droplets,
@@ -98,7 +99,7 @@ export default function HomePage() {
   const [energyStatus, setEnergyStatus] = useState<string>("Normal");
   const [weatherSummary, setWeatherSummary] = useState<string>("Loading weather...");
   const [summaryText, setSummaryText] = useState<string>(
-    "No reports. Water, power, and climate conditions are looking good in your area today."
+    "No issues reported in your area today."
   );
 
   // Notification Feed State & Modal Controls
@@ -559,9 +560,7 @@ export default function HomePage() {
         <header className="glass-header mb-6 flex items-center justify-between px-4 py-3 sm:mb-8 sm:px-5 lg:px-6">
           <Link href="/" className="flex items-center gap-3">
             {/* BRAND ICON LOCKED TO RESI TEAL ALWAYS */}
-            <div className="brand-icon !text-[#14b8a6] !border-[#14b8a6]/20">
-              <Activity className="h-[18px] w-[18px]" />
-            </div>
+            <Image src={logoIcon} alt="ResiGrid" width={36} height={36} className="h-9 w-9 rounded-xl object-cover" priority />
 
             <div>
               <div className="flex items-center gap-2">

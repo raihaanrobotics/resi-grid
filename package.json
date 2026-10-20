@@ -9,6 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/geolocation": "^8.2.4",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/status-bar": "^8.0.4",
+    "@onesignal/capacitor-plugin": "^1.2.1",
     "@supabase/supabase-js": "^2.118.0",
     "lucide-react": "^1.53.0",
     "next": "16.4.0",
@@ -17,6 +25,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

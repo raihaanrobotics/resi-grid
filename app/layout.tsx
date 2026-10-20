@@ -2,7 +2,7 @@
 
 import "./globals.css";
 import NavigationDock from "@/components/shared/NavigationDock";
-import { GeoProvider } from "@/context/GeoContext";
+import AppRuntime from "@/components/shared/AppRuntime";
 import { usePathname } from "next/navigation";
 
 export default function RootLayout({
@@ -16,10 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased text-white bg-black">
-        <GeoProvider>
+        <AppRuntime>
           {children}
           {!hideNavigationDock && <NavigationDock />}
-        </GeoProvider>
+        </AppRuntime>
       </body>
     </html>
   );

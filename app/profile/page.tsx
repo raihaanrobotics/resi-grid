@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   User,
   Shield,
@@ -22,7 +23,9 @@ import {
   Wrench,
   Package,
 } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
+import { getAuthCallbackUrl } from "@/lib/authRedirect";
 
 const ACCENT_PALETTES = [
   { id: "teal", name: "Resi Teal", hex: "#14b8a6", border: "border-teal-500", bg: "bg-teal-500" },
@@ -199,6 +202,7 @@ const DEPOT_UNITS = [
 ];
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
@@ -210,6 +214,7 @@ export default function ProfilePage() {
   const [secretCode, setSecretCode] = useState("");
   const [assignedDepot, setAssignedDepot] = useState(DEPOT_UNITS[0]);
   const [authError, setAuthError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
 
   const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
@@ -218,34 +223,40 @@ export default function ProfilePage() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
 
-  // Profile & Contact States
-  const [fullName, setFullName] = useState("Raihaan Mahomed");
-  const [email, setEmail] = useState("raihaan@rdesigns.co.za");
-  const [phone, setPhone] = useState("+27 82 123 4567");
-  const [selectedWard, setSelectedWard] = useState("Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
-  const [streetAddress, setStreetAddress] = useState("142 Chief Albert Luthuli St, Pietermaritzburg");
-  const [accountNumber, setAccountNumber] = useState("800459201");
-  const [standNumber, setStandNumber] = useState("Erf 1452 Scottsville");
+  // Profile & Contact States (Clean/Blank initial states)
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [selectedWard, setSelectedWard] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [standNumber, setStandNumber] = useState("");
 
-  // Check Supabase Auth Session on Mount
+  // Check Supabase Auth Session and load persistent profile on Mount
   useEffect(() => {
     async function checkSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
+        if (session && session.user) {
           setIsAuthenticated(true);
-          if (session.user?.email) {
-            setEmail(session.user.email);
-            const role = session.user.user_metadata?.role || "resident";
-            setAccountType(role);
-          }
-        } else {
-          const savedProfile = localStorage.getItem("resigrid_user_profile");
-          const savedRole = localStorage.getItem("resigrid_account_role") as any;
-          if (savedProfile) {
-            setIsAuthenticated(true);
-            if (savedRole) setAccountType(savedRole);
-          }
+          const userEmail = session.user.email || "";
+          setEmail(userEmail);
+          const role = session.user.user_metadata?.role || "resident";
+          setAccountType(role);
+
+          // Try fetching stored profile details from Supabase metadata or fallback to local storage
+          const meta = session.user.user_metadata || {};
+          const localProfile = localStorage.getItem(`resigrid_profile_${session.user.id}`);
+          const parsedLocal = localProfile ? JSON.parse(localProfile) : {};
+
+          setFullName(meta.full_name || parsedLocal.fullName || "");
+          setPhone(meta.phone || parsedLocal.phone || "");
+          setSelectedProvince(meta.province || parsedLocal.selectedProvince || "KwaZulu-Natal");
+          setSelectedCity(meta.city || parsedLocal.selectedCity || "Pietermaritzburg (Msunduzi)");
+          setSelectedWard(meta.ward || parsedLocal.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
+          setStreetAddress(meta.street_address || parsedLocal.streetAddress || "");
+          setAccountNumber(meta.account_number || parsedLocal.accountNumber || "");
+          setStandNumber(meta.stand_number || parsedLocal.standNumber || "");
         }
       } catch (err) {
         console.error("Auth check error:", err);
@@ -258,8 +269,6 @@ export default function ProfilePage() {
 
     try {
       const savedAccent = localStorage.getItem("resigrid_accent_theme");
-      const savedProfile = localStorage.getItem("resigrid_user_profile");
-
       if (savedAccent) {
         setSelectedAccent(savedAccent);
         setStagedAccent(savedAccent);
@@ -268,20 +277,6 @@ export default function ProfilePage() {
           document.documentElement.style.setProperty("--feature-accent", matchedPalette.hex);
           document.documentElement.style.setProperty("--accent", matchedPalette.hex);
         }
-      }
-
-      if (savedProfile) {
-        const parsed = JSON.parse(savedProfile);
-        if (parsed.fullName) setFullName(parsed.fullName);
-        if (parsed.email) setEmail(parsed.email);
-        if (parsed.phone) setPhone(parsed.phone);
-        if (parsed.selectedProvince) setSelectedProvince(parsed.selectedProvince);
-        if (parsed.selectedCity) setSelectedCity(parsed.selectedCity);
-        if (parsed.selectedWard) setSelectedWard(parsed.selectedWard);
-        if (parsed.streetAddress) setStreetAddress(parsed.streetAddress);
-        if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
-        if (parsed.standNumber) setStandNumber(parsed.standNumber);
-        if (parsed.assignedDepot) setAssignedDepot(parsed.assignedDepot);
       }
     } catch (e) {
       console.error("Error reading saved preferences:", e);
@@ -301,10 +296,25 @@ export default function ProfilePage() {
     };
   }, [isAuthenticated]);
 
+  // Handle South African Phone Number Formatting for WhatsApp (wa.me)
+  const handlePhoneBlur = () => {
+    if (!phone) return;
+    let digits = phone.replace(/\D/g, "");
+    if (digits.startsWith("27")) {
+      digits = "+" + digits;
+    } else if (digits.startsWith("0")) {
+      digits = "+27" + digits.substring(1);
+    } else if (!digits.startsWith("+")) {
+      digits = "+27" + digits;
+    }
+    setPhone(digits);
+  };
+
   // Handle Authentication (Login / Signup) via Supabase with Role-Based Routing
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
+    setAuthMessage("");
 
     if (accountType === "municipal") {
       const validMunicipalKey = "MUNI-SECURE-2026";
@@ -322,19 +332,27 @@ export default function ProfilePage() {
 
     try {
       if (authMode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email: authEmail,
           password: authPassword,
           options: {
-            data: { role: accountType, assigned_depot: assignedDepot }
+            emailRedirectTo: getAuthCallbackUrl({
+              currentOrigin: window.location.origin,
+              isNativePlatform: Capacitor.isNativePlatform(),
+            }),
+            data: { role: accountType, assigned_depot: assignedDepot, full_name: fullName, phone }
           }
         });
         if (error) {
           setAuthError(error.message);
           return;
         }
+        if (!data.session) {
+          setAuthMessage("Confirmation email sent. Open the link to verify your email, then sign in.");
+          return;
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: authEmail,
           password: authPassword,
         });
@@ -342,17 +360,26 @@ export default function ProfilePage() {
           setAuthError(error.message);
           return;
         }
+        if (!data.session) {
+          setAuthError("Sign-in did not create an active session. Please try again.");
+          return;
+        }
+        
+        // Load user metadata on successful login
+        const meta = data.session.user.user_metadata || {};
+        setEmail(data.session.user.email || authEmail);
+        setFullName(meta.full_name || "");
+        setPhone(meta.phone || "");
       }
 
       setEmail(authEmail);
       localStorage.setItem("resigrid_account_role", accountType);
-      localStorage.setItem("resigrid_user_profile", JSON.stringify({ fullName, email: authEmail, phone, selectedProvince, selectedCity, selectedWard, streetAddress, accountNumber, standNumber, assignedDepot }));
       
       // Role-Based Redirection matching user instruction:
       if (accountType === "municipal") {
-        window.location.href = "/dashboard";
+        router.replace("/dashboard");
       } else if (accountType === "crew") {
-        window.location.href = "/crew";
+        router.replace("/crew");
       } else {
         setIsAuthenticated(true);
       }
@@ -408,7 +435,26 @@ export default function ProfilePage() {
       assignedDepot,
     };
 
-    localStorage.setItem("resigrid_user_profile", JSON.stringify(profileData));
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
+        await supabase.auth.updateUser({
+          data: {
+            full_name: fullName,
+            phone,
+            province: selectedProvince,
+            city: selectedCity,
+            ward: selectedWard,
+            street_address: streetAddress,
+            account_number: accountNumber,
+            stand_number: standNumber
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Error saving user profile metadata to Supabase:", err);
+    }
 
     setSuccessMessage("Preferences saved successfully and synced with cloud database");
     setSavedSuccess(true);
@@ -421,7 +467,6 @@ export default function ProfilePage() {
     } catch (err) {
       console.error("Supabase sign out error:", err);
     }
-    localStorage.removeItem("resigrid_user_profile");
     localStorage.removeItem("resigrid_account_role");
     setIsAuthenticated(false);
   };
@@ -512,6 +557,11 @@ export default function ProfilePage() {
           {authError && (
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center">
               {authError}
+            </div>
+          )}
+          {authMessage && (
+            <div className="p-3 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-200 text-xs text-center">
+              {authMessage}
             </div>
           )}
 
@@ -678,12 +728,12 @@ export default function ProfilePage() {
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-white/20 flex items-center justify-center text-lg sm:text-xl font-black text-white shrink-0 transition-all shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
               style={{ backgroundColor: "var(--accent)" }}
             >
-              {fullName.split(" ").map((n) => n[0]).join("").toUpperCase() || "RM"}
+              {fullName ? fullName.split(" ").map((n) => n[0]).join("").toUpperCase() : "RG"}
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h2 className="text-base sm:text-lg font-bold text-white truncate">{fullName}</h2>
+                <h2 className="text-base sm:text-lg font-bold text-white truncate">{fullName || "Citizen User"}</h2>
                 <CheckCircle2 className="w-4 h-4 text-accent-dynamic shrink-0" />
               </div>
               <p className="text-xs text-muted truncate mt-0.5">{email}</p>
@@ -789,6 +839,7 @@ export default function ProfilePage() {
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Sipho Dlamini"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
@@ -800,17 +851,20 @@ export default function ProfilePage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.co.za"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Contact Phone</label>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Contact Phone (WhatsApp)</label>
                 <input
                   type="tel"
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  onBlur={handlePhoneBlur}
+                  placeholder="+27 82 123 4567"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
@@ -896,6 +950,7 @@ export default function ProfilePage() {
                   type="text"
                   value={streetAddress}
                   onChange={(e) => setStreetAddress(e.target.value)}
+                  placeholder="e.g. 142 Chief Albert Luthuli St"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>

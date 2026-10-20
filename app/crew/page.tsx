@@ -27,6 +27,7 @@ import {
   Building2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 
 interface ReportItem {
   id: string;
@@ -226,9 +227,12 @@ export default function FieldCrewPortalPage() {
 
       if (error) {
         console.error("Failed to update status in Supabase:", error);
+        return;
       }
+      void dispatchReportScreenNotification(reportId);
     } catch (err) {
       console.error("Status update error:", err);
+      return;
     }
 
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {

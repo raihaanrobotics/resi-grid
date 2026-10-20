@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { supabase } from "@/lib/supabase";
+
 export interface ResiGridNotification {
   id: string;
   dedupeKey?: string;
@@ -119,6 +122,14 @@ export function saveGlobalNotifications(notifications: ResiGridNotification[]) {
 
 export async function dispatchReportScreenNotification(reportId: string) {
   try {
+    if (Capacitor.isNativePlatform()) {
+      const { error } = await supabase.functions.invoke("native-push", {
+        body: { action: "report", reportId },
+      });
+      if (error) throw error;
+      return;
+    }
+
     const response = await fetch("/api/push/dispatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -178,6 +189,14 @@ export function upsertGlobalNotification(
 
 async function dispatchNotification(notification: ResiGridNotification) {
   try {
+    if (Capacitor.isNativePlatform()) {
+      const { error } = await supabase.functions.invoke("native-push", {
+        body: { action: "notification", notification },
+      });
+      if (error) throw error;
+      return;
+    }
+
     const response = await fetch("/api/push/dispatch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

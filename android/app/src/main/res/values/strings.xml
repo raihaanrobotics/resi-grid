@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ResiGrid</string>
+    <string name="title_activity_main">ResiGrid</string>
+    <string name="package_name">com.resigrid.app</string>
+    <string name="custom_url_scheme">com.resigrid.app</string>
+</resources>

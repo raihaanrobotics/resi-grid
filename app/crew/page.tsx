@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
+import { openWhatsApp } from "@/lib/phone";
 
 interface ReportItem {
   id: string;
@@ -247,9 +248,8 @@ export default function FieldCrewPortalPage() {
 
   // WhatsApp Citizen Dispatch Link
   const handleNotifyCitizenWhatsApp = (job: ReportItem, customText?: string) => {
-    const phone = (job.reporterPhone || "27821234567").replace(/[^0-9]/g, "");
     const text = customText || `Hello ${job.reporterName}, this is the Municipal Operations Field Crew regarding your report (${job.id}: ${job.title}). Current status: *${job.status}*. Address: ${job.locationAddress}.`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    openWhatsApp(job.reporterPhone || "", text);
   };
 
   // Add Spares / Material Item

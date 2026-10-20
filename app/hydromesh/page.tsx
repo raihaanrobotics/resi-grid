@@ -24,11 +24,13 @@ import {
   Clock,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { upsertGlobalNotification } from "@/lib/notifications/globalNotifications";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
+import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
 
 // Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
 declare global {
@@ -239,7 +241,8 @@ export default function HydroMeshPage() {
     const executeWaterTelemetryPoll = () => {
       try {
         const bridgePressure = window.AndroidAudioBridge?.getSensorPressureReading?.();
-        const measuredStatus: "normal" | "low_pressure" = bridgePressure !== undefined && bridgePressure < 2.0 ? "low_pressure" : "normal";
+        if (typeof bridgePressure !== "number" || !Number.isFinite(bridgePressure)) return;
+        const measuredStatus: "normal" | "low_pressure" = bridgePressure < 2.0 ? "low_pressure" : "normal";
 
         setScanResultStatus(measuredStatus);
         setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -317,7 +320,7 @@ export default function HydroMeshPage() {
           latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
           longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           location: row.location || "Sector 4",
-          whatsappPhone: row.whatsapp_phone || "27821234567",
+          whatsappPhone: row.whatsapp_phone || "",
           isUserCreated: row.is_user_created ?? true,
         }));
         setWaterNodesList(mappedNodes);
@@ -397,6 +400,10 @@ export default function HydroMeshPage() {
     setIsScanning(true);
 
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("This device does not support microphone access. Use the ResiGrid app or a secure HTTPS browser.");
+      }
+
       if (window.AndroidAudioBridge?.getRawAcousticFrequency) {
         const rawFft = window.AndroidAudioBridge.getRawAcousticFrequency();
         setFftSpectrum(rawFft.slice(0, 16));
@@ -471,12 +478,14 @@ export default function HydroMeshPage() {
           animFrameRef.current = requestAnimationFrame(processSpectrum);
         } else {
           const bridgePressure = window.AndroidAudioBridge?.getSensorPressureReading?.();
-          const determinedStatus: "normal" | "low_pressure" = bridgePressure !== undefined && bridgePressure < 2.0 ? "low_pressure" : "normal";
+          const determinedStatus = typeof bridgePressure === "number" && Number.isFinite(bridgePressure)
+            ? bridgePressure < 2.0 ? "low_pressure" : "normal"
+            : null;
           
           setScanResultStatus(determinedStatus);
           setLastCheckTimestamp("Just tested");
           setScanPhase("complete");
-          broadcastTelemetryToGlobal(determinedStatus);
+          if (determinedStatus) broadcastTelemetryToGlobal(determinedStatus);
           stopAcousticScan();
         }
       };
@@ -484,7 +493,19 @@ export default function HydroMeshPage() {
       processSpectrum();
     } catch (err) {
       console.error("Acoustic microphone hardware error:", err);
-      setErrorMessage("Microphone access required for testing tap pressure. Please allow microphone permission.");
+      const errorName = err instanceof DOMException ? err.name : "";
+      const denied = errorName === "NotAllowedError" || errorName === "SecurityError";
+      setErrorMessage(
+        denied
+          ? Capacitor.getPlatform() === "android"
+            ? "Microphone permission was denied. Allow it in Android Settings > Apps > ResiGrid > Permissions, then tap to retry."
+            : Capacitor.isNativePlatform()
+              ? "Microphone permission was denied. Allow it in ResiGrid's app permissions, then tap to retry."
+              : "Microphone permission was denied. Allow microphone access in your browser settings, then tap to retry."
+          : err instanceof Error
+            ? err.message
+            : "Could not access the phone microphone. Check microphone permission and try again."
+      );
       setScanPhase("error");
       stopAcousticScan();
     }
@@ -498,22 +519,25 @@ export default function HydroMeshPage() {
   const executeWhatsAppDispatch = (node: WaterNode) => {
     const pickupCode = `HYD-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const message = encodeURIComponent(
+    const message =
       `Hello ${node.owner}, I would like to request water supply from your ${node.type} listed on ResiGrid HydroMesh.\n\n` +
       `Pickup Code: ${pickupCode}\n` +
       `My Location: ${streetAddress}\n` +
       `Rate: ${node.price}\n\n` +
-      `Please confirm pickup availability.`
-    );
+      `Please confirm pickup availability.`;
 
-    const whatsappUrl = `https://wa.me/${node.whatsappPhone}?text=${message}`;
-    window.open(whatsappUrl, "_blank");
+    openWhatsApp(node.whatsappPhone, message);
   };
 
   const handleAddTank = async (e: React.FormEvent) => {
     e.preventDefault();
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Tank") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
+    const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
+    if (!normalizedPhone) {
+      window.alert("Enter a valid South African WhatsApp number, such as +27 82 123 4567.");
+      return;
+    }
 
     const newNode: WaterNode = {
       id: `node-${Date.now()}`,
@@ -524,7 +548,7 @@ export default function HydroMeshPage() {
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
       location: streetAddress,
-      whatsappPhone: newPhone.replace(/[^0-9]/g, ""),
+      whatsappPhone: normalizedPhone,
       isUserCreated: true,
     };
 
@@ -756,10 +780,16 @@ export default function HydroMeshPage() {
                         <CheckCircle2 className="h-6 w-6" />
                       </div>
                       <h3 className="text-sm sm:text-lg font-semibold" style={{ color: accentColor }}>
-                        {scanResultStatus === "low_pressure" ? "Low Pressure Detected" : "Tap Flow Normal"}
+                        {scanResultStatus === "low_pressure"
+                          ? "Low Pressure Detected"
+                          : scanResultStatus === "normal"
+                            ? "Tap Flow Normal"
+                            : "Acoustic Scan Complete"}
                       </h3>
                       <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
-                        Acoustic signature recorded successfully. Tap again to test anytime.
+                        {scanResultStatus
+                          ? "Acoustic signature recorded successfully. Tap again to test anytime."
+                          : "Microphone audio was captured. A calibrated pressure sensor is required to measure actual water pressure."}
                       </p>
                     </div>
                   )}
@@ -773,6 +803,16 @@ export default function HydroMeshPage() {
                       <p className="text-xs font-medium text-rose-300 max-w-xs mx-auto">
                         {errorMessage}
                       </p>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void startAcousticScan();
+                        }}
+                        className="mt-3 rounded-lg border border-rose-300/30 px-3 py-2 text-[11px] text-white hover:bg-rose-500/10"
+                      >
+                        Retry microphone permission
+                      </button>
                     </div>
                   )}
                 </div>
@@ -787,8 +827,10 @@ export default function HydroMeshPage() {
                       </strong>
                       <p className="text-muted leading-relaxed">
                         {scanResultStatus === "low_pressure"
-                          ? "Low water pressure detected! Neighbors nearby have been notified. Consider storing water in containers."
-                          : "Water line pressure is stable and normal in your home."}
+                          ? "A connected pressure sensor detected low pressure. Nearby users have been notified."
+                          : scanResultStatus === "normal"
+                            ? "The connected pressure sensor reports normal pressure."
+                            : "The phone microphone captured tap audio. A calibrated pressure sensor is required to measure actual water-line pressure."}
                       </p>
                     </div>
                   </div>
@@ -803,7 +845,11 @@ export default function HydroMeshPage() {
                   <Activity className="w-3 h-3" style={{ color: accentColor }} /> Line Status
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-white">
-                  {scanResultStatus === "low_pressure" ? "Low Pressure" : "Normal"}
+                  {scanResultStatus === "low_pressure"
+                    ? "Low pressure"
+                    : scanResultStatus === "normal"
+                      ? "Normal"
+                      : "Not measured"}
                 </p>
               </div>
 
@@ -812,16 +858,22 @@ export default function HydroMeshPage() {
                   <Gauge className="w-3 h-3" style={{ color: accentColor }} /> Flow Response
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-white">
-                  {scanPhase === "complete" ? "Verified" : "Standby"}
+                  {scanPhase === "complete"
+                    ? scanResultStatus ? "Sensor measured" : "Audio captured"
+                    : "Standby"}
                 </p>
               </div>
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto space-y-1">
                 <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.08em] text-muted">
-                  <AlertTriangle className="w-3 h-3" style={{ color: accentColor }} /> Outage Risk
+                  <AlertTriangle className="w-3 h-3" style={{ color: accentColor }} /> Pressure Alert
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-white">
-                  {scanResultStatus === "low_pressure" ? "High" : "Low"}
+                  {scanResultStatus === "low_pressure"
+                    ? "Detected"
+                    : scanResultStatus === "normal"
+                      ? "None"
+                      : "Not measured"}
                 </p>
               </div>
 
@@ -1253,7 +1305,7 @@ export default function HydroMeshPage() {
                   required
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="e.g. 27821234567"
+                  placeholder="e.g. +27 82 123 4567"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>

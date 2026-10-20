@@ -24,6 +24,7 @@ import { useUserLocation } from "@/hooks/useUserLocation";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
+import { normalizeSouthAfricanPhone } from "@/lib/phone";
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -374,9 +375,21 @@ export default function CivicAIPage() {
   const handleSubmitReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim()) return;
+    const normalizedReporterPhone = normalizeSouthAfricanPhone(reporterPhone);
+    if (!normalizedReporterPhone) {
+      setErrorMessage("Enter a valid South African phone number, such as +27 82 123 4567.");
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorMessage(null);
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    if (authError || !userData.user) {
+      console.error("Could not verify report ownership:", authError);
+      setErrorMessage("Please sign in again before submitting a report.");
+      setIsSubmitting(false);
+      return;
+    }
 
     const activeAddress = useCustomAddress && customAddress.trim()
       ? customAddress.trim()
@@ -391,7 +404,8 @@ export default function CivicAIPage() {
 
     // Full Payload containing every single detail (for Municipal Dashboard & Supabase matching table schema)
     const fullPayload = {
-      report_id: `RPT-${crypto.randomUUID()}`,
+      report_id: null,
+      reporter_user_id: userData.user.id,
       category,
       title: reportTitle.trim(),
       description: description.trim(),
@@ -403,7 +417,7 @@ export default function CivicAIPage() {
       status: "Auto-Dispatched",
       time_str: `Today, ${timestamp} SAST`,
       reporter_name: reporterName.trim(),
-      reporter_phone: reporterPhone.trim(),
+      reporter_phone: normalizedReporterPhone,
       account_number: accountNumber.trim(),
       stand_number: standNumber.trim(),
       assigned_depot: "Depot Rapid Response Queue",
@@ -414,7 +428,7 @@ export default function CivicAIPage() {
 
     // Client-side representation mapping for local storage / broadcast
     const localReportItem = {
-      id: fullPayload.report_id,
+      id: "",
       category: fullPayload.category,
       title: fullPayload.title,
       description: fullPayload.description,
@@ -454,14 +468,24 @@ export default function CivicAIPage() {
 
     try {
       // 1. Insert into Supabase table public.reports matching the updated schema columns
-      const { error: dbError } = await supabase.from("reports").insert([fullPayload]);
+      const { data: insertedReport, error: dbError } = await supabase
+        .from("reports")
+        .insert([fullPayload])
+        .select("report_id")
+        .single();
 
       if (dbError) {
         console.error("Supabase storage error:", dbError);
         setErrorMessage(`Supabase Error: ${dbError.message || JSON.stringify(dbError)}`);
-      } else {
-        void dispatchReportScreenNotification(fullPayload.report_id);
+        return;
       }
+      if (!insertedReport?.report_id) {
+        throw new Error("The report was saved without a report number. Apply the latest ResiGrid Supabase migration.");
+      }
+      const reportId = insertedReport.report_id as string;
+      localReportItem.id = reportId;
+      publicPayload.id = reportId;
+      void dispatchReportScreenNotification(reportId);
 
       // 2. API Dispatch Endpoint
       await fetch("/api/dispatch", {

@@ -28,24 +28,13 @@ import {
   Gauge,
   Clock,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
-import { upsertGlobalNotification } from "@/lib/notifications/globalNotifications";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
-
-// Native Android Studio / Capacitor Industrial Hardware Interface Type Declaration
-declare global {
-  interface Window {
-    AndroidPowerBridge?: {
-      getShuntCurrentMilliamps?: () => number;
-      getDcBusVoltageMillivolts?: () => number;
-      getLineFrequencyHz?: () => number;
-      getBusTemperatureCelsius?: () => number;
-    };
-  }
-}
+import { Device } from "@capacitor/device";
+import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
 
 interface PowerNode {
   id: string;
@@ -183,26 +172,19 @@ export default function VoltShieldPage() {
     usageTip = "Excellent: Your household is operating entirely within the subsidized lifeline tariff block!";
   }
 
-  // Industrial Battery Shunt Current & Power Ripple Telemetry Scanner State
+  // Generic phones expose battery and charging state, not charger current or grid voltage.
   const [isScanning, setIsScanning] = useState(false);
   const [scanPhase, setScanPhase] = useState<"idle" | "analyzing" | "complete" | "error">("idle");
-  const [scanProgress, setScanProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Live Shunt & Ripple Telemetry Bins
-  const [rippleSpectrum, setRippleSpectrum] = useState<number[]>(new Array(16).fill(12));
-  const [shuntCurrentMa, setShuntCurrentMa] = useState<number>(420);
-  const [dcRippleMv, setDcRippleMv] = useState<number>(12.4);
-  const [gridStabilityScore, setGridStabilityScore] = useState<number>(99.4);
   const [lastCheckTimestamp, setLastCheckTimestamp] = useState<string>("Not tested yet");
-  const scanIntervalRef = useRef<number | null>(null);
 
-  // Device Battery & Charging Power Sense State
+  // Live device battery and charging state from Capacitor Device.
   const [batteryInfo, setBatteryInfo] = useState<{
-    charging: boolean;
-    level: number;
+    charging: boolean | null;
+    level: number | null;
     supported: boolean;
-  }>({ charging: true, level: 85, supported: false });
+  }>({ charging: null, level: null, supported: false });
 
   // Filter nearby nodes and reports within 10km radius
   const nearbyNodes = filterByRadius(powerNodesList, 10.0);
@@ -219,59 +201,6 @@ export default function VoltShieldPage() {
     }
     return acc;
   }, []);
-  const hasNearbyPowerReport = deduplicatedPowerReports.some(
-    (report) => report.category === "power" &&
-      (report.status === "Pending Review" || report.status === "Auto-Dispatched")
-  );
-
-  // Broadcast out verified telemetry ONLY when a low voltage stability drop or high ripple is genuinely detected
-  const broadcastTelemetryToGlobal = useCallback((stability: number, ripple: number) => {
-    const isUnstable = stability < 85 || ripple > 25;
-    if (!isUnstable || hasNearbyPowerReport) return;
-
-    upsertGlobalNotification({
-      dedupeKey: "telemetry:power-stability",
-      title: "Power stability issue",
-      description: "Voltage instability detected nearby.",
-      type: "warning",
-      category: "power",
-      status: "active",
-      latitude: location?.latitude,
-      longitude: location?.longitude,
-    });
-  }, [hasNearbyPowerReport, location]);
-
-  // Automated 15-Minute Industrial Telemetry Background Check Loop (Using accurate bridge data or stable nominal fallbacks)
-  useEffect(() => {
-    const executeIndustrialTelemetryPoll = () => {
-      try {
-        const bridgeCurrent = window.AndroidPowerBridge?.getShuntCurrentMilliamps?.();
-        const bridgeRipple = window.AndroidPowerBridge?.getDcBusVoltageMillivolts?.();
-
-        const measuredCurrent = bridgeCurrent !== undefined ? bridgeCurrent : 420;
-        const measuredRipple = bridgeRipple !== undefined ? bridgeRipple : 12.4; // Nominal stable fallback
-        const calculatedStability = measuredRipple > 25 ? 74.2 : measuredRipple > 16 ? 91.5 : 99.4;
-
-        setShuntCurrentMa(Math.round(measuredCurrent));
-        setDcRippleMv(Number(measuredRipple.toFixed(1)));
-        setGridStabilityScore(calculatedStability);
-        setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-
-        broadcastTelemetryToGlobal(calculatedStability, measuredRipple);
-      } catch (err) {
-        console.error("Automated industrial telemetry poll error:", err);
-      }
-    };
-
-    const initialTimer = setTimeout(executeIndustrialTelemetryPoll, 3000);
-    const intervalId = setInterval(executeIndustrialTelemetryPoll, 15 * 60 * 1000);
-
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(intervalId);
-    };
-  }, [broadcastTelemetryToGlobal]);
-
   // Fetch reports and power nodes directly from Supabase with localStorage fallback and BroadcastChannel sync
   const loadSupabaseData = useCallback(async () => {
     try {
@@ -330,7 +259,7 @@ export default function VoltShieldPage() {
           latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
           longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           location: row.location || "Sector 4",
-          whatsappPhone: row.whatsapp_phone || "27821234567",
+          whatsappPhone: row.whatsapp_phone || "",
           isUserCreated: row.is_user_created ?? true,
         }));
         setPowerNodesList(mappedNodes);
@@ -350,20 +279,30 @@ export default function VoltShieldPage() {
     loadSupabaseData();
     const interval = setInterval(loadSupabaseData, 10000);
 
-    if (typeof window !== "undefined" && "getBattery" in navigator) {
-      (navigator as any).getBattery().then((battery: any) => {
-        const updateBatteryState = () => {
+    const fetchDeviceBattery = async () => {
+      try {
+        const info = await Device.getBatteryInfo();
+        if (
+          typeof info.batteryLevel === "number" &&
+          Number.isFinite(info.batteryLevel) &&
+          typeof info.isCharging === "boolean"
+        ) {
           setBatteryInfo({
-            charging: battery.charging,
-            level: Math.round(battery.level * 100),
+            charging: info.isCharging,
+            level: Math.round(info.batteryLevel * 100),
             supported: true,
           });
-        };
-        updateBatteryState();
-        battery.addEventListener("chargingchange", updateBatteryState);
-        battery.addEventListener("levelchange", updateBatteryState);
-      });
-    }
+          return;
+        }
+        setBatteryInfo({ charging: null, level: null, supported: false });
+      } catch (err) {
+        console.error("Could not read phone battery status through Capacitor:", err);
+        setBatteryInfo({ charging: null, level: null, supported: false });
+      }
+    };
+
+    void fetchDeviceBattery();
+    const batteryInterval = setInterval(fetchDeviceBattery, 15000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -388,59 +327,40 @@ export default function VoltShieldPage() {
 
     return () => {
       clearInterval(interval);
+      clearInterval(batteryInterval);
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
     };
   }, [loadSupabaseData]);
 
-  const stopShuntScan = useCallback(() => {
-    if (scanIntervalRef.current) {
-      clearInterval(scanIntervalRef.current);
-      scanIntervalRef.current = null;
-    }
-    setIsScanning(false);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      stopShuntScan();
-    };
-  }, [stopShuntScan]);
-
-  // Phone Charging Shunt & Power Noise Diagnostic Scan
+  // Read battery and charging state from the native device API.
   const startShuntScan = async () => {
     setErrorMessage(null);
-    setScanProgress(0);
-    setScanPhase("analyzing");
     setIsScanning(true);
-
-    let progress = 0;
-    scanIntervalRef.current = window.setInterval(() => {
-      progress += 2;
-      setScanProgress(Math.min(100, progress));
-
-      const bridgeCurrent = window.AndroidPowerBridge?.getShuntCurrentMilliamps?.();
-      const bridgeRipple = window.AndroidPowerBridge?.getDcBusVoltageMillivolts?.();
-
-      const measuredCurrent = bridgeCurrent !== undefined ? bridgeCurrent : 440;
-      const measuredRipple = bridgeRipple !== undefined ? bridgeRipple : 11.8;
-
-      setShuntCurrentMa(Math.round(measuredCurrent));
-      setDcRippleMv(Number(measuredRipple.toFixed(1)));
-
-      const liveBins = Array.from({ length: 16 }, () => Math.floor(10 + (measuredRipple * 1.2) + Math.random() * 6));
-      setRippleSpectrum(liveBins);
-
-      if (progress >= 100) {
-        if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-        const calculatedStability = measuredRipple > 25 ? 74.2 : measuredRipple > 16 ? 91.5 : 99.4;
-        setGridStabilityScore(calculatedStability);
-        setLastCheckTimestamp("Just tested");
-        setScanPhase("complete");
-        broadcastTelemetryToGlobal(calculatedStability, measuredRipple);
-        setIsScanning(false);
+    try {
+      const info = await Device.getBatteryInfo();
+      if (
+        typeof info.batteryLevel !== "number" ||
+        !Number.isFinite(info.batteryLevel) ||
+        typeof info.isCharging !== "boolean"
+      ) {
+        throw new Error("This device does not expose battery and charging status.");
       }
-    }, 50);
+      setBatteryInfo({
+        charging: info.isCharging,
+        level: Math.round(info.batteryLevel * 100),
+        supported: true,
+      });
+      setScanPhase("analyzing");
+      setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      setScanPhase("complete");
+    } catch (error) {
+      console.error("Could not read device battery information:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Battery status is unavailable on this device.");
+      setScanPhase("error");
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleRequestSupply = (node: PowerNode) => {
@@ -451,22 +371,25 @@ export default function VoltShieldPage() {
   const executeWhatsAppDispatch = (node: PowerNode) => {
     const accessCode = `PWR-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    const message = encodeURIComponent(
+    const message =
       `Hello ${node.owner}, I would like to request backup power access from your ${node.type} listed on ResiGrid VoltShield.\n\n` +
       `Access Code: ${accessCode}\n` +
       `My Location: ${streetAddress}\n` +
       `Rate: ${node.price}\n\n` +
-      `Please confirm charging availability.`
-    );
+      `Please confirm charging availability.`;
 
-    const whatsappUrl = `https://wa.me/${node.whatsappPhone}?text=${message}`;
-    window.open(whatsappUrl, "_blank");
+    openWhatsApp(node.whatsappPhone, message);
   };
 
   const handleAddNode = async (e: React.FormEvent) => {
     e.preventDefault();
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Power Node") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
+    const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
+    if (!normalizedPhone) {
+      window.alert("Enter a valid South African WhatsApp number, such as +27 82 123 4567.");
+      return;
+    }
 
     const newNode: PowerNode = {
       id: `power-${Date.now()}`,
@@ -478,7 +401,7 @@ export default function VoltShieldPage() {
       longitude: location?.longitude ?? Number.NaN,
       distance: "0.1 km away",
       location: streetAddress,
-      whatsappPhone: newPhone.replace(/[^0-9]/g, ""),
+      whatsappPhone: normalizedPhone,
       isUserCreated: true,
     };
 
@@ -528,13 +451,7 @@ export default function VoltShieldPage() {
     }
   };
 
-  // Determine Outage Risk Level from Grid Stability Score
-  let outageRiskLabel = "Low Risk";
-  if (gridStabilityScore < 85) {
-    outageRiskLabel = "High Risk";
-  } else if (gridStabilityScore < 95) {
-    outageRiskLabel = "Medium Risk";
-  }
+  const outageRiskLabel = "Not measured by phone";
 
   return (
     <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
@@ -632,7 +549,10 @@ export default function VoltShieldPage() {
             
             {/* PHONE CHARGING TEST INTERFACE */}
             <section
-              onClick={isScanning ? stopShuntScan : startShuntScan}
+              onClick={() => {
+                if (!isScanning) void startShuntScan();
+              }}
+              aria-busy={isScanning}
               className="glass-panel relative overflow-y-hidden p-4 sm:p-6 transition-all cursor-pointer touch-manipulation pointer-events-auto flex flex-col justify-between mt-3 sm:mt-5 border"
               style={{
                 borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)",
@@ -643,12 +563,12 @@ export default function VoltShieldPage() {
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>POWER TEST</p>
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>PHONE STATUS</p>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
-                      Measure Power While Your Phone Charges
+                      Phone Battery &amp; Charging Status
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Plug your phone into a charger and tap anywhere below. This test measures the electrical current and noise coming through your charger to detect if local power instability or a blackout is on the way.
+                      Tap below to read your phone's battery level and charging state. Phones do not expose household grid voltage, charger current, or neighborhood outage risk.
                     </p>
                   </div>
                 </div>
@@ -668,9 +588,9 @@ export default function VoltShieldPage() {
                       >
                         <Gauge className="h-6 w-6" />
                       </div>
-                      <p className="text-xs sm:text-sm font-semibold text-white">Tap to Test While Charging</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Tap to Read Phone Battery</p>
                       <p className="mt-1 text-[11px]" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>
-                        Measures charging current &amp; line noise
+                        Reads the phone battery and charging state using the native device API.
                       </p>
                     </div>
                   )}
@@ -679,12 +599,12 @@ export default function VoltShieldPage() {
                   {scanPhase === "analyzing" && (
                     <div className="w-full text-center py-2">
                       <div className="mx-auto mb-5 flex h-20 items-end justify-center gap-1.5 sm:gap-2 px-2 max-w-md overflow-hidden">
-                        {rippleSpectrum.map((val, i) => (
+                        {Array.from({ length: 16 }, (_, index) => index).map((index) => (
                           <div
-                            key={i}
+                            key={index}
                             className="w-1.5 sm:w-2 rounded-t transition-all duration-75"
                             style={{ 
-                              height: `${val}%`, 
+                              height: batteryInfo.level !== null && index < batteryInfo.level / 100 * 16 ? "80%" : "20%",
                               backgroundColor: "var(--accent)",
                               boxShadow: "0 0 12px var(--accent)"
                             }}
@@ -695,7 +615,7 @@ export default function VoltShieldPage() {
                       <div className="flex items-center justify-center gap-2">
                         <Activity className="h-4 w-4 animate-pulse shrink-0" style={{ color: "var(--accent)" }} />
                         <p className="text-xs font-semibold truncate" style={{ color: "var(--accent)" }}>
-                          Measuring Power ({scanProgress}%) • {shuntCurrentMa} mA • {dcRippleMv} mV Noise
+                          Reading battery and charging status…
                         </p>
                       </div>
                     </div>
@@ -715,7 +635,7 @@ export default function VoltShieldPage() {
                         <CheckCircle2 className="h-6 w-6" />
                       </div>
                       <h3 className="text-sm sm:text-lg font-semibold" style={{ color: "var(--accent)" }}>
-                        {gridStabilityScore}% Stability — Test Complete
+                        {batteryInfo.level}% Battery — {batteryInfo.charging ? "Charging" : "Not Charging"}
                       </h3>
                       <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
                         Test is finished. Tap again to re-test.
@@ -745,9 +665,7 @@ export default function VoltShieldPage() {
                         Test Results Summary
                       </strong>
                       <p className="text-muted leading-relaxed">
-                        {gridStabilityScore < 85 || dcRippleMv > 25
-                          ? "Warning: Voltage drop or high electrical noise detected while charging! Neighbors nearby have been alerted. Get your backup power ready."
-                          : "Your charging power is stable and running normally."}
+                        {`Phone battery is ${batteryInfo.level}%. ${batteryInfo.charging ? "The phone reports that it is charging." : "The phone reports that it is not charging."} This device API cannot measure mains voltage, charger current, or neighborhood outage risk.`}
                       </p>
                     </div>
                   </div>
@@ -761,7 +679,7 @@ export default function VoltShieldPage() {
                 <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.08em] text-muted">
                   <Activity className="w-3 h-3" style={{ color: "var(--accent)" }} /> Grid Voltage
                 </div>
-                <p className="text-xs sm:text-sm font-semibold text-white">230.4V AC</p>
+                <p className="text-xs sm:text-sm font-semibold text-white">Not exposed by phone</p>
               </div>
 
               <div className="glass-panel p-3.5 sm:p-4 pointer-events-auto space-y-1">
@@ -778,7 +696,11 @@ export default function VoltShieldPage() {
                   <BatteryCharging className="w-3 h-3" style={{ color: "var(--accent)" }} /> Power Sense
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-white">
-                  {batteryInfo.charging ? "AC Stable" : "Battery Mode"}
+                  {!batteryInfo.supported
+                    ? "Unavailable"
+                    : batteryInfo.charging
+                      ? `Charging · ${batteryInfo.level}%`
+                      : `On battery · ${batteryInfo.level}%`}
                 </p>
               </div>
 
@@ -1214,7 +1136,7 @@ export default function VoltShieldPage() {
                   required
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  placeholder="e.g. 27821234567"
+                  placeholder="e.g. +27 82 123 4567"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>

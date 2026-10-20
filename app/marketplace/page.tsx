@@ -22,6 +22,7 @@ import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
+import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
 
 interface ListingItem {
   id: string;
@@ -134,7 +135,7 @@ export default function MarketplacePage() {
               seller: node.owner || "Community Water Depot",
               location: node.location || "Neighborhood",
               status: "Available",
-              contactPhone: node.whatsapp_phone || "27821234567",
+              contactPhone: node.whatsapp_phone || "",
               latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
               longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
               isUserCreated: node.is_user_created,
@@ -152,7 +153,7 @@ export default function MarketplacePage() {
               seller: node.owner || "Community Backup Node",
               location: node.location || "Neighborhood",
               status: "Available",
-              contactPhone: node.whatsapp_phone || "27821234567",
+              contactPhone: node.whatsapp_phone || "",
               latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
               longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
               isUserCreated: node.is_user_created,
@@ -170,7 +171,7 @@ export default function MarketplacePage() {
               seller: rep.reporter_name || "Resident",
               location: rep.location_address || "Ward",
               status: "Available",
-              contactPhone: rep.reporter_phone || "27821234567",
+              contactPhone: rep.reporter_phone || "",
               latitude: typeof rep.latitude === "number" ? rep.latitude : Number.NaN,
               longitude: typeof rep.longitude === "number" ? rep.longitude : Number.NaN,
               isUserCreated: true,
@@ -193,6 +194,11 @@ export default function MarketplacePage() {
   const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle || !newPrice || !newSeller || !newLocation) return;
+    const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
+    if (!normalizedPhone) {
+      window.alert("Enter a valid South African WhatsApp number, such as +27 82 123 4567.");
+      return;
+    }
 
     const uniqueId = `MKT-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newListingItem: ListingItem = {
@@ -203,7 +209,7 @@ export default function MarketplacePage() {
       seller: newSeller.trim(),
       location: newLocation.trim(),
       status: "Available",
-      contactPhone: newPhone.replace(/[^0-9]/g, "") || "27821234567",
+      contactPhone: normalizedPhone,
       isUserCreated: true,
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
@@ -281,11 +287,8 @@ export default function MarketplacePage() {
   };
 
   const handleTradeContact = (item: ListingItem) => {
-    const phone = item.contactPhone || "27821234567";
-    const message = encodeURIComponent(
-      `Hello ${item.seller}, I am inquiring about your ResiMarket listing: "${item.title}" priced at ${item.price}.\nIs this still available?`
-    );
-    window.open(`https://wa.me/${phone}?text=${message}`, "_blank");
+    const message = `Hello ${item.seller}, I am inquiring about your ResiMarket listing: "${item.title}" priced at ${item.price}.\nIs this still available?`;
+    openWhatsApp(item.contactPhone || "", message);
   };
 
   // Filter listings within 10km radius using GeoContext filterByRadius engine
@@ -641,7 +644,7 @@ export default function MarketplacePage() {
                     required
                     value={newPhone}
                     onChange={(e) => setNewPhone(e.target.value)}
-                    placeholder="e.g. 27821234567"
+                    placeholder="e.g. +27 82 123 4567"
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                   />
                 </div>

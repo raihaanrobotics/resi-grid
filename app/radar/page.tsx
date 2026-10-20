@@ -13,11 +13,13 @@ import {
   EyeOff,
   Navigation,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
+import { projectToRadar } from "@/lib/radarProjection";
 
 interface IncidentMarker {
   id: string;
@@ -35,6 +37,7 @@ interface IncidentMarker {
   status: string;
   distanceKm?: number;
   formattedDistance?: string;
+  reporterUserId?: string | null;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -46,29 +49,17 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   emerald: "#10b981",
 };
 
-// Precise Haversine distance formula in kilometers
-function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
 export default function RadarPage() {
   const { streetAddress, location, filterByRadius, refreshLocation, loading: geoLoading } = useGeo();
   const [selectedIncident, setSelectedIncident] = useState<IncidentMarker | null>(null);
   const [scanning] = useState(true);
   const [liveIncidents, setLiveIncidents] = useState<IncidentMarker[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Theme Accent Persistence
-  const [accentColor, setAccentColor] = useState<string>("#38bdf8");
+  const [accentColor, setAccentGroup] = useState<string>("#38bdf8");
 
   // Filter Layers & Marker Visibility Toggle
   const [layers, setLayers] = useState({
@@ -78,9 +69,6 @@ export default function RadarPage() {
   });
   const [markersVisible, setMarkersVisible] = useState(true);
 
-  const userLat = location?.latitude ?? -29.6006;
-  const userLng = location?.longitude ?? 30.3794;
-
   // Sync Accent Theme State & Global Variables
   useEffect(() => {
     const applySavedTheme = () => {
@@ -88,7 +76,7 @@ export default function RadarPage() {
         const savedAccent = localStorage.getItem("resigrid_accent_theme");
         if (savedAccent && ACCENT_HEX_MAP[savedAccent]) {
           const hex = ACCENT_HEX_MAP[savedAccent];
-          setAccentColor(hex);
+          setAccentGroup(hex);
           document.documentElement.style.setProperty("--feature-accent", hex);
           document.documentElement.style.setProperty("--accent", hex);
         }
@@ -103,7 +91,7 @@ export default function RadarPage() {
       const customEvent = e as CustomEvent<{ hex?: string }>;
       if (customEvent.detail?.hex) {
         const hex = customEvent.detail.hex;
-        setAccentColor(hex);
+        setAccentGroup(hex);
         document.documentElement.style.setProperty("--feature-accent", hex);
         document.documentElement.style.setProperty("--accent", hex);
       } else {
@@ -114,6 +102,24 @@ export default function RadarPage() {
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
     return () => {
       window.removeEventListener("resigrid_theme_change", handleThemeEvent);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setCurrentUserId(session?.user.id ?? null);
+    });
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not identify the signed-in radar user:", error);
+      } else if (active) {
+        setCurrentUserId(data.session?.user.id ?? null);
+      }
+    });
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -136,34 +142,12 @@ export default function RadarPage() {
         const mapped: IncidentMarker[] = data.map((row: any) => {
           const lat = typeof row.latitude === "number" ? row.latitude : Number.NaN;
           const lng = typeof row.longitude === "number" ? row.longitude : Number.NaN;
-          
-          let x = 50;
-          let y = 50;
-          let distKm = 0;
-
-          if (Number.isFinite(lat) && Number.isFinite(lng)) {
-            distKm = calculateDistanceKm(userLat, userLng, lat, lng);
-            
-            // Industrial Grade Geodesic Offsets with Precise Mercator Log Scaling
-            const latDiffKm = (lat - userLat) * 111.132;
-            const lngDiffKm = (lng - userLng) * (111.320 * Math.cos((userLat * Math.PI) / 180));
-
-            const maxRadiusKm = 10.0;
-            const actualDistKm = Math.hypot(latDiffKm, lngDiffKm);
-
-            if (actualDistKm < 0.01) {
-              x = 50;
-              y = 50;
-            } else {
-              // Logarithmic visual scaling to preserve precise radar positioning
-              const scaledDistKm = Math.min(maxRadiusKm, Math.pow(actualDistKm / maxRadiusKm, 0.65) * maxRadiusKm);
-              const normX = (lngDiffKm / actualDistKm) * (scaledDistKm / maxRadiusKm) * 44;
-              const normY = (latDiffKm / actualDistKm) * (scaledDistKm / maxRadiusKm) * 44;
-
-              x = Math.min(94, Math.max(6, 50 + normX));
-              y = Math.min(94, Math.max(6, 50 - normY));
-            }
-          }
+          const point = location
+            ? projectToRadar(location.latitude, location.longitude, lat, lng, 10)
+            : null;
+          const x = point?.x ?? 50;
+          const y = point?.y ?? 50;
+          const distKm = point?.distanceKm ?? Number.NaN;
 
           const cat = row.category || "other";
           const normalizedType = cat === "power" || cat === "water" ? cat : "other";
@@ -183,7 +167,8 @@ export default function RadarPage() {
             description: row.description || "No additional hazard details provided.",
             status: row.status || "Active",
             distanceKm: distKm,
-            formattedDistance: `${distKm.toFixed(1)} km`,
+            formattedDistance: Number.isFinite(distKm) ? `${distKm.toFixed(2)} km` : undefined,
+            reporterUserId: row.reporter_user_id ?? null,
           };
         });
 
@@ -200,7 +185,7 @@ export default function RadarPage() {
       console.error("Error reading active reports for radar from Supabase:", e);
       setLiveIncidents([]);
     }
-  }, [userLat, userLng, streetAddress]);
+  }, [location, streetAddress]);
 
   useEffect(() => {
     loadReports();
@@ -227,6 +212,43 @@ export default function RadarPage() {
 
   const displayIncidents = nearbyIncidents;
   const filteredIncidents = displayIncidents.filter((inc) => layers[inc.type as keyof typeof layers]);
+
+  const handleDeleteReport = async (incident: IncidentMarker) => {
+    if (!currentUserId || incident.reporterUserId !== currentUserId) return;
+    if (!window.confirm(`Delete your report ${incident.id}? This cannot be undone.`)) return;
+
+    setDeletingReportId(incident.id);
+    setDeleteError(null);
+    try {
+      const { data, error } = await supabase
+        .from("reports")
+        .delete()
+        .eq("report_id", incident.id)
+        .eq("reporter_user_id", currentUserId)
+        .select("report_id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new Error("Report not deleted. Confirm the latest report ownership migration is applied.");
+      }
+
+      const remaining = liveIncidents.filter((report) => report.id !== incident.id);
+      setLiveIncidents(remaining);
+      writeOfflineData("resigrid_radar_incidents", remaining);
+      setSelectedIncident((selected) => selected?.id === incident.id ? null : selected);
+
+      if ("BroadcastChannel" in window) {
+        const channel = new BroadcastChannel("resigrid_reports_dispatch");
+        channel.postMessage({ type: "REPORT_DELETED", payload: { id: incident.id } });
+        channel.close();
+      }
+    } catch (error) {
+      console.error("Could not delete the user's radar report:", error);
+      setDeleteError("Could not delete this report. Please retry.");
+    } finally {
+      setDeletingReportId(null);
+    }
+  };
 
   const toggleLayer = (layerKey: keyof typeof layers) => {
     setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));
@@ -334,7 +356,7 @@ export default function RadarPage() {
             </div>
 
             {/* RADAR CANVAS */}
-            <div className="relative w-full aspect-square sm:aspect-[16/10] bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-1 sm:my-2">
+            <div className="relative w-full aspect-square bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-1 sm:my-2">
               
               {/* Dynamic Theme Grid dots */}
               <div 
@@ -346,9 +368,9 @@ export default function RadarPage() {
               />
               
               {/* Radar Rings (Precise 10km Scale Indicators) */}
-              <div className="absolute w-[360px] h-[360px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` }} />
-              <div className="absolute w-[240px] h-[240px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 20%, transparent)` }} />
-              <div className="absolute w-[120px] h-[120px] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
+              <div className="absolute aspect-square w-[84%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` }} />
+              <div className="absolute aspect-square w-[56%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 20%, transparent)` }} />
+              <div className="absolute aspect-square w-[28%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
               <div className="absolute w-full h-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
               <div className="absolute h-full w-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
 
@@ -361,7 +383,7 @@ export default function RadarPage() {
               {/* Theme Rotating Sweep */}
               {scanning && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-[360px] h-[360px] rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
+                  <div className="w-[84%] aspect-square rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
                     <div 
                       className="absolute top-0 right-0 w-1/2 h-1/2 origin-bottom-left rounded-tr-full"
                       style={{
@@ -430,7 +452,7 @@ export default function RadarPage() {
             <div className="w-full">
               <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
                 <h2 className="text-xs font-semibold text-white tracking-wider">ALL INCIDENT DETAILS</h2>
-                <span className="text-[10px] font-mono text-muted">{displayIncidents.length} Active (10km)</span>
+                <span className="text-[10px] font-mono text-muted">{displayIncidents.length} reports · 10 km</span>
               </div>
 
               {/* Inner Scroll Area */}
@@ -461,6 +483,24 @@ export default function RadarPage() {
                           <span className="text-[10px] font-mono font-bold uppercase tracking-wider truncate" style={{ color: accentColor }}>
                             {incident.category || incident.type} • {incident.id}
                           </span>
+                          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-semibold text-white/80">
+                            {incident.status}
+                          </span>
+                          {currentUserId && incident.reporterUserId === currentUserId && (
+                            <button
+                              type="button"
+                              disabled={deletingReportId === incident.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDeleteReport(incident);
+                              }}
+                              aria-label={`Delete your report ${incident.id}`}
+                              title="Delete your report"
+                              className="ml-auto rounded-lg p-1.5 text-rose-300 transition-colors hover:bg-rose-500/15 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
 
                         <div>
@@ -476,6 +516,7 @@ export default function RadarPage() {
                   })
                 )}
               </div>
+              {deleteError && <p role="alert" className="mt-3 text-center text-[11px] text-rose-300">{deleteError}</p>}
             </div>
           </div>
 

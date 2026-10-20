@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
+import { openWhatsApp } from "@/lib/phone";
 
 interface ReportItem {
   id: string;
@@ -372,9 +373,8 @@ export default function MunicipalDashboardPage() {
 
   // WhatsApp Dispatch Helper
   const handleWhatsAppNotify = (job: ReportItem) => {
-    const phone = (job.reporterPhone || "27821234567").replace(/[^0-9]/g, "");
     const text = `Hello ${job.reporterName}, Municipal Dispatch has assigned *${job.assignedDepotUnit}* to your report (${job.id}: ${job.title}) at ${job.locationAddress}. Status: *${job.status}*.`;
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, "_blank");
+    openWhatsApp(job.reporterPhone || "", text);
   };
 
   const handleManualRefresh = async () => {

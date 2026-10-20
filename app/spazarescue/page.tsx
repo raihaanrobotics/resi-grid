@@ -21,6 +21,7 @@ import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
+import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
 
 interface SpazaFoodStore {
   id: string;
@@ -162,7 +163,7 @@ export default function SpazaRescuePage() {
               hasDryStock: item.has_dry_stock ?? true,
               spoilageClearanceAlert: item.spoilage_clearance_alert,
               foodEssentials: Array.isArray(item.food_essentials) ? item.food_essentials : ["Maize Meal", "Canned Goods"],
-              contactPhone: item.contact_phone,
+              contactPhone: item.contact_phone || "",
               latitude: typeof item.latitude === "number" ? item.latitude : Number.NaN,
               longitude: typeof item.longitude === "number" ? item.longitude : Number.NaN,
             }));
@@ -179,7 +180,7 @@ export default function SpazaRescuePage() {
               coordinator: item.coordinator,
               description: item.description,
               operatingHours: item.operating_hours,
-              contactPhone: item.contact_phone,
+              contactPhone: item.contact_phone || "",
               spoilageClearanceAlert: item.spoilage_clearance_alert,
               foodEssentials: Array.isArray(item.food_essentials) ? item.food_essentials : undefined,
               latitude: typeof item.latitude === "number" ? item.latitude : Number.NaN,
@@ -203,6 +204,11 @@ export default function SpazaRescuePage() {
   const handleRegisterStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shopName || !ownerName || !storeAddress) return;
+    const normalizedPhone = normalizeSouthAfricanPhone(shopPhone);
+    if (!normalizedPhone) {
+      window.alert("Enter a valid South African WhatsApp number, such as +27 82 123 4567.");
+      return;
+    }
 
     const storeId = `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newStore: SpazaFoodStore = {
@@ -213,7 +219,7 @@ export default function SpazaRescuePage() {
       isOperating: true,
       hasDryStock: true,
       foodEssentials: ["Maize Meal", "Canned Goods", "Bread"],
-      contactPhone: shopPhone.replace(/[^0-9]/g, "") || "27821234567",
+      contactPhone: normalizedPhone,
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
     };
@@ -252,6 +258,11 @@ export default function SpazaRescuePage() {
     e.preventDefault();
     if (!aidTitle || !aidCoordinator || !aidAddress) return;
     if (aidListingChoice === "relief" && !aidDesc) return;
+    const normalizedPhone = normalizeSouthAfricanPhone(aidPhone);
+    if (!normalizedPhone) {
+      window.alert("Enter a valid South African WhatsApp number, such as +27 82 123 4567.");
+      return;
+    }
 
     const finalAidType = aidListingChoice === "spaza" 
       ? "Spaza Store" 
@@ -266,7 +277,7 @@ export default function SpazaRescuePage() {
       coordinator: aidCoordinator.trim(),
       description: aidListingChoice === "relief" ? aidDesc.trim() : `Spaza shop managed by ${aidCoordinator}`,
       operatingHours: aidListingChoice === "relief" ? (aidHours.trim() || "Daily: 9:00 AM - 3:00 PM") : "Open Daily",
-      contactPhone: aidPhone.replace(/[^0-9]/g, "") || "27821234567",
+      contactPhone: normalizedPhone,
       spoilageClearanceAlert: spoilageAlert.trim() || undefined,
       foodEssentials: essentialsInput ? essentialsInput.split(",").map((s) => s.trim()) : (aidListingChoice === "spaza" ? ["Maize Meal", "Canned Goods"] : undefined),
       latitude: location?.latitude ?? Number.NaN,
@@ -311,9 +322,8 @@ export default function SpazaRescuePage() {
   };
 
   const handleContactWhatsApp = (targetPhone: string, storeName: string) => {
-    const cleanNum = targetPhone || "27821234567";
-    const msg = encodeURIComponent(`Hello, I am contacting via SpazaRescue regarding food stock & clearance at "${storeName}". Is this available?`);
-    window.open(`https://wa.me/${cleanNum}?text=${msg}`, "_blank");
+    const message = `Hello, I am contacting via SpazaRescue regarding food stock & clearance at "${storeName}". Is this available?`;
+    openWhatsApp(targetPhone, message);
   };
 
   const nearbyStores = filterByRadius(stores, 10);
@@ -750,7 +760,7 @@ export default function SpazaRescuePage() {
                   required
                   value={shopPhone}
                   onChange={(e) => setShopPhone(e.target.value)}
-                  placeholder="e.g. 27821234567"
+                  placeholder="e.g. +27 82 123 4567"
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>
@@ -998,7 +1008,7 @@ export default function SpazaRescuePage() {
                   required
                   value={aidPhone}
                   onChange={(e) => setAidPhone(e.target.value)}
-                  placeholder="e.g. 27821234567"
+                  placeholder="e.g. +27 82 123 4567"
                   className="w-full bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                 />
               </div>

@@ -62,6 +62,10 @@ ResiGrid uses Web Push for the website and OneSignal for native Capacitor push. 
 
 The app requests location and notification permission after sign-in. Android notification settings and lock-screen privacy settings still control whether notifications appear on the lock screen and wake the display.
 
+## Radar report ownership and numbering
+
+Apply [`supabase/migrations/20261020150000_radar_report_ownership.sql`](./supabase/migrations/20261020150000_radar_report_ownership.sql) to the Supabase project before using report deletion or submitting reports with sequential `RPT-0001`-style references. The migration assigns the authenticated reporter as the owner and restricts report deletion to that owner. You can apply it with `npx supabase db push` from a linked Supabase project, or run the SQL in the Supabase SQL Editor.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

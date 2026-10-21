@@ -14,14 +14,17 @@ import {
   Navigation,
   Plus,
   Trash2,
+  Clock,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
+import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, normalizeReportStatus } from "@/lib/reportUtils";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 
 interface IncidentMarker {
   id: string;
+  displayId?: string;
   type: "power" | "water" | "roads" | "civic" | "other" | "mesh";
   category?: "power" | "water" | "roads" | "civic";
   title: string;
@@ -34,6 +37,8 @@ interface IncidentMarker {
   coordinates: { x: number; y: number };
   description: string;
   status: string;
+  assignedDepotUnit?: string;
+  estimatedFixTime?: string;
   distanceKm?: number;
   formattedDistance?: string;
   reporterUserId?: string | null;
@@ -173,18 +178,21 @@ export default function RadarPage() {
 
           return {
             id: idStr,
+            displayId: getReportDisplayId(row.report_id, row.id),
             type: normalizedType as "power" | "water" | "other",
             category: cat,
             title: row.title || "Community Hazard Report",
             location: row.location_address || streetAddress,
             locationAddress: row.location_address,
             severity: row.priority ? (row.priority.toLowerCase() as any) : "high",
-            time: row.time_str || "Recently",
+            time: formatReportTimestamp(row.created_at) || row.time_str || "Recently",
             latitude: typeof row.latitude === "number" ? row.latitude : -29.6,
             longitude: typeof row.longitude === "number" ? row.longitude : 30.3,
             coordinates: coords,
             description: row.description || "No additional hazard details provided.",
-            status: row.status || "Active",
+            status: normalizeReportStatus(row.status, row.assigned_depot),
+            assignedDepotUnit: row.assigned_depot || undefined,
+            estimatedFixTime: row.estimated_fix_time || undefined,
             distanceKm: 0.5,
             formattedDistance: "Nearby",
             reporterUserId: row.reporter_user_id ?? null,
@@ -241,7 +249,7 @@ export default function RadarPage() {
 
   const handleDeleteReport = async (incident: IncidentMarker) => {
     if (!currentUserId || incident.reporterUserId !== currentUserId) return;
-    if (!window.confirm(`Delete your report ${incident.id}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete your report ${incident.displayId || incident.id}? This cannot be undone.`)) return;
 
     setDeletingReportId(incident.id);
     setDeleteError(null);
@@ -507,10 +515,10 @@ export default function RadarPage() {
                       >
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="text-[10px] font-mono font-bold uppercase tracking-wider truncate" style={{ color: accentColor }}>
-                            {incident.category || incident.type} • {incident.id}
+                            {incident.category || incident.type} • {incident.displayId || incident.id}
                           </span>
                           <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-semibold text-white/80">
-                            {incident.status}
+                            {normalizeReportStatus(incident.status, incident.assignedDepotUnit)}
                           </span>
                           {currentUserId && incident.reporterUserId === currentUserId && (
                             <button
@@ -520,7 +528,7 @@ export default function RadarPage() {
                                 event.stopPropagation();
                                 void handleDeleteReport(incident);
                               }}
-                              aria-label={`Delete your report ${incident.id}`}
+                              aria-label={`Delete your report ${incident.displayId || incident.id}`}
                               title="Delete your report"
                               className="ml-auto rounded-lg p-1.5 text-rose-300 transition-colors hover:bg-rose-500/15 disabled:opacity-50"
                             >
@@ -528,6 +536,11 @@ export default function RadarPage() {
                             </button>
                           )}
                         </div>
+                        {hasEstimatedFixTime(incident.estimatedFixTime) && (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/25 bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-300">
+                            <Clock className="h-3 w-3" /> Fix: {incident.estimatedFixTime}
+                          </span>
+                        )}
 
                         <div>
                           <h3 className="text-xs sm:text-sm font-bold text-white">{incident.title}</h3>

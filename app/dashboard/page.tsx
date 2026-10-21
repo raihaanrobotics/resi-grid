@@ -23,8 +23,8 @@ import {
   Send,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 import { openWhatsApp } from "@/lib/phone";
+import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, isCrewAssigned, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
 
 interface ReportItem {
   id: string;
@@ -32,8 +32,10 @@ interface ReportItem {
   title: string;
   description: string;
   locationAddress: string;
-  status: "Auto-Dispatched" | "Pending Review" | "On Site" | "In Progress" | "Resolved";
+  status: ReportStatus;
   time: string;
+  displayId: string;
+  createdTimestamp?: number;
   province?: string;
   municipality?: string;
   ward?: string;
@@ -256,12 +258,14 @@ export default function MunicipalDashboardPage() {
       if (data) {
         const formattedReports: ReportItem[] = data.map((row: any) => ({
           id: row.report_id || `RPT-${row.id}`,
+          displayId: getReportDisplayId(row.report_id, row.id),
           category: row.category || "water",
           title: row.title || "Untitled Incident",
           description: row.description || "",
           locationAddress: row.location_address || "Unknown Location",
-          status: row.status || "Auto-Dispatched",
+          status: normalizeReportStatus(row.status, row.assigned_depot),
           time: row.time_str || "Today",
+          createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
           province: row.province || "KwaZulu-Natal",
           municipality: row.municipality || "Pietermaritzburg (Msunduzi)",
           ward: row.ward || "Ward 26 (CBD / Central)",
@@ -269,8 +273,8 @@ export default function MunicipalDashboardPage() {
           reporterPhone: row.reporter_phone || "N/A",
           accountNumber: row.account_number || "N/A",
           standNumber: row.stand_number || "N/A",
-          assignedDepotUnit: row.assigned_depot || DEPOT_UNITS[0],
-          estimatedFixTime: row.estimated_fix_time || "4 Hours Target",
+          assignedDepotUnit: row.assigned_depot || "Depot Rapid Response Queue",
+          estimatedFixTime: row.estimated_fix_time || "Pending Triage",
           coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
         }));
 
@@ -317,45 +321,6 @@ export default function MunicipalDashboardPage() {
     };
   }, []);
 
-  // Update Status & Sync with Supabase & BroadcastChannel
-  const updateReportStatus = async (reportId: string, newStatus: ReportItem["status"]) => {
-    try {
-      const { data, error } = await supabase
-        .from("reports")
-        .update({ status: newStatus })
-        .eq("report_id", reportId)
-        .select("report_id")
-        .maybeSingle();
-
-      if (error) {
-        console.error("Failed to update status in Supabase:", error);
-        window.alert("Could not update this report. Please retry.");
-        return;
-      }
-      if (!data) {
-        window.alert("The report could not be found or you are not allowed to update it.");
-        return;
-      }
-      setReports((prev) =>
-        prev.map((report) => report.id === reportId ? { ...report, status: newStatus } : report)
-      );
-      void dispatchReportScreenNotification(reportId);
-    } catch (err) {
-      console.error("Failed to update status in Supabase:", err);
-      window.alert("Could not update this report. Please retry.");
-      return;
-    }
-
-    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-      const bc = new BroadcastChannel("resigrid_reports_dispatch");
-      bc.postMessage({
-        type: "STATUS_UPDATE",
-        payload: { id: reportId, status: newStatus },
-      });
-      bc.close();
-    }
-  };
-
   // Assign Specific Crew Unit and Sync to Supabase & /crew portal
   const handleConfirmCrewAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -366,7 +331,7 @@ export default function MunicipalDashboardPage() {
         .from("reports")
         .update({
           assigned_depot: selectedCrewUnit,
-          status: "Auto-Dispatched",
+          status: "Crew Dispatched",
         })
         .eq("report_id", assigningJob.id)
         .select("report_id")
@@ -384,7 +349,7 @@ export default function MunicipalDashboardPage() {
 
       setReports((prev) =>
         prev.map((r) =>
-          r.id === assigningJob.id ? { ...r, assignedDepotUnit: selectedCrewUnit, status: "Auto-Dispatched" } : r
+          r.id === assigningJob.id ? { ...r, assignedDepotUnit: selectedCrewUnit, status: "Crew Dispatched" } : r
         )
       );
 
@@ -518,7 +483,7 @@ export default function MunicipalDashboardPage() {
             </div>
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-extrabold text-white">
-                {reports.filter((r) => r.status === "Auto-Dispatched").length}
+                {reports.filter((r) => isCrewAssigned(r.assignedDepotUnit) && r.status !== "Resolved").length}
               </span>
               <span className="text-xs text-muted block mt-0.5">Active Depot Work Orders</span>
             </div>
@@ -647,7 +612,7 @@ export default function MunicipalDashboardPage() {
                 >
                   <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-teal-400">{item.id}</span>
+                      <span className="text-xs font-mono font-bold text-teal-400">{item.displayId}</span>
                       <span
                         className={`text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border ${
                           item.category === "water"
@@ -659,12 +624,28 @@ export default function MunicipalDashboardPage() {
                       >
                         {item.category}
                       </span>
+                      <span className={`text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border ${
+                        item.status === "Resolved"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          : item.status === "Crew Dispatched" || item.status === "On Site" || item.status === "In Progress"
+                          ? "bg-teal-500/10 text-teal-300 border-teal-500/20"
+                          : "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                      }`}>
+                        {item.status}
+                      </span>
                       <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white font-medium">
                         {item.ward || "Ward 26"}
                       </span>
-                      <span className="text-[10px] bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded text-teal-300 font-medium">
-                        Crew: {item.assignedDepotUnit?.split(" - ")[0]}
-                      </span>
+                      {isCrewAssigned(item.assignedDepotUnit) && (
+                        <span className="text-[10px] bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded text-teal-300 font-medium">
+                          Crew: {item.assignedDepotUnit?.split(" - ")[0]}
+                        </span>
+                      )}
+                      {hasEstimatedFixTime(item.estimatedFixTime) && (
+                        <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-amber-300 font-medium flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> Fix: {item.estimatedFixTime}
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="text-sm font-bold text-white">{item.title}</h3>
@@ -673,6 +654,12 @@ export default function MunicipalDashboardPage() {
                     <div className="flex items-center gap-3 text-[11px] text-muted pt-1 flex-wrap">
                       <span className="flex items-center gap-1 text-teal-300 font-mono truncate max-w-full">
                         <MapPin className="h-3 w-3 text-teal-400 shrink-0" /> {item.locationAddress}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3 shrink-0" />
+                        Logged {item.createdTimestamp
+                          ? formatReportTimestamp(new Date(item.createdTimestamp).toISOString())
+                          : item.time}
                       </span>
                       {item.reporterName && (
                         <span className="flex items-center gap-1 text-white truncate">
@@ -702,18 +689,6 @@ export default function MunicipalDashboardPage() {
 
                     <button
                       type="button"
-                      onClick={() => updateReportStatus(item.id, "Resolved")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        item.status === "Resolved"
-                          ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                          : "bg-white/5 text-muted hover:text-white border border-white/10"
-                      }`}
-                    >
-                      Resolve
-                    </button>
-
-                    <button
-                      type="button"
                       onClick={() => handleWhatsAppNotify(item)}
                       title="WhatsApp Resident"
                       className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer"
@@ -735,7 +710,7 @@ export default function MunicipalDashboardPage() {
           <div className="glass-panel w-full max-w-md p-5 relative border-teal-500/30 space-y-4 rounded-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
-                <span className="text-xs font-mono text-teal-400 font-bold">{assigningJob.id}</span>
+                <span className="text-xs font-mono text-teal-400 font-bold">{assigningJob.displayId}</span>
                 <h3 className="text-sm font-bold text-white">Assign Field Crew Unit</h3>
               </div>
               <button onClick={() => setAssigningJob(null)} className="text-muted hover:text-white cursor-pointer">
@@ -794,7 +769,7 @@ export default function MunicipalDashboardPage() {
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <span className="text-xs font-mono text-teal-400 font-bold">
-                  {activeReportDetail.id}
+                  {activeReportDetail.displayId}
                 </span>
                 <h3 className="text-sm font-bold text-white">
                   {activeReportDetail.title}

@@ -372,7 +372,7 @@ export default function SpazaRescuePage() {
         <div className="flex items-center justify-between relative z-10 min-w-0">
           <Link href="/" className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="feature-icon feature-food shrink-0" style={{ color: accentColor }}>
-              <Store className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color: accentColor }} />
+              <Utensils className="w-4 h-4 sm:w-[18px] sm:h-[18px]" style={{ color: accentColor }} />
             </div>
 
             <div className="min-w-0">

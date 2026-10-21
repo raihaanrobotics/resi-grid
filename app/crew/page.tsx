@@ -29,6 +29,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 import { openWhatsApp } from "@/lib/phone";
+import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, isCrewAssigned, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
 
 interface ReportItem {
   id: string;
@@ -36,8 +37,9 @@ interface ReportItem {
   title: string;
   description: string;
   locationAddress: string;
-  status: "Auto-Dispatched" | "Pending Review" | "On Site" | "In Progress" | "Resolved";
+  status: ReportStatus;
   time: string;
+  displayId: string;
   province?: string;
   municipality?: string;
   ward?: string;
@@ -99,6 +101,7 @@ export default function FieldCrewPortalPage() {
   const [newMaterialQty, setNewMaterialQty] = useState(1);
   const [completionNotes, setCompletionNotes] = useState("");
   const [isSubmittingLog, setIsSubmittingLog] = useState(false);
+  const [isSavingEstimatedFixTime, setIsSavingEstimatedFixTime] = useState(false);
 
   // Theme Accent Sync
   useEffect(() => {
@@ -158,12 +161,13 @@ export default function FieldCrewPortalPage() {
 
           return {
             id: row.report_id || `RPT-${row.id}`,
+            displayId: getReportDisplayId(row.report_id, row.id),
             category: category,
             title: row.title || "Untitled Incident",
             description: row.description || "",
             locationAddress: row.location_address || "Unknown Location",
-            status: row.status || "Auto-Dispatched",
-            time: row.time_str || "Today",
+            status: normalizeReportStatus(row.status, row.assigned_depot),
+            time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
             province: row.province || "KwaZulu-Natal",
             municipality: row.municipality || "Pietermaritzburg (Msunduzi)",
             ward: row.ward || "Ward 26",
@@ -171,8 +175,8 @@ export default function FieldCrewPortalPage() {
             reporterPhone: row.reporter_phone || "N/A",
             accountNumber: row.account_number || "N/A",
             standNumber: row.stand_number || "N/A",
-            assignedDepotUnit: row.assigned_depot || "Msunduzi Water Rapid Response - Unit 1",
-            estimatedFixTime: row.estimated_fix_time || `${targetHours} Hours Target`,
+            assignedDepotUnit: row.assigned_depot || "Depot Rapid Response Queue",
+            estimatedFixTime: row.estimated_fix_time || "",
             targetResolutionHours: targetHours,
             createdTimestamp: createdAt,
             coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
@@ -280,9 +284,50 @@ export default function FieldCrewPortalPage() {
     return true;
   };
 
+  const saveEstimatedFixTime = async () => {
+    const estimatedFixTime = activeJob?.estimatedFixTime?.trim();
+    if (!activeJob || !estimatedFixTime) {
+      window.alert("Enter an estimated fix time before saving.");
+      return;
+    }
+    setIsSavingEstimatedFixTime(true);
+    try {
+      const { data, error } = await supabase
+        .from("reports")
+        .update({ estimated_fix_time: estimatedFixTime })
+        .eq("report_id", activeJob.id)
+        .select("report_id")
+        .maybeSingle();
+
+      if (error) {
+        console.error("Failed to save estimated fix time:", error);
+        window.alert("Could not save the estimated fix time. Please retry.");
+        return;
+      }
+      if (!data) {
+        window.alert("The report could not be found or you are not allowed to update it.");
+        return;
+      }
+      setReports((prev) => prev.map((report) =>
+        report.id === activeJob.id ? { ...report, estimatedFixTime } : report
+      ));
+      setActiveJob((current) => current?.id === activeJob.id
+        ? { ...current, estimatedFixTime }
+        : current
+      );
+    } catch (err) {
+      console.error("Estimated fix time update error:", err);
+      window.alert("Could not save the estimated fix time. Please retry.");
+    } finally {
+      setIsSavingEstimatedFixTime(false);
+    }
+  };
+
   // WhatsApp Citizen Dispatch Link
   const handleNotifyCitizenWhatsApp = (job: ReportItem, customText?: string) => {
-    const text = customText || `Hello ${job.reporterName}, this is the Municipal Operations Field Crew regarding your report (${job.id}: ${job.title}). Current status: *${job.status}*. Address: ${job.locationAddress}.`;
+    const text = customText || (job.status === "Resolved"
+      ? `Hello ${job.reporterName}, this is the Municipal Operations Field Crew. Your report (${job.displayId}: ${job.title}) has been fixed at ${job.locationAddress}.`
+      : `Hello ${job.reporterName}, this is the Municipal Operations Field Crew regarding your report (${job.displayId}: ${job.title}). Current status: *${job.status}*. Address: ${job.locationAddress}.`);
     openWhatsApp(job.reporterPhone || "", text);
   };
 
@@ -323,7 +368,7 @@ export default function FieldCrewPortalPage() {
       if (!updated) return;
 
       // Notify citizen via WhatsApp automatically
-      const whatsappMsg = `Hello ${activeJob.reporterName}, Municipal Field Crew ${activeJob.assignedDepotUnit} has marked your ticket (${activeJob.id}) as RESOLVED at ${activeJob.locationAddress}.\n\nWork Done: ${completionNotes || "Site repairs completed successfully."}`;
+      const whatsappMsg = `Hello ${activeJob.reporterName}, Municipal Field Crew ${activeJob.assignedDepotUnit} has fixed your ticket (${activeJob.displayId}) at ${activeJob.locationAddress}.\n\nWork Done: ${completionNotes || "Site repairs completed successfully."}`;
       handleNotifyCitizenWhatsApp(activeJob, whatsappMsg);
 
       setActiveJob(null);
@@ -354,7 +399,7 @@ export default function FieldCrewPortalPage() {
       (job.reporterName && job.reporterName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (job.accountNumber && job.accountNumber.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    return matchesDepot && matchesStatus && matchesSearch;
+    return isCrewAssigned(job.assignedDepotUnit) && matchesDepot && matchesStatus && matchesSearch;
   });
 
   const activeCount = reports.filter((r) => r.status !== "Resolved").length;
@@ -531,7 +576,7 @@ export default function FieldCrewPortalPage() {
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-bold text-teal-400">{job.id}</span>
+                    <span className="text-xs font-mono font-bold text-teal-400">{job.displayId}</span>
                     
                     {/* Category Badge */}
                     <span
@@ -563,6 +608,11 @@ export default function FieldCrewPortalPage() {
                     <span className="text-[10px] bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded text-amber-300 font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3 text-amber-400" /> SLA: {job.targetResolutionHours || 4}h
                     </span>
+                    {hasEstimatedFixTime(job.estimatedFixTime) && (
+                      <span className="text-[10px] bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 rounded text-teal-300 font-medium flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Fix: {job.estimatedFixTime}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-xs sm:text-sm font-bold text-white">{job.title}</h3>
@@ -571,6 +621,9 @@ export default function FieldCrewPortalPage() {
                   <div className="flex items-center gap-3 text-[11px] text-muted pt-1 flex-wrap">
                     <span className="flex items-center gap-1 text-teal-300 font-mono truncate max-w-full">
                       <MapPin className="h-3 w-3 text-teal-400 shrink-0" /> {job.locationAddress}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 shrink-0" /> Logged {job.time}
                     </span>
                     {job.reporterName && (
                       <span className="flex items-center gap-1 text-white truncate">
@@ -581,7 +634,7 @@ export default function FieldCrewPortalPage() {
                 </div>
 
                 {/* STATUS UPDATE & ACTION CONTROLS */}
-                <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3 flex-wrap">
+                <div className="flex flex-col items-start gap-2 border-t border-white/10 pt-3">
                   <button
                     type="button"
                     onClick={() => setActiveJob(job)}
@@ -591,35 +644,23 @@ export default function FieldCrewPortalPage() {
                     <ChevronRight className="h-3.5 w-3.5 text-teal-400" />
                   </button>
 
-                  <div className="flex items-center gap-1.5">
-                    {job.status !== "Resolved" && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => updateJobStatus(job.id, "On Site")}
-                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                            job.status === "On Site"
-                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                              : "bg-white/5 text-muted hover:text-white border border-white/10"
-                          }`}
-                        >
-                          On Site
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => updateJobStatus(job.id, "In Progress")}
-                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                            job.status === "In Progress"
-                              ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
-                              : "bg-white/5 text-muted hover:text-white border border-white/10"
-                          }`}
-                        >
-                          Progress
-                        </button>
-                      </>
-                    )}
-
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {(["Pending Review", "Crew Dispatched", "On Site", "In Progress", "Resolved"] as const).map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => updateJobStatus(job.id, status)}
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                          job.status === status
+                            ? status === "Resolved"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                              : "bg-teal-500/20 text-teal-300 border border-teal-500/40"
+                            : "bg-white/5 text-muted hover:text-white border border-white/10"
+                        }`}
+                      >
+                        {status}
+                      </button>
+                    ))}
                     <button
                       type="button"
                       onClick={() => handleNotifyCitizenWhatsApp(job)}
@@ -643,7 +684,7 @@ export default function FieldCrewPortalPage() {
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="min-w-0">
                 <span className="text-xs font-mono text-teal-400 font-bold">
-                  {activeJob.id}
+                  {activeJob.displayId}
                 </span>
                 <h3 className="text-xs sm:text-sm font-bold text-white truncate">{activeJob.title}</h3>
               </div>
@@ -702,42 +743,26 @@ export default function FieldCrewPortalPage() {
                 </p>
               </div>
 
-              {/* Status Transition Buttons */}
-              <div className="space-y-1 pt-1">
-                <span className="text-muted block text-[10px] uppercase tracking-wider">Update Job Status</span>
-                <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-2 pt-1">
+                <label htmlFor="estimated-fix-time" className="text-muted block text-[10px] uppercase tracking-wider">
+                  Estimated Fix Time
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    id="estimated-fix-time"
+                    type="text"
+                    value={activeJob.estimatedFixTime || ""}
+                    onChange={(event) => setActiveJob({ ...activeJob, estimatedFixTime: event.target.value })}
+                    placeholder="e.g. 2 hours"
+                    className="min-w-0 flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  />
                   <button
                     type="button"
-                    onClick={() => updateJobStatus(activeJob.id, "On Site")}
-                    className={`py-2 px-1 rounded-xl text-xs font-semibold border transition-all ${
-                      activeJob.status === "On Site"
-                        ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                        : "bg-black/40 border-white/10 text-muted hover:text-white"
-                    }`}
+                    onClick={saveEstimatedFixTime}
+                    disabled={isSavingEstimatedFixTime}
+                    className="px-3 py-2 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs disabled:opacity-50"
                   >
-                    On Site
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateJobStatus(activeJob.id, "In Progress")}
-                    className={`py-2 px-1 rounded-xl text-xs font-semibold border transition-all ${
-                      activeJob.status === "In Progress"
-                        ? "bg-teal-500/20 text-teal-300 border-teal-500/40"
-                        : "bg-black/40 border-white/10 text-muted hover:text-white"
-                    }`}
-                  >
-                    In Progress
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateJobStatus(activeJob.id, "Resolved")}
-                    className={`py-2 px-1 rounded-xl text-xs font-semibold border transition-all ${
-                      activeJob.status === "Resolved"
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                        : "bg-black/40 border-white/10 text-muted hover:text-white"
-                    }`}
-                  >
-                    Resolved
+                    {isSavingEstimatedFixTime ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>

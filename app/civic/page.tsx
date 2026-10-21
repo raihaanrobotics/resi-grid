@@ -404,7 +404,6 @@ export default function CivicAIPage() {
 
     // Full Payload containing every single detail (for Municipal Dashboard & Supabase matching table schema)
     const fullPayload = {
-      report_id: `RPT-${crypto.randomUUID()}`,
       category,
       title: reportTitle.trim(),
       description: description.trim(),
@@ -413,8 +412,9 @@ export default function CivicAIPage() {
       municipality: selectedMunicipality,
       ward: selectedWard,
       priority,
-      status: "Auto-Dispatched",
+      status: "Pending Review",
       time_str: `Today, ${timestamp} SAST`,
+      created_at: new Date().toISOString(),
       reporter_name: reporterName.trim(),
       reporter_phone: normalizedReporterPhone,
       account_number: accountNumber.trim(),

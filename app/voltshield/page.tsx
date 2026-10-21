@@ -32,6 +32,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
+import { formatReportTimestamp, getReportDisplayId, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 import { Device } from "@capacitor/device";
 import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
@@ -53,11 +54,12 @@ interface PowerNode {
 
 interface PowerReportItem {
   id: string;
+  displayId: string;
   category: "water" | "power" | "roads" | "civic";
   title: string;
   description: string;
   locationAddress: string;
-  status: "Auto-Dispatched" | "Pending Review" | "Resolved";
+  status: ReportStatus;
   time: string;
   latitude: number;
   longitude: number;
@@ -224,16 +226,19 @@ export default function VoltShieldPage() {
       if (reportsData) {
         const formattedReports: PowerReportItem[] = reportsData.map((row: any) => ({
           id: row.report_id || `RPT-${row.id}`,
+          displayId: getReportDisplayId(row.report_id, row.id),
           category: row.category || "power",
           title: row.title || "Untitled Incident",
           description: row.description || "",
           locationAddress: row.location_address || "Unknown Location",
-          status: row.status || "Auto-Dispatched",
-          time: row.time_str || "Today",
+          status: normalizeReportStatus(row.status, row.assigned_depot),
+          time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
           latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
           longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           ward: row.ward || "Ward 26",
           priority: row.priority || "High",
+          assignedDepotUnit: row.assigned_depot || undefined,
+          estimatedFixTime: row.estimated_fix_time || undefined,
         }));
         const powerReportsOnly = formattedReports.filter((r) => r.category === "power");
         setPowerReports(powerReportsOnly);
@@ -936,7 +941,8 @@ export default function VoltShieldPage() {
                 </div>
               ) : (
                 deduplicatedPowerReports.map((report) => {
-                  const isResolved = report.status === "Resolved" || report.status === "Auto-Dispatched";
+                  const status = normalizeReportStatus(report.status, report.assignedDepotUnit);
+                  const isResolved = status === "Resolved";
                   const statusColor = isResolved ? "#10b981" : "#f59e0b";
 
                   return (
@@ -946,7 +952,7 @@ export default function VoltShieldPage() {
                     >
                       <div className="flex items-center justify-between flex-wrap gap-1">
                         <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
-                          {report.id} {report.formattedDistance ? `• ${report.formattedDistance}` : ""}
+                          {report.displayId || report.id} {report.formattedDistance ? `• ${report.formattedDistance}` : ""}
                         </span>
                         <span 
                           className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
@@ -956,9 +962,14 @@ export default function VoltShieldPage() {
                             borderColor: `color-mix(in srgb, ${statusColor} 25%, transparent)`,
                           }}
                         >
-                          {report.status}
+                          {status}
                         </span>
                       </div>
+                      {report.estimatedFixTime && report.estimatedFixTime.toLowerCase() !== "pending triage" && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                          <Clock className="h-3 w-3" /> Fix: {report.estimatedFixTime}
+                        </span>
+                      )}
 
                       <h3 className="text-xs sm:text-sm font-bold text-white">{report.title}</h3>
                       <p className="text-[11px] text-muted leading-relaxed">{report.description}</p>

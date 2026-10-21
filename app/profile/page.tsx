@@ -590,7 +590,7 @@ export default function ProfilePage() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                  RESIDENT PROFILE
+                  PROFILE
                 </h1>
                 <span 
                   className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-accent-dynamic shrink-0 transition-all"
@@ -714,7 +714,7 @@ export default function ProfilePage() {
 
             <div className="border-b border-white/10 pb-3">
               <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Account Details &amp; Operational Zone
+                <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Personal Details
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
                 Manage personal credentials and ward location.

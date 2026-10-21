@@ -339,7 +339,7 @@ export default function MarketplacePage() {
                 RESIMARKET
               </h1>
               <p className="mt-0.5 truncate text-[8px] sm:text-[10px] tracking-[0.1em] text-muted">
-                POWER, WATER & SERVICE TRADING
+                POWER, WATER & GOODS TRADING
               </p>
             </div>
           </Link>
@@ -405,7 +405,7 @@ export default function MarketplacePage() {
           <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search power, water reserves, equipment..."
+            placeholder="Search power, water supply, equipment..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-3 py-2 text-xs text-white placeholder:text-muted focus:outline-none focus:border-white/30 transition-colors"
@@ -592,9 +592,8 @@ export default function MarketplacePage() {
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer"
                 >
                   <option value="power" className="bg-neutral-900 text-white">Power / Energy</option>
-                  <option value="water" className="bg-neutral-900 text-white">Water Reserves</option>
-                  <option value="services" className="bg-neutral-900 text-white">Services / Technical</option>
-                  <option value="goods" className="bg-neutral-900 text-white">Goods & Hardware</option>
+                  <option value="water" className="bg-neutral-900 text-white">Water</option>
+                  <option value="goods" className="bg-neutral-900 text-white">Goods</option>
                 </select>
               </div>
 

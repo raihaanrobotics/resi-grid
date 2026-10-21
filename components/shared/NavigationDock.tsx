@@ -80,7 +80,7 @@ export default function NavigationDock() {
 
   const dockView = isMunicipalContext || isCrewContext
     ? "staff"
-    : showSubDock || isFeatureActive
+    : showSubDock
       ? activeSubView
       : "main";
 

@@ -17,7 +17,7 @@ import {
 
 const allFeatures = [
   {
-    title: "HydroMesh™",
+    title: "HydroMesh",
     subtitle: "Water & Acoustic Telemetry",
     description: "Real-time water pressure monitoring, acoustic tap diagnostics, dry-pipe cavitation detection, and P2P community tank sharing.",
     href: "/hydromesh",

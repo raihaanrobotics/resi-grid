@@ -801,7 +801,7 @@ export default function CivicAIPage() {
             <div className="panel-reflection pointer-events-none" />
             
             <div className="flex items-center justify-between">
-              <label className="text-[11px] sm:text-xs font-medium text-muted block">Precise Location Source</label>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block">Location</label>
               <button
                 type="button"
                 onClick={handleToggleAddressSource}
@@ -860,7 +860,7 @@ export default function CivicAIPage() {
               }}
             >
               <Send className="h-4 w-4 shrink-0 pointer-events-none" style={{ color: "var(--accent)" }} />
-              <span className="pointer-events-none">{isSubmitting ? "Dispatching..." : "Dispatch Automated Report"}</span>
+              <span className="pointer-events-none">{isSubmitting ? "Dispatching..." : "Dispatch Report"}</span>
             </button>
           </div>
 

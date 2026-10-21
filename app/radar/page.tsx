@@ -277,7 +277,7 @@ export default function RadarPage() {
                 RADAR
               </h1>
               <p className="text-[9px] sm:text-[10px] tracking-wider text-muted mt-0.5 truncate">
-                10KM AREA RADIUS • SUPABASE LIVE SYNC
+                10KM AREA RADIUS
               </p>
             </div>
           </div>
@@ -451,7 +451,7 @@ export default function RadarPage() {
 
             <div className="w-full">
               <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
-                <h2 className="text-xs font-semibold text-white tracking-wider">ALL INCIDENT DETAILS</h2>
+                <h2 className="text-xs font-semibold text-white tracking-wider">ALL INCIDENTS</h2>
                 <span className="text-[10px] font-mono text-muted">{displayIncidents.length} reports · 10 km</span>
               </div>
 

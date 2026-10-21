@@ -46,15 +46,15 @@ interface HomeReport {
 
 const modules = [
   {
-    title: "Water & Tanks",
-    description: "Check water flow & community tanks",
+    title: "Water & Supply",
+    description: "Check water flow & shared supply",
     href: "/hydromesh",
     icon: Droplets,
     color: "water",
   },
   {
-    title: "Power & Load",
-    description: "See power status & backup spots",
+    title: "Power & Energy",
+    description: "Monitor grid status, outage alerts, and backup power",
     href: "/voltshield",
     icon: Zap,
     color: "energy",
@@ -68,14 +68,14 @@ const modules = [
   },
   {
     title: "Weather & Climate",
-    description: "Check storm warnings & climate updates",
+    description: "Check warnings & climate updates",
     href: "/weather",
     icon: CloudSun,
     color: "transport",
   },
   {
     title: "Report issue",
-    description: "Report a burst pipe or outage",
+    description: "Instantly dispatch municipal tickets for outages & other issues",
     href: "/civic",
     icon: Landmark,
     color: "civic",

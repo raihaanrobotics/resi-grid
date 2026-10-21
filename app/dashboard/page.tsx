@@ -14,10 +14,8 @@ import {
   SlidersHorizontal,
   FileSpreadsheet,
   PhoneCall,
-  X,
   User,
   Hash,
-  Home,
   Wrench,
   MessageCircle,
   Send,
@@ -42,7 +40,6 @@ interface ReportItem {
   reporterName?: string;
   reporterPhone?: string;
   accountNumber?: string;
-  standNumber?: string;
   assignedDepotUnit?: string;
   estimatedFixTime?: string;
   coords?: { lat: number; lng: number };
@@ -272,8 +269,7 @@ export default function MunicipalDashboardPage() {
           reporterName: row.reporter_name || "Anonymous",
           reporterPhone: row.reporter_phone || "N/A",
           accountNumber: row.account_number || "N/A",
-          standNumber: row.stand_number || "N/A",
-          assignedDepotUnit: row.assigned_depot || "Depot Rapid Response Queue",
+          assignedDepotUnit: row.assigned_depot || "Unassigned",
           estimatedFixTime: row.estimated_fix_time || "Pending Triage",
           coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
         }));
@@ -401,7 +397,7 @@ export default function MunicipalDashboardPage() {
   });
 
   return (
-    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] pb-28 pt-4 px-3 sm:px-6 lg:px-10 max-w-[1920px] mx-auto space-y-5 selection:bg-teal-500/30 selection:text-teal-200">
+    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] pb-28 pt-4 px-3 sm:px-6 lg:px-10 max-w-[1920px] mx-auto space-y-5 selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
       <div className="ambient-background" aria-hidden="true">
         <div className="ambient-orb orb-one" />
         <div className="ambient-orb orb-two" />
@@ -415,7 +411,7 @@ export default function MunicipalDashboardPage() {
         <header className="glass-header flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-5">
           <div className="flex items-center gap-3">
             <div className="feature-icon feature-civic">
-              <Building2 className="h-5 w-5 text-teal-400" />
+              <Building2 className="h-5 w-5 text-accent-dynamic" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -427,17 +423,6 @@ export default function MunicipalDashboardPage() {
                 REAL-TIME WARD TRIAGE &amp; CREW DEPLOYMENT DASHBOARD
               </p>
             </div>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={handleManualRefresh}
-              title="Refresh Feed"
-              className="glass-action px-3 py-1.5 text-xs text-teal-400 border-teal-500/30 hover:bg-teal-500/20 transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Sync System</span>
-            </button>
           </div>
         </header>
 
@@ -452,8 +437,18 @@ export default function MunicipalDashboardPage() {
           <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
-              <span className="eyebrow text-teal-400">TOTAL DISPATCHES</span>
-              <Building2 className="h-4 w-4 text-teal-400" />
+              <span className="eyebrow text-accent-dynamic">TOTAL DISPATCHES</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleManualRefresh}
+                  title="Sync System"
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-accent-dynamic hover:bg-[var(--accent)]/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
+                  <span>Sync</span>
+                </button>
+                <Building2 className="h-4 w-4 text-accent-dynamic" />
+              </div>
             </div>
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-extrabold text-white">{reports.length}</span>
@@ -478,8 +473,8 @@ export default function MunicipalDashboardPage() {
           <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
-              <span className="eyebrow text-teal-400">DISPATCHED CREWS</span>
-              <UserCheck className="h-4 w-4 text-teal-400" />
+              <span className="eyebrow text-accent-dynamic">DISPATCHED CREWS</span>
+              <UserCheck className="h-4 w-4 text-accent-dynamic" />
             </div>
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-extrabold text-white">
@@ -508,7 +503,7 @@ export default function MunicipalDashboardPage() {
         <div className="glass-panel p-4 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 w-full md:w-auto flex-1 max-w-md bg-black/40 border border-white/10 rounded-xl px-3.5 py-2">
-              <Search className="h-4 w-4 text-teal-400 shrink-0" />
+              <Search className="h-4 w-4 text-accent-dynamic shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
@@ -520,12 +515,12 @@ export default function MunicipalDashboardPage() {
 
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2 flex-1 md:flex-initial">
-                <SlidersHorizontal className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                <SlidersHorizontal className="h-3.5 w-3.5 text-accent-dynamic shrink-0" />
                 <span className="text-xs text-muted">Category:</span>
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full md:w-auto cursor-pointer"
+                  className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent)]/50 w-full md:w-auto cursor-pointer"
                 >
                   <option value="ALL" className="bg-neutral-900 text-white">All Categories</option>
                   <option value="water" className="bg-neutral-900 text-white">Water & Sanitation</option>
@@ -542,7 +537,7 @@ export default function MunicipalDashboardPage() {
               <select
                 value={selectedProvince}
                 onChange={(e) => handleProvinceChange(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full cursor-pointer"
+                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent)]/50 w-full cursor-pointer"
               >
                 {Object.keys(SOUTH_AFRICAN_PROVINCES_CITIES_WARDS).map((prov) => (
                   <option key={prov} value={prov} className="bg-neutral-900 text-white">
@@ -557,7 +552,7 @@ export default function MunicipalDashboardPage() {
               <select
                 value={selectedCity}
                 onChange={(e) => handleCityChange(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full cursor-pointer"
+                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent)]/50 w-full cursor-pointer"
               >
                 {Object.keys(currentCities).map((city) => (
                   <option key={city} value={city} className="bg-neutral-900 text-white">
@@ -568,12 +563,12 @@ export default function MunicipalDashboardPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Filter className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+              <Filter className="h-3.5 w-3.5 text-accent-dynamic shrink-0" />
               <span className="text-xs text-muted shrink-0">Ward:</span>
               <select
                 value={selectedWard}
                 onChange={(e) => setSelectedWard(e.target.value)}
-                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/50 w-full cursor-pointer"
+                className="bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[var(--accent)]/50 w-full cursor-pointer"
               >
                 <option value="ALL" className="bg-neutral-900 text-white">All Municipal Wards</option>
                 {currentWards.map((ward) => (
@@ -592,9 +587,9 @@ export default function MunicipalDashboardPage() {
 
           <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3 gap-2">
             <h2 className="text-xs sm:text-base font-semibold text-white flex items-center gap-2 truncate">
-              <ShieldAlert className="h-4 w-4 text-teal-400 shrink-0" /> <span className="truncate">Municipal Ward Incident Queue</span>
+              <ShieldAlert className="h-4 w-4 text-accent-dynamic shrink-0" /> <span className="truncate">Municipal Ward Incident Queue</span>
             </h2>
-            <span className="text-xs font-mono text-teal-400 shrink-0">
+            <span className="text-xs font-mono text-accent-dynamic shrink-0">
               {filteredReports.length} Reports
             </span>
           </div>
@@ -612,7 +607,7 @@ export default function MunicipalDashboardPage() {
                 >
                   <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-bold text-teal-400">{item.displayId}</span>
+                      <span className="text-xs font-mono font-bold text-accent-dynamic">{item.displayId}</span>
                       <span
                         className={`text-[9px] uppercase font-mono font-bold px-2 py-0.5 rounded border ${
                           item.category === "water"
@@ -628,7 +623,7 @@ export default function MunicipalDashboardPage() {
                         item.status === "Resolved"
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                           : item.status === "Crew Dispatched" || item.status === "On Site" || item.status === "In Progress"
-                          ? "bg-teal-500/10 text-teal-300 border-teal-500/20"
+                          ? "bg-[var(--accent)]/10 text-accent-dynamic border-[var(--accent)]/20"
                           : "bg-amber-500/10 text-amber-300 border-amber-500/20"
                       }`}>
                         {item.status}
@@ -637,7 +632,7 @@ export default function MunicipalDashboardPage() {
                         {item.ward || "Ward 26"}
                       </span>
                       {isCrewAssigned(item.assignedDepotUnit) && (
-                        <span className="text-[10px] bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded text-teal-300 font-medium">
+                        <span className="text-[10px] bg-[var(--accent)]/10 border border-[var(--accent)]/20 px-2 py-0.5 rounded text-accent-dynamic font-medium">
                           Crew: {item.assignedDepotUnit?.split(" - ")[0]}
                         </span>
                       )}
@@ -652,8 +647,8 @@ export default function MunicipalDashboardPage() {
                     <p className="text-xs text-muted leading-relaxed line-clamp-2">{item.description}</p>
 
                     <div className="flex items-center gap-3 text-[11px] text-muted pt-1 flex-wrap">
-                      <span className="flex items-center gap-1 text-teal-300 font-mono truncate max-w-full">
-                        <MapPin className="h-3 w-3 text-teal-400 shrink-0" /> {item.locationAddress}
+                      <span className="flex items-center gap-1 text-accent-dynamic font-mono truncate max-w-full">
+                        <MapPin className="h-3 w-3 text-accent-dynamic shrink-0" /> {item.locationAddress}
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3 shrink-0" />
@@ -663,7 +658,7 @@ export default function MunicipalDashboardPage() {
                       </span>
                       {item.reporterName && (
                         <span className="flex items-center gap-1 text-white truncate">
-                          <User className="h-3 w-3 text-teal-400 shrink-0" /> {item.reporterName}
+                          <User className="h-3 w-3 text-accent-dynamic shrink-0" /> {item.reporterName}
                         </span>
                       )}
                     </div>
@@ -674,7 +669,7 @@ export default function MunicipalDashboardPage() {
                     <button
                       type="button"
                       onClick={() => setAssigningJob(item)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-500/20 text-teal-300 hover:bg-teal-500/30 border border-teal-500/40 transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent)]/20 text-accent-dynamic hover:bg-[var(--accent)]/30 border border-[var(--accent)]/40 transition-all flex items-center gap-1.5 cursor-pointer"
                     >
                       <Wrench className="h-3.5 w-3.5" /> Assign Crew
                     </button>
@@ -684,7 +679,7 @@ export default function MunicipalDashboardPage() {
                       onClick={() => setActiveReportDetail(item)}
                       className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <FileSpreadsheet className="h-3.5 w-3.5 text-teal-400" /> Inspect
+                      <FileSpreadsheet className="h-3.5 w-3.5 text-accent-dynamic" /> Inspect
                     </button>
 
                     <button
@@ -707,32 +702,29 @@ export default function MunicipalDashboardPage() {
       {/* ASSIGN CREW MODAL */}
       {assigningJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="glass-panel w-full max-w-md p-5 relative border-teal-500/30 space-y-4 rounded-2xl">
+          <div className="glass-panel w-full max-w-md p-5 relative border-[var(--accent)]/30 space-y-4 rounded-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
-                <span className="text-xs font-mono text-teal-400 font-bold">{assigningJob.displayId}</span>
+                <span className="text-xs font-mono text-accent-dynamic font-bold">{assigningJob.displayId}</span>
                 <h3 className="text-sm font-bold text-white">Assign Field Crew Unit</h3>
               </div>
-              <button onClick={() => setAssigningJob(null)} className="text-muted hover:text-white cursor-pointer">
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             <form onSubmit={handleConfirmCrewAssignment} className="space-y-4 text-xs">
               <div className="bg-black/40 p-3 rounded-xl border border-white/5 space-y-1">
                 <span className="text-muted text-[10px] uppercase">Incident</span>
                 <p className="text-white font-medium">{assigningJob.title}</p>
-                <p className="text-teal-300 font-mono text-[11px]">{assigningJob.locationAddress}</p>
+                <p className="text-accent-dynamic font-mono text-[11px]">{assigningJob.locationAddress}</p>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-wider text-teal-400 font-semibold block">
+                <label className="text-[10px] uppercase tracking-wider text-accent-dynamic font-semibold block">
                   Select Specialized Depot Unit
                 </label>
                 <select
                   value={selectedCrewUnit}
                   onChange={(e) => setSelectedCrewUnit(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-teal-500/50 cursor-pointer"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[var(--accent)]/50 cursor-pointer"
                 >
                   {DEPOT_UNITS.map((unit) => (
                     <option key={unit} value={unit} className="bg-neutral-900 text-white">
@@ -752,7 +744,7 @@ export default function MunicipalDashboardPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-[var(--accent)]/20 border border-[var(--accent)]/30 text-accent-dynamic font-semibold text-xs hover:bg-[var(--accent)]/30 transition-all cursor-pointer flex items-center gap-1.5"
                 >
                   <Send className="h-3.5 w-3.5" /> Dispatch to Crew
                 </button>
@@ -765,84 +757,72 @@ export default function MunicipalDashboardPage() {
       {/* DETAILED INSPECTION MODAL */}
       {activeReportDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="glass-panel w-full max-w-xl p-6 relative border-teal-500/30 space-y-4 max-h-[90vh] overflow-y-auto rounded-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="glass-panel w-full max-w-md p-4 relative border-[var(--accent)]/30 space-y-3 max-h-[85vh] overflow-y-auto rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div>
-                <span className="text-xs font-mono text-teal-400 font-bold">
+                <span className="text-[11px] font-mono text-accent-dynamic font-bold">
                   {activeReportDetail.displayId}
                 </span>
-                <h3 className="text-sm font-bold text-white">
+                <h3 className="text-xs font-bold text-white truncate max-w-[280px]">
                   {activeReportDetail.title}
                 </h3>
               </div>
-              <button
-                onClick={() => setActiveReportDetail(null)}
-                className="text-muted hover:text-white cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-3.5 rounded-xl border border-white/5">
+            <div className="space-y-2.5 text-xs">
+              <div className="grid grid-cols-2 gap-2 bg-black/40 p-2.5 rounded-xl border border-white/5">
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Reporter Full Name</span>
-                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
-                    <User className="h-3.5 w-3.5 text-teal-400" />
-                    {activeReportDetail.reporterName || "N/A"}
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Reporter Name</span>
+                  <p className="text-white font-medium mt-0.5 flex items-center gap-1 truncate">
+                    <User className="h-3 w-3 text-accent-dynamic shrink-0" />
+                    <span className="truncate">{activeReportDetail.reporterName || "N/A"}</span>
                   </p>
                 </div>
 
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Contact Phone Number</span>
-                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
-                    <PhoneCall className="h-3.5 w-3.5 text-teal-400" />
-                    {activeReportDetail.reporterPhone || "N/A"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-3.5 rounded-xl border border-white/5">
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipal Account Number</span>
-                  <p className="text-teal-300 font-mono font-medium mt-0.5 flex items-center gap-1">
-                    <Hash className="h-3.5 w-3.5 text-teal-400" />
-                    {activeReportDetail.accountNumber || "N/A"}
-                  </p>
-                </div>
-
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Stand / Erf Number</span>
-                  <p className="text-white font-medium mt-0.5 flex items-center gap-1">
-                    <Home className="h-3.5 w-3.5 text-teal-400" />
-                    {activeReportDetail.standNumber || "N/A"}
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Contact Phone</span>
+                  <p className="text-white font-medium mt-0.5 flex items-center gap-1 truncate">
+                    <PhoneCall className="h-3 w-3 text-accent-dynamic shrink-0" />
+                    <span className="truncate">{activeReportDetail.reporterPhone || "N/A"}</span>
                   </p>
                 </div>
               </div>
 
-              <div>
-                <span className="text-muted block text-[10px] uppercase tracking-wider">Full Street Address / Location</span>
-                <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2.5 rounded-xl border border-white/5">
-                  <MapPin className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-                  {activeReportDetail.locationAddress}
+              <div className="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Municipal Account Number</span>
+                <p className="text-accent-dynamic font-mono font-medium mt-0.5 flex items-center gap-1">
+                  <Hash className="h-3 w-3 text-accent-dynamic shrink-0" />
+                  {activeReportDetail.accountNumber || "N/A"}
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Assigned Depot Unit</span>
-                  <p className="text-teal-300 font-medium mt-0.5">{activeReportDetail.assignedDepotUnit}</p>
+              <div>
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Full Street Address / Location</span>
+                <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2 rounded-xl border border-white/5 truncate">
+                  <MapPin className="h-3 w-3 text-accent-dynamic shrink-0" />
+                  <span className="truncate">{activeReportDetail.locationAddress}</span>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-black/40 p-2 rounded-xl border border-white/5">
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Assigned Unit</span>
+                  <p className="text-accent-dynamic font-medium mt-0.5 truncate">
+                    {isCrewAssigned(activeReportDetail.assignedDepotUnit) ? activeReportDetail.assignedDepotUnit : "Unassigned"}
+                  </p>
                 </div>
 
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Estimated Fix Time</span>
-                  <p className="text-white font-medium mt-0.5">{activeReportDetail.estimatedFixTime}</p>
+                <div className="bg-black/40 p-2 rounded-xl border border-white/5">
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Estimated Fix Time</span>
+                  <p className="text-white font-medium mt-0.5 truncate">
+                    {activeReportDetail.estimatedFixTime}
+                  </p>
                 </div>
               </div>
 
               <div>
-                <span className="text-muted block text-[10px] uppercase tracking-wider">Issue Description & Impact</span>
-                <p className="text-muted leading-relaxed mt-0.5 bg-black/40 p-3 rounded-xl border border-white/5">
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Issue Description</span>
+                <p className="text-muted leading-relaxed mt-0.5 bg-black/40 p-2.5 rounded-xl border border-white/5 text-[11px] line-clamp-3">
                   {activeReportDetail.description}
                 </p>
               </div>
@@ -851,7 +831,7 @@ export default function MunicipalDashboardPage() {
             <div className="pt-2 border-t border-white/10 flex items-center justify-end">
               <button
                 onClick={() => setActiveReportDetail(null)}
-                className="px-5 py-2.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[var(--accent)]/20 border border-[var(--accent)]/30 text-accent-dynamic font-semibold text-xs hover:bg-[var(--accent)]/30 transition-all cursor-pointer"
               >
                 Close Inspection
               </button>

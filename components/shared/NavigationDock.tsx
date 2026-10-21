@@ -1,4 +1,5 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -17,7 +18,7 @@ import {
   Building2,
   Wrench
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { label: "Home", href: "/", icon: Home },
@@ -57,33 +58,34 @@ export default function NavigationDock() {
   const isFeatureActive = featureRoutes.some((route) => pathname.startsWith(route));
   const isMunicipalContext = pathname.startsWith("/dashboard") || pathname.startsWith("/profile2");
   const isCrewContext = pathname.startsWith("/crew") || pathname.startsWith("/profile3");
-  const [activeDockView, setActiveDockView] = useState<"main" | "sub1" | "sub2" | "sub3">("main");
+
+  const [activeSubView, setActiveSubView] = useState<"sub1" | "sub2" | "sub3">("sub1");
+  const [showSubDock, setShowSubDock] = useState<boolean>(false);
+
+  // Auto-detect sub-dock based on route if user navigates directly via URL
+  useEffect(() => {
+    if (isFeatureActive && pathname !== "/features") {
+      setShowSubDock(true);
+      if (pathname.startsWith("/weather") || pathname.startsWith("/civic")) {
+        setActiveSubView("sub2");
+      } else if (pathname.startsWith("/spazarescue")) {
+        setActiveSubView("sub3");
+      } else {
+        setActiveSubView("sub1");
+      }
+    } else if (!isFeatureActive) {
+      setShowSubDock(false);
+    }
+  }, [pathname, isFeatureActive]);
+
   const dockView = isMunicipalContext || isCrewContext
     ? "staff"
-    : !isFeatureActive
-      ? "main"
-      : pathname.startsWith("/weather") || pathname.startsWith("/civic")
-        ? "sub2"
-        : pathname.startsWith("/spazarescue")
-          ? "sub3"
-          : pathname.startsWith("/hydromesh") || pathname.startsWith("/voltshield")
-            ? "sub1"
-            : activeDockView;
+    : showSubDock || isFeatureActive
+      ? activeSubView
+      : "main";
 
   const handleReturnToMain = () => {
-    setActiveDockView("main");
-  };
-
-  const handleSwitchToGroup1 = () => {
-    setActiveDockView("sub1");
-  };
-
-  const handleSwitchToGroup2 = () => {
-    setActiveDockView("sub2");
-  };
-
-  const handleSwitchToGroup3 = () => {
-    setActiveDockView("sub3");
+    setShowSubDock(false);
   };
 
   return (
@@ -137,7 +139,7 @@ export default function NavigationDock() {
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
             <button
               type="button"
-              onClick={handleSwitchToGroup2}
+              onClick={() => setActiveSubView("sub2")}
               className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
               title="Next sub-dock"
               aria-label="Switch to Weather and Report"
@@ -149,7 +151,7 @@ export default function NavigationDock() {
           <div className="flex items-center justify-between gap-1 w-full">
             <button
               type="button"
-              onClick={handleSwitchToGroup1}
+              onClick={() => setActiveSubView("sub1")}
               className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
               title="Previous sub-dock"
               aria-label="Switch to Water and Power"
@@ -176,7 +178,7 @@ export default function NavigationDock() {
             <div className="h-4 w-[1px] bg-white/20 mx-0.5 shrink-0" />
             <button
               type="button"
-              onClick={handleSwitchToGroup3}
+              onClick={() => setActiveSubView("sub3")}
               className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
               title="Next sub-dock"
               aria-label="Switch to Spaza"
@@ -188,7 +190,7 @@ export default function NavigationDock() {
           <div className="flex items-center justify-between gap-1 w-full">
             <button
               type="button"
-              onClick={handleSwitchToGroup2}
+              onClick={() => setActiveSubView("sub2")}
               className="dock-item shrink-0 text-white hover:opacity-80 transition-opacity cursor-pointer touch-manipulation p-1.5 sm:p-2"
               title="Previous sub-dock"
               aria-label="Switch to Weather and Report"
@@ -232,7 +234,8 @@ export default function NavigationDock() {
                 onClick={(e) => {
                   if (item.label === "Features") {
                     e.preventDefault();
-                    setActiveDockView("sub1");
+                    setActiveSubView("sub1");
+                    setShowSubDock(true);
                   }
                 }}
                 className={`dock-item shrink-0 px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 ${active ? "dock-active" : ""}`}

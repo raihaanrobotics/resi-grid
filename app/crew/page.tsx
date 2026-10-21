@@ -91,6 +91,7 @@ export default function FieldCrewPortalPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeJob, setActiveJob] = useState<ReportItem | null>(null);
+  const [reportSyncError, setReportSyncError] = useState("");
 
   // Material & Work Log Modal State
   const [materials, setMaterials] = useState<MaterialUsed[]>([]);
@@ -145,6 +146,7 @@ export default function FieldCrewPortalPage() {
 
       if (error) {
         console.error("Error fetching crew jobs from Supabase:", error);
+        setReportSyncError(error.message);
         return;
       }
 
@@ -178,9 +180,11 @@ export default function FieldCrewPortalPage() {
         });
 
         setReports(formatted);
+        setReportSyncError("");
       }
     } catch (err) {
       console.error("Supabase crew sync error:", err);
+      setReportSyncError(err instanceof Error ? err.message : "Unknown report sync error.");
     }
   };
 
@@ -396,6 +400,12 @@ export default function FieldCrewPortalPage() {
           </button>
         </div>
       </header>
+
+      {reportSyncError && (
+        <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">
+          Report feed unavailable: {reportSyncError}
+        </p>
+      )}
 
       {/* DEPOT UNIT SELECTOR PANEL */}
       <div className="glass-panel p-3.5 sm:p-4 space-y-1.5 sm:space-y-2">

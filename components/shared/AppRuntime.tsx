@@ -14,8 +14,8 @@ let oneSignalInitialization: Promise<void> | null = null;
 type AppRole = "resident" | "municipal" | "crew";
 
 function getRoleHome(role: AppRole): string {
-  if (role === "municipal") return "/dashboard";
-  if (role === "crew") return "/crew";
+  if (role === "municipal") return "/profile2";
+  if (role === "crew") return "/profile3";
   return "/";
 }
 

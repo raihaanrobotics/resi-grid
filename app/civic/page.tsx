@@ -404,8 +404,7 @@ export default function CivicAIPage() {
 
     // Full Payload containing every single detail (for Municipal Dashboard & Supabase matching table schema)
     const fullPayload = {
-      report_id: null,
-      reporter_user_id: userData.user.id,
+      report_id: `RPT-${crypto.randomUUID()}`,
       category,
       title: reportTitle.trim(),
       description: description.trim(),
@@ -424,6 +423,7 @@ export default function CivicAIPage() {
       estimated_fix_time: "Pending Triage",
       latitude: location ? location.latitude : null,
       longitude: location ? location.longitude : null,
+      reporter_user_id: userData.user.id,
     };
 
     // Client-side representation mapping for local storage / broadcast
@@ -446,6 +446,7 @@ export default function CivicAIPage() {
       assignedDepotUnit: fullPayload.assigned_depot,
       estimatedFixTime: fullPayload.estimated_fix_time,
       coords: location ? { lat: location.latitude, lng: location.longitude } : undefined,
+      reporterUserId: userData.user.id,
     };
 
     // Sanitized Payload for Public/Radar Pages (Personal Information Stripped)
@@ -464,6 +465,7 @@ export default function CivicAIPage() {
       assignedDepotUnit: localReportItem.assignedDepotUnit,
       estimatedFixTime: localReportItem.estimatedFixTime,
       coords: localReportItem.coords,
+      reporterUserId: userData.user.id,
     };
 
     try {
@@ -487,14 +489,7 @@ export default function CivicAIPage() {
       publicPayload.id = reportId;
       void dispatchReportScreenNotification(reportId);
 
-      // 2. API Dispatch Endpoint
-      await fetch("/api/dispatch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(localReportItem),
-      }).catch(() => {});
-
-      // 3. Save full details to municipal storage so Municipal Dashboard receives every detail
+      // 2. Save full details to municipal storage so Municipal Dashboard receives every detail
       try {
         const existingMunicipal = localStorage.getItem("resigrid_active_reports");
         const parsedMunicipal = existingMunicipal ? JSON.parse(existingMunicipal) : [];
@@ -504,7 +499,7 @@ export default function CivicAIPage() {
         console.error("Municipal storage write error:", err);
       }
 
-      // 4. Broadcast sanitized payload (without personal info) to radar & public pages
+      // 3. Broadcast sanitized payload (without personal info) to radar & public pages
       if (typeof window !== "undefined" && "BroadcastChannel" in window) {
         const bc = new BroadcastChannel("resigrid_reports_dispatch");
         bc.postMessage({ type: "NEW_REPORT", payload: publicPayload });

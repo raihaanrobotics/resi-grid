@@ -33,9 +33,9 @@ export default function AuthCallbackPage() {
 
       const role = data.session.user.user_metadata?.role;
       const destination = role === "municipal"
-        ? "/dashboard"
+        ? "/profile2"
         : role === "crew"
-          ? "/crew"
+          ? "/profile3"
           : "/";
       if (active) router.replace(destination);
     })().catch((error: unknown) => {

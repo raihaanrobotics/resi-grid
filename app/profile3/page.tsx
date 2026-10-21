@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   User,
@@ -214,6 +215,8 @@ export default function CrewProfilePage() {
   const [stagedAccent, setStagedAccent] = useState<string>("amber");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
+  const [profileSaveStatus, setProfileSaveStatus] = useState<"saving" | "saved" | "error" | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState("");
 
   // Profile & Contact States
   const [fullName, setFullName] = useState("");
@@ -248,6 +251,39 @@ export default function CrewProfilePage() {
           setSelectedCity(meta.city || parsedLocal.selectedCity || "Pietermaritzburg (Msunduzi)");
           setSelectedWard(meta.ward || parsedLocal.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
           if (meta.assigned_depot) setAssignedDepot(meta.assigned_depot);
+          if (meta.profile_initialized !== true) {
+            setProfileSaveStatus("saving");
+            setAuthLoading(false);
+            const profileData = {
+              fullName: meta.full_name || parsedLocal.fullName || "",
+              email: userEmail,
+              phone: meta.phone || parsedLocal.phone || "",
+              selectedProvince: meta.province || parsedLocal.selectedProvince || "KwaZulu-Natal",
+              selectedCity: meta.city || parsedLocal.selectedCity || "Pietermaritzburg (Msunduzi)",
+              selectedWard: meta.ward || parsedLocal.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands",
+              assignedDepot: meta.assigned_depot || parsedLocal.assignedDepot || DEPOT_UNITS[0],
+            };
+            try {
+              localStorage.setItem(`resigrid_profile_${session.user.id}`, JSON.stringify(profileData));
+              const { error } = await supabase.auth.updateUser({
+                data: {
+                  full_name: profileData.fullName,
+                  phone: profileData.phone,
+                  province: profileData.selectedProvince,
+                  city: profileData.selectedCity,
+                  ward: profileData.selectedWard,
+                  assigned_depot: profileData.assignedDepot,
+                  profile_initialized: true,
+                },
+              });
+              if (error) throw error;
+              setProfileSaveStatus("saved");
+            } catch (error) {
+              console.error("Could not save crew profile on first login:", error);
+              setProfileSaveError(error instanceof Error ? error.message : "Please try saving your profile again.");
+              setProfileSaveStatus("error");
+            }
+          }
         }
       } catch (err) {
         console.error("Auth check error:", err);
@@ -363,8 +399,7 @@ export default function CrewProfilePage() {
       setEmail(authEmail);
       localStorage.setItem("resigrid_account_role", "crew");
       
-      // Route strictly to Crew Portal
-      router.replace("/crew");
+      router.replace("/profile3");
     } catch (err: any) {
       setAuthError(err.message || "Authentication failed");
     }
@@ -392,6 +427,8 @@ export default function CrewProfilePage() {
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setProfileSaveStatus("saving");
+    setProfileSaveError("");
 
     setSelectedAccent(stagedAccent);
     const matchedPalette = ACCENT_PALETTES.find((p) => p.id === stagedAccent);
@@ -415,25 +452,31 @@ export default function CrewProfilePage() {
     };
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
-        await supabase.auth.updateUser({
-          data: {
-            full_name: fullName,
-            phone,
-            province: selectedProvince,
-            city: selectedCity,
-            ward: selectedWard,
-            assigned_depot: assignedDepot,
-            role: "crew"
-          }
-        });
-      }
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) throw new Error("Your session expired. Please sign in again.");
+      localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          full_name: fullName,
+          phone,
+          province: selectedProvince,
+          city: selectedCity,
+          ward: selectedWard,
+          assigned_depot: assignedDepot,
+          role: "crew",
+          profile_initialized: true,
+        }
+      });
+      if (error) throw error;
     } catch (err) {
       console.error("Error saving user profile metadata to Supabase:", err);
+      setProfileSaveError(err instanceof Error ? err.message : "Could not save your profile. Please try again.");
+      setProfileSaveStatus("error");
+      return;
     }
 
+    setProfileSaveStatus("saved");
     setSuccessMessage("Field crew profile settings updated successfully");
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -576,6 +619,10 @@ export default function CrewProfilePage() {
                 {authMode === "login" ? "Sign Up" : "Sign In"}
               </button>
             </div>
+            <div className="flex justify-center gap-4 text-[11px]">
+              <Link href="/" className="text-amber-300 hover:underline">Resident login</Link>
+              <Link href="/profile2" className="text-amber-300 hover:underline">Municipal login</Link>
+            </div>
           </form>
         </div>
       </main>
@@ -650,6 +697,23 @@ export default function CrewProfilePage() {
             </div>
           </div>
         </div>
+
+        {profileSaveStatus && (
+          <div
+            role="status"
+            className={`rounded-xl border px-4 py-3 text-xs ${
+              profileSaveStatus === "error"
+                ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+            }`}
+          >
+            {profileSaveStatus === "saving"
+              ? "Saving your profile..."
+              : profileSaveStatus === "saved"
+                ? "Profile saved."
+                : `Profile could not be saved: ${profileSaveError}`}
+          </div>
+        )}
 
         {/* SUCCESS TOAST */}
         {savedSuccess && (
@@ -841,11 +905,12 @@ export default function CrewProfilePage() {
             <button
               type="button"
               onClick={() => handleSave()}
-              className="w-full sm:w-auto px-6 py-3 rounded-full border border-amber-500/40 bg-amber-500/20 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none hover:bg-amber-500/30"
+              disabled={profileSaveStatus === "saving"}
+              className="w-full sm:w-auto px-6 py-3 rounded-full border border-amber-500/40 bg-amber-500/20 text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none hover:bg-amber-500/30 disabled:cursor-wait disabled:opacity-60"
               style={{ touchAction: "manipulation" }}
             >
               <Save className="w-4 h-4 pointer-events-none" />
-              <span className="pointer-events-none">Save Field Crew Preferences</span>
+              <span className="pointer-events-none">{profileSaveStatus === "saving" ? "Saving..." : "Save Field Crew Preferences"}</span>
             </button>
           </div>
 

@@ -221,6 +221,7 @@ export default function MunicipalDashboardPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeReportDetail, setActiveReportDetail] = useState<ReportItem | null>(null);
+  const [reportSyncError, setReportSyncError] = useState("");
 
   // Crew Assignment Modal State
   const [assigningJob, setAssigningJob] = useState<ReportItem | null>(null);
@@ -248,6 +249,7 @@ export default function MunicipalDashboardPage() {
 
       if (error) {
         console.error("Error fetching reports from Supabase:", error);
+        setReportSyncError(error.message);
         return;
       }
 
@@ -273,9 +275,11 @@ export default function MunicipalDashboardPage() {
         }));
 
         setReports(formattedReports);
+        setReportSyncError("");
       }
     } catch (err) {
       console.error("Supabase connection exception:", err);
+      setReportSyncError(err instanceof Error ? err.message : "Unknown report sync error.");
     }
   };
 
@@ -471,6 +475,12 @@ export default function MunicipalDashboardPage() {
             </button>
           </div>
         </header>
+
+        {reportSyncError && (
+          <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">
+            Report feed unavailable: {reportSyncError}
+          </p>
+        )}
 
         {/* METRICS & WARD OVERVIEW */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

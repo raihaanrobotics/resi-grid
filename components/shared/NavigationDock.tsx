@@ -90,20 +90,20 @@ export default function NavigationDock() {
   };
 
   return (
-    <nav className={`floating-dock mx-auto transition-all ${dockView === "staff" ? "w-auto max-w-xs" : "w-[96%] max-w-xl"}`}>
-      <div className={`floating-dock-inner overflow-x-auto no-scrollbar py-2 flex items-center ${dockView === "staff" ? "justify-center gap-2 px-4" : "justify-between px-2 sm:px-3"}`}>
+    <nav className={`floating-dock mx-auto transition-all ${dockView === "staff" ? "w-[210px] max-w-[210px]" : "w-[96%] max-w-xl"}`}>
+      <div className={`floating-dock-inner overflow-x-auto no-scrollbar py-2 flex items-center ${dockView === "staff" ? "justify-around gap-6 px-3" : "justify-between px-2 sm:px-3"}`}>
         {dockView === "staff" ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between w-full gap-5">
             <Link
               href={isMunicipalContext ? "/dashboard" : "/crew"}
-              className={`dock-item shrink-0 px-4 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/dashboard") || (isCrewContext && pathname === "/crew") ? "dock-active" : ""}`}
+              className={`dock-item shrink-0 px-3.5 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/dashboard") || (isCrewContext && pathname === "/crew") ? "dock-active" : ""}`}
             >
               {isMunicipalContext ? <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} /> : <Wrench className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />}
               <span className="truncate">Home</span>
             </Link>
             <Link
               href={isMunicipalContext ? "/profile2" : "/profile3"}
-              className={`dock-item shrink-0 px-4 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/profile2") || (isCrewContext && pathname === "/profile3") ? "dock-active" : ""}`}
+              className={`dock-item shrink-0 px-3.5 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/profile2") || (isCrewContext && pathname === "/profile3") ? "dock-active" : ""}`}
             >
               <UserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />
               <span className="truncate">Profile</span>

@@ -52,6 +52,7 @@ interface ReportItem {
   targetResolutionHours?: number;
   createdTimestamp?: number;
   coords?: { lat: number; lng: number };
+  repairNotes?: string;
 }
 
 interface MaterialUsed {
@@ -93,6 +94,7 @@ export default function FieldCrewPortalPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeJob, setActiveJob] = useState<ReportItem | null>(null);
+  const [resolvedJobModal, setResolvedJobModal] = useState<ReportItem | null>(null);
   const [reportSyncError, setReportSyncError] = useState("");
 
   // Material & Work Log Modal State
@@ -180,6 +182,7 @@ export default function FieldCrewPortalPage() {
             targetResolutionHours: targetHours,
             createdTimestamp: createdAt,
             coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
+            repairNotes: row.repair_notes || "",
           };
         });
 
@@ -236,14 +239,17 @@ export default function FieldCrewPortalPage() {
   const updateJobStatus = async (
     reportId: string,
     newStatus: ReportItem["status"],
-    description?: string
+    repairNotes?: string
   ): Promise<boolean> => {
-    const update: { status: ReportItem["status"]; description?: string } = { status: newStatus };
-    if (description !== undefined) update.description = description;
+    const updatePayload: { status: ReportItem["status"]; repair_notes?: string } = { status: newStatus };
+    if (repairNotes !== undefined) {
+      updatePayload.repair_notes = repairNotes;
+    }
+
     try {
       const { data, error } = await supabase
         .from("reports")
-        .update(update)
+        .update(updatePayload)
         .eq("report_id", reportId)
         .select("report_id")
         .maybeSingle();
@@ -258,14 +264,10 @@ export default function FieldCrewPortalPage() {
         return false;
       }
       setReports((prev) => prev.map((report) =>
-        report.id === reportId
-          ? { ...report, status: newStatus, ...(description !== undefined ? { description } : {}) }
-          : report
+        report.id === reportId ? { ...report, status: newStatus, ...(repairNotes !== undefined ? { repairNotes } : {}) } : report
       ));
-      setActiveJob((current) => current?.id === reportId
-        ? { ...current, status: newStatus, ...(description !== undefined ? { description } : {}) }
-        : current
-      );
+      setActiveJob((current) => current?.id === reportId ? { ...current, status: newStatus, ...(repairNotes !== undefined ? { repairNotes } : {}) } : current);
+      setResolvedJobModal((current) => current?.id === reportId ? { ...current, status: newStatus, ...(repairNotes !== undefined ? { repairNotes } : {}) } : current);
       void dispatchReportScreenNotification(reportId);
     } catch (err) {
       console.error("Status update error:", err);
@@ -358,13 +360,12 @@ export default function FieldCrewPortalPage() {
     setIsSubmittingLog(true);
 
     const materialsSummary = materials.length > 0
-      ? materials.map((m) => `${m.quantity}x ${m.item}`).join(", ")
-      : "None recorded";
-
-    const updatedDescription = `${activeJob.description}\n\n[FIELD REPAIR LOG]: ${completionNotes || "Repair completed on-site."} | Requisitioned Spares: ${materialsSummary}`;
+      ? `\n\nMaterials Used:\n` + materials.map((m) => `- ${m.quantity}x ${m.item}`).join("\n")
+      : "";
+    const repairNotesVal = (completionNotes.trim() ? completionNotes.trim() : "Site repairs completed successfully.") + materialsSummary;
 
     try {
-      const updated = await updateJobStatus(activeJob.id, "Resolved", updatedDescription);
+      const updated = await updateJobStatus(activeJob.id, "Resolved", repairNotesVal);
       if (!updated) return;
 
       // Notify citizen via WhatsApp automatically
@@ -419,7 +420,7 @@ export default function FieldCrewPortalPage() {
       <header className="glass-header flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-5">
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="feature-icon feature-civic shrink-0">
-            <Wrench className="h-4 w-4 sm:h-5 sm:w-5 text-teal-400" />
+            <Wrench className="h-4 w-4 sm:h-5 sm:w-5 text-teal-400" style={{ color: accentColor }} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -438,9 +439,9 @@ export default function FieldCrewPortalPage() {
             type="button"
             onClick={handleManualRefresh}
             title="Refresh Feed"
-            className="glass-action px-2.5 sm:px-3 py-1.5 text-xs text-teal-400 border-teal-500/30 hover:bg-teal-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="glass-action px-2.5 sm:px-3 py-1.5 text-xs text-teal-400 border-teal-500/30 hover:bg-teal-500/25 transition-all flex items-center gap-1.5 cursor-pointer"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} style={{ color: accentColor }} />
             <span className="hidden sm:inline">Sync System</span>
           </button>
         </div>
@@ -454,7 +455,7 @@ export default function FieldCrewPortalPage() {
 
       {/* DEPOT UNIT SELECTOR PANEL */}
       <div className="glass-panel p-3.5 sm:p-4 space-y-1.5 sm:space-y-2">
-        <label className="text-[10px] uppercase tracking-wider text-teal-400 font-semibold block">
+        <label className="text-[10px] uppercase tracking-wider text-teal-400 font-semibold block" style={{ color: accentColor }}>
           Active Municipal Crew Unit
         </label>
         <select
@@ -475,8 +476,8 @@ export default function FieldCrewPortalPage() {
         <div className="glass-panel p-4 sm:p-5 relative">
           <div className="panel-reflection" />
           <div className="flex items-center justify-between">
-            <span className="eyebrow text-amber-400">ACTIVE ASSIGNMENTS</span>
-            <Clock className="h-4 w-4 text-amber-400" />
+            <span className="eyebrow text-teal-400" style={{ color: accentColor }}>ACTIVE ASSIGNMENTS</span>
+            <Clock className="h-4 w-4 text-teal-400" style={{ color: accentColor }} />
           </div>
           <div className="my-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-white">{activeCount}</span>
@@ -487,8 +488,8 @@ export default function FieldCrewPortalPage() {
         <div className="glass-panel p-4 sm:p-5 relative">
           <div className="panel-reflection" />
           <div className="flex items-center justify-between">
-            <span className="eyebrow text-teal-400">RESOLVED TODAY</span>
-            <CheckCircle2 className="h-4 w-4 text-teal-400" />
+            <span className="eyebrow text-teal-400" style={{ color: accentColor }}>RESOLVED TODAY</span>
+            <CheckCircle2 className="h-4 w-4 text-teal-400" style={{ color: accentColor }} />
           </div>
           <div className="my-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-white">{resolvedCount}</span>
@@ -499,8 +500,8 @@ export default function FieldCrewPortalPage() {
         <div className="glass-panel p-4 sm:p-5 relative">
           <div className="panel-reflection" />
           <div className="flex items-center justify-between">
-            <span className="eyebrow text-cyan-400">TOTAL WORK ORDERS</span>
-            <Building2 className="h-4 w-4 text-cyan-400" />
+            <span className="eyebrow text-teal-400" style={{ color: accentColor }}>TOTAL WORK ORDERS</span>
+            <Building2 className="h-4 w-4 text-teal-400" style={{ color: accentColor }} />
           </div>
           <div className="my-2">
             <span className="text-2xl sm:text-3xl font-extrabold text-white">{reports.length}</span>
@@ -513,10 +514,10 @@ export default function FieldCrewPortalPage() {
       <div className="glass-panel p-3.5 sm:p-4 space-y-3">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2">
-            <Search className="h-4 w-4 text-teal-400 shrink-0" />
+            <Search className="h-4 w-4 text-teal-400 shrink-0" style={{ color: accentColor }} />
             <input
               type="text"
-              placeholder="Search work order #, stand, address..."
+              placeholder="Search work order, stand, address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-transparent w-full text-xs text-white focus:outline-none placeholder:text-muted"
@@ -556,9 +557,9 @@ export default function FieldCrewPortalPage() {
 
         <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3 gap-2">
           <h2 className="text-xs sm:text-base font-semibold text-white flex items-center gap-2 truncate">
-            <ShieldAlert className="h-4 w-4 text-teal-400 shrink-0" /> <span className="truncate">Artisan Queue &amp; SLA Tracker</span>
+            <ShieldAlert className="h-4 w-4 text-teal-400 shrink-0" style={{ color: accentColor }} /> <span className="truncate">Incident Queue</span>
           </h2>
-          <span className="text-[11px] sm:text-xs font-mono text-teal-400 shrink-0">
+          <span className="text-[11px] sm:text-xs font-mono text-teal-400 shrink-0" style={{ color: accentColor }}>
             {filteredJobs.length} Jobs
           </span>
         </div>
@@ -576,7 +577,7 @@ export default function FieldCrewPortalPage() {
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-bold text-teal-400">{job.displayId}</span>
+                    <span className="text-xs font-mono font-bold text-teal-400" style={{ color: accentColor }}>{job.displayId}</span>
                     
                     {/* Category Badge */}
                     <span
@@ -610,7 +611,7 @@ export default function FieldCrewPortalPage() {
                     </span>
                     {hasEstimatedFixTime(job.estimatedFixTime) && (
                       <span className="text-[10px] bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 rounded text-teal-300 font-medium flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> Fix: {job.estimatedFixTime}
+                        <Clock className="w-3 h-3" style={{ color: accentColor }} /> Fix: {job.estimatedFixTime}
                       </span>
                     )}
                   </div>
@@ -619,15 +620,15 @@ export default function FieldCrewPortalPage() {
                   <p className="text-[11px] sm:text-xs text-muted leading-relaxed line-clamp-2">{job.description}</p>
 
                   <div className="flex items-center gap-3 text-[11px] text-muted pt-1 flex-wrap">
-                    <span className="flex items-center gap-1 text-teal-300 font-mono truncate max-w-full">
-                      <MapPin className="h-3 w-3 text-teal-400 shrink-0" /> {job.locationAddress}
+                    <span className="flex items-center gap-1 text-teal-300 font-mono truncate max-w-full" style={{ color: accentColor }}>
+                      <MapPin className="h-3 w-3 text-teal-400 shrink-0" style={{ color: accentColor }} /> {job.locationAddress}
                     </span>
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3 shrink-0" /> Logged {job.time}
                     </span>
                     {job.reporterName && (
                       <span className="flex items-center gap-1 text-white truncate">
-                        <User className="h-3 w-3 text-teal-400 shrink-0" /> {job.reporterName}
+                        <User className="h-3 w-3 text-teal-400 shrink-0" style={{ color: accentColor }} /> {job.reporterName}
                       </span>
                     )}
                   </div>
@@ -635,22 +636,33 @@ export default function FieldCrewPortalPage() {
 
                 {/* STATUS UPDATE & ACTION CONTROLS */}
                 <div className="flex flex-col items-start gap-2 border-t border-white/10 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => setActiveJob(job)}
-                    className="flex-1 sm:flex-initial px-3 py-2 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <span>Inspect &amp; Spares</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-teal-400" />
-                  </button>
+                  {job.status === "Resolved" ? (
+                    <button
+                      type="button"
+                      onClick={() => setResolvedJobModal(job)}
+                      className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>View Completed Work Order</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-teal-400" style={{ color: accentColor }} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setActiveJob(job)}
+                      className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Inspect &amp; Spares</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-teal-400" style={{ color: accentColor }} />
+                    </button>
+                  )}
 
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {(["Pending Review", "Crew Dispatched", "On Site", "In Progress", "Resolved"] as const).map((status) => (
+                  <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:flex-wrap">
+                    {(["On Site", "In Progress", "Resolved"] as const).map((status) => (
                       <button
                         key={status}
                         type="button"
                         onClick={() => updateJobStatus(job.id, status)}
-                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                        className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer text-center ${
                           job.status === status
                             ? status === "Resolved"
                               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
@@ -665,9 +677,10 @@ export default function FieldCrewPortalPage() {
                       type="button"
                       onClick={() => handleNotifyCitizenWhatsApp(job)}
                       title="WhatsApp Citizen"
-                      className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-1"
                     >
                       <MessageCircle className="h-4 w-4" />
+                      <span className="text-[11px] sm:hidden">WhatsApp</span>
                     </button>
                   </div>
                 </div>
@@ -677,90 +690,61 @@ export default function FieldCrewPortalPage() {
         </div>
       </div>
 
-      {/* FIELD WORK ORDER & SPARES REQUISITION MODAL */}
+      {/* ACTIVE FIELD WORK ORDER & SPARES REQUISITION MODAL */}
       {activeJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
-          <div className="glass-panel w-full max-w-xl p-4 sm:p-6 relative border-teal-500/30 space-y-4 max-h-[92vh] overflow-y-auto my-auto rounded-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="min-w-0">
-                <span className="text-xs font-mono text-teal-400 font-bold">
-                  {activeJob.displayId}
-                </span>
-                <h3 className="text-xs sm:text-sm font-bold text-white truncate">{activeJob.title}</h3>
+          <div className="glass-panel w-full max-w-sm p-4 relative border-teal-500/30 space-y-2.5 max-h-[90vh] overflow-y-auto my-auto rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="min-w-0 flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-teal-400" style={{ color: accentColor }} />
+                <h3 className="text-xs font-bold text-white">Work Order Inspection &amp; Spares</h3>
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveJob(null)}
-                className="text-muted hover:text-white cursor-pointer p-1"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
 
             {/* Incident Summary Fields */}
-            <div className="space-y-3 text-xs">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-black/40 p-3.5 rounded-xl border border-white/5">
-                <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Resident Contact</span>
-                  <p className="text-white font-medium mt-0.5 flex items-center gap-1 truncate">
-                    <User className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-                    {activeJob.reporterName} • {activeJob.reporterPhone}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleNotifyCitizenWhatsApp(activeJob)}
-                  className="w-full sm:w-auto px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-semibold text-xs hover:bg-emerald-500/30 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <MessageCircle className="h-3.5 w-3.5" /> Message Citizen
-                </button>
+            <div className="space-y-2 text-xs">
+              <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 space-y-0.5">
+                <span className="text-muted text-[9px] uppercase">Work Order ID</span>
+                <p className="text-teal-400 font-bold font-mono" style={{ color: accentColor }}>{activeJob.displayId}</p>
+                <p className="text-white text-xs font-medium mt-1">{activeJob.title}</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/40 p-3.5 rounded-xl border border-white/5">
+              <div className="grid grid-cols-2 gap-2 bg-black/40 p-2.5 rounded-xl border border-white/5">
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Municipal Account Number</span>
-                  <p className="text-teal-300 font-mono font-medium mt-0.5 flex items-center gap-1 truncate">
-                    <Hash className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-                    {activeJob.accountNumber || "N/A"}
-                  </p>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Resident Contact</span>
+                  <p className="text-white font-medium mt-0.5 truncate">{activeJob.reporterName}</p>
+                  <p className="text-[10px] text-teal-400" style={{ color: accentColor }}>{activeJob.reporterPhone}</p>
                 </div>
-
                 <div>
-                  <span className="text-muted block text-[10px] uppercase tracking-wider">Stand / Erf Number</span>
-                  <p className="text-white font-medium mt-0.5 flex items-center gap-1 truncate">
-                    <Home className="h-3.5 w-3.5 text-teal-400 shrink-0" />
-                    {activeJob.standNumber || "N/A"}
-                  </p>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Account / Stand</span>
+                  <p className="text-white font-medium mt-0.5">{activeJob.accountNumber || "N/A"}</p>
+                  <p className="text-[10px] text-muted">Stand: {activeJob.standNumber || "N/A"}</p>
                 </div>
               </div>
 
               <div>
-                <span className="text-muted block text-[10px] uppercase tracking-wider">Full Address</span>
-                <p className="text-white font-medium mt-0.5 flex items-center gap-1.5 bg-black/30 p-2.5 rounded-xl border border-white/5">
-                  <MapPin className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Exact Location / Address</span>
+                <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2 rounded-xl border border-white/5 truncate">
+                  <MapPin className="h-3 w-3 text-teal-400 shrink-0" style={{ color: accentColor }} />
                   <span className="truncate">{activeJob.locationAddress}</span>
                 </p>
               </div>
 
-              <div className="space-y-2 pt-1">
-                <label htmlFor="estimated-fix-time" className="text-muted block text-[10px] uppercase tracking-wider">
-                  Estimated Fix Time
-                </label>
+              <div className="space-y-1">
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Estimated Fix Time</span>
                 <div className="flex gap-2">
                   <input
-                    id="estimated-fix-time"
                     type="text"
                     value={activeJob.estimatedFixTime || ""}
                     onChange={(event) => setActiveJob({ ...activeJob, estimatedFixTime: event.target.value })}
                     placeholder="e.g. 2 hours"
-                    className="min-w-0 flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                    className="min-w-0 flex-1 bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={saveEstimatedFixTime}
                     disabled={isSavingEstimatedFixTime}
-                    className="px-3 py-2 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs disabled:opacity-50"
+                    className="px-3 py-1.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs disabled:opacity-50"
                   >
                     {isSavingEstimatedFixTime ? "Saving..." : "Save"}
                   </button>
@@ -768,41 +752,41 @@ export default function FieldCrewPortalPage() {
               </div>
 
               {/* Log Spares & Materials Form */}
-              <div className="pt-3 border-t border-white/10 space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400 flex items-center gap-1.5">
-                  <Package className="h-3.5 w-3.5" /> Log Requisitioned Materials &amp; Spares
+              <div className="space-y-1.5 pt-1 border-t border-white/10">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
+                  <Package className="h-3 w-3 text-teal-400" style={{ color: accentColor }} /> Requisition Materials &amp; Spares
                 </span>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <input
                     type="text"
-                    placeholder="e.g. 110mm PVC Coupling / Circuit Breaker"
+                    placeholder="e.g. 110mm PVC Coupling"
                     value={newMaterialName}
                     onChange={(e) => setNewMaterialName(e.target.value)}
-                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none"
                   />
                   <input
                     type="number"
                     min="1"
                     value={newMaterialQty}
                     onChange={(e) => setNewMaterialQty(parseInt(e.target.value) || 1)}
-                    className="w-14 bg-black/40 border border-white/10 rounded-xl px-2 py-2 text-xs text-white text-center focus:outline-none"
+                    className="w-12 bg-black/40 border border-white/10 rounded-xl py-1.5 text-xs text-white text-center focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={handleAddMaterial}
-                    className="p-2.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold hover:bg-teal-500/30 transition-all cursor-pointer shrink-0"
+                    className="p-2 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold hover:bg-teal-500/30 transition-all cursor-pointer shrink-0"
                   >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-3.5 w-3.5" />
                   </button>
                 </div>
 
                 {materials.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
+                  <div className="flex flex-wrap gap-1 pt-1">
                     {materials.map((m) => (
                       <span
                         key={m.id}
-                        className="text-[11px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1 text-white flex items-center gap-1.5"
+                        className="text-[10px] bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-white flex items-center gap-1"
                       >
                         {m.quantity}x {m.item}
                         <button
@@ -810,7 +794,7 @@ export default function FieldCrewPortalPage() {
                           onClick={() => handleRemoveMaterial(m.id)}
                           className="text-muted hover:text-rose-400 cursor-pointer"
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-2.5 w-2.5" />
                         </button>
                       </span>
                     ))}
@@ -818,38 +802,96 @@ export default function FieldCrewPortalPage() {
                 )}
               </div>
 
-              {/* Work Log Form */}
-              <form onSubmit={handleCompleteWorkOrder} className="pt-2 space-y-3">
+              {/* Work Log Form - Only show repair log notes on active jobs for final sign-off when closing */}
+              <form onSubmit={handleCompleteWorkOrder} className="space-y-2 pt-1 border-t border-white/10">
                 <div>
-                  <label className="text-[10px] text-muted block mb-1">Artisan Repair &amp; Closeout Notes</label>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider mb-1">Artisan Repair &amp; Closeout Notes</span>
                   <textarea
                     rows={2}
                     value={completionNotes}
                     onChange={(e) => setCompletionNotes(e.target.value)}
                     placeholder="Provide details on the fix executed on-site..."
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none resize-none"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none resize-none"
                   />
                 </div>
 
-                <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-3">
+                <div className="pt-2 border-t border-white/10 flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setActiveJob(null)}
-                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-muted text-xs hover:text-white transition-all cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-muted text-xs hover:text-white transition-all cursor-pointer"
                   >
-                    Cancel
+                    Close
                   </button>
 
                   <button
                     type="submit"
                     disabled={isSubmittingLog}
-                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    className="px-3.5 py-1.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer shadow-lg flex items-center gap-1"
                   >
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{isSubmittingLog ? "Closing..." : "Finalize & Sign Off"}</span>
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    <span>{isSubmittingLog ? "Signing..." : "Finalize & Sign Off"}</span>
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RESOLVED / CLOSED WORK ORDER HISTORY MODAL */}
+      {resolvedJobModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+          <div className="glass-panel w-full max-w-sm p-4 relative border-teal-500/30 space-y-2.5 max-h-[90vh] overflow-y-auto my-auto rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="min-w-0 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                <h3 className="text-xs font-bold text-white">Completed Work Order History</h3>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 space-y-0.5">
+                <span className="text-muted text-[9px] uppercase">Work Order ID</span>
+                <p className="text-teal-400 font-bold font-mono" style={{ color: accentColor }}>{resolvedJobModal.displayId}</p>
+                <p className="text-white text-xs font-medium mt-1">{resolvedJobModal.title}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-black/40 p-2.5 rounded-xl border border-white/5">
+                <div>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Resident Contact</span>
+                  <p className="text-white font-medium mt-0.5 truncate">{resolvedJobModal.reporterName}</p>
+                  <p className="text-[10px] text-teal-400" style={{ color: accentColor }}>{resolvedJobModal.reporterPhone}</p>
+                </div>
+                <div>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Account / Stand</span>
+                  <p className="text-white font-medium mt-0.5">{resolvedJobModal.accountNumber || "N/A"}</p>
+                  <p className="text-[10px] text-muted">Stand: {resolvedJobModal.standNumber || "N/A"}</p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Exact Location / Address</span>
+                <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2 rounded-xl border border-white/5 truncate">
+                  <MapPin className="h-3 w-3 text-teal-400 shrink-0" style={{ color: accentColor }} />
+                  <span className="truncate">{resolvedJobModal.locationAddress}</span>
+                </p>
+              </div>
+
+              <div className="bg-black/40 p-3 rounded-xl border border-white/5 space-y-1">
+                <span className="text-muted block text-[9px] uppercase tracking-wider font-bold">Artisan Repair &amp; Closeout Notes</span>
+                <p className="text-white text-xs leading-relaxed whitespace-pre-line">{resolvedJobModal.repairNotes || "No repair notes recorded."}</p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setResolvedJobModal(null)}
+                className="px-4 py-1.5 rounded-xl bg-white/5 border border-white/10 text-muted text-xs hover:text-white transition-all cursor-pointer"
+              >
+                Close History
+              </button>
             </div>
           </div>
         </div>

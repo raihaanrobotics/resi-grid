@@ -15,6 +15,8 @@ import {
   Plus,
   Trash2,
   Clock,
+  Truck,
+  PhoneCall,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
@@ -42,6 +44,22 @@ interface IncidentMarker {
   distanceKm?: number;
   formattedDistance?: string;
   reporterUserId?: string | null;
+  ward?: string;
+}
+
+interface WaterTankerDispatch {
+  dispatchId: string;
+  tankerUnit: string;
+  province: string;
+  municipality: string;
+  ward: string;
+  locationDescription: string;
+  capacityLiters: string;
+  scheduledTime: string;
+  driverContact: string;
+  status: "En Route" | "On Station" | "Completed";
+  notes: string;
+  timestamp: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -85,6 +103,10 @@ export default function RadarPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Water Tanker State
+  const [activeTankers, setActiveTankers] = useState<WaterTankerDispatch[]>([]);
+  const [selectedTankerModal, setSelectedTankerModal] = useState<WaterTankerDispatch | null>(null);
 
   // Theme Accent Persistence
   const [accentColor, setAccentGroup] = useState<string>("#38bdf8");
@@ -196,6 +218,7 @@ export default function RadarPage() {
             distanceKm: 0.5,
             formattedDistance: "Nearby",
             reporterUserId: row.reporter_user_id ?? null,
+            ward: row.ward || "Ward 26",
           };
         });
 
@@ -214,15 +237,58 @@ export default function RadarPage() {
     }
   }, [streetAddress]);
 
+  const loadTankers = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("water_tankers")
+        .select("*")
+        .order("timestamp", { ascending: false });
+
+      if (!error && data) {
+        const mappedTankers: WaterTankerDispatch[] = data.map((row: any) => ({
+          dispatchId: row.dispatch_id || `TNK-${row.id}`,
+          tankerUnit: row.tanker_unit,
+          province: row.province,
+          municipality: row.municipality,
+          ward: row.ward,
+          locationDescription: row.location_description,
+          capacityLiters: row.capacity_liters,
+          scheduledTime: row.scheduled_time,
+          driverContact: row.driver_contact,
+          status: row.status || "En Route",
+          notes: row.notes,
+          timestamp: row.timestamp ? new Date(row.timestamp).getTime() : Date.now(),
+        }));
+        setActiveTankers(mappedTankers);
+        localStorage.setItem("resigrid_active_tankers", JSON.stringify(mappedTankers));
+      }
+    } catch (err) {
+      console.error("Error fetching water tankers from Supabase:", err);
+      try {
+        const savedTankers = localStorage.getItem("resigrid_active_tankers");
+        if (savedTankers) setActiveTankers(JSON.parse(savedTankers));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     loadReports();
-    const interval = setInterval(loadReports, 10000);
+    loadTankers();
+    const interval = setInterval(() => {
+      loadReports();
+      loadTankers();
+    }, 10000);
 
     let channel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       channel = new BroadcastChannel("resigrid_reports_dispatch");
       channel.onmessage = (e) => {
         if (e.data?.type === "NEW_REPORT" || e.data?.type === "STATUS_UPDATE") loadReports();
+        if (e.data?.type === "TANKER_DISPATCH") {
+          loadTankers();
+        }
       };
     }
 
@@ -230,7 +296,7 @@ export default function RadarPage() {
       clearInterval(interval);
       if (channel) channel.close();
     };
-  }, [loadReports]);
+  }, [loadReports, loadTankers]);
 
   // Filter Incidents within 10km Radius with fallback around the center dot if anything fails
   const displayIncidents = useMemo(() => {
@@ -511,12 +577,19 @@ export default function RadarPage() {
                         ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
                         : "border-sky-500/30 bg-sky-500/15 text-sky-300";
 
+                    // Check if there is an active water tanker dispatch matching this incident's ward/location
+                    const matchingTanker = incident.type === "water"
+                      ? activeTankers.find((t) => 
+                          (incident.ward && t.ward.toLowerCase().includes(incident.ward.toLowerCase().split(":")[0])) ||
+                          (incident.location && t.locationDescription.toLowerCase().includes(incident.location.toLowerCase().substring(0, 8))))
+                      : null;
+
                     return (
                       <div
                         key={incident.id}
                         onClick={() => setSelectedIncident(incident)}
-                        className={`p-3 sm:p-3.5 bg-white/5 border rounded-xl space-y-2 transition-all cursor-pointer ${
-                          isSelected ? "border-white/40 bg-white/[0.08]" : "border-white/10 hover:border-white/30"
+                        className={`p-3.5 sm:p-4 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all flex flex-col gap-3 cursor-pointer ${
+                          isSelected ? "border-white/40 bg-white/[0.08]" : ""
                         }`}
                         style={{
                           borderColor: isSelected ? accentColor : undefined
@@ -564,6 +637,22 @@ export default function RadarPage() {
                             <span className="truncate">{incident.location}</span>
                           </p>
                         </div>
+
+                        {matchingTanker && (
+                          <div className="pt-2 border-t border-white/10 flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedTankerModal(matchingTanker);
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Truck className="h-3.5 w-3.5" />
+                              <span>Water Tanker View Details</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -576,6 +665,76 @@ export default function RadarPage() {
         </div>
 
       </div>
+
+      {/* WATER TANKER DETAILS MODAL */}
+      {selectedTankerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="glass-panel w-full max-w-sm p-4 relative border-[var(--accent)]/30 space-y-2.5 rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4" style={{ color: accentColor }} />
+                <h3 className="text-xs font-bold text-white">Emergency Water Tanker Deployment</h3>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="bg-black/40 p-2.5 rounded-xl border border-white/5 space-y-0.5">
+                <span className="text-muted text-[9px] uppercase">Assigned Unit</span>
+                <p className="text-white font-bold">{selectedTankerModal.tankerUnit}</p>
+                <p className="font-mono text-[10px]" style={{ color: accentColor }}>Capacity: {selectedTankerModal.capacityLiters}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-black/40 p-2.5 rounded-xl border border-white/5">
+                <div>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Target Ward</span>
+                  <p className="text-white font-medium mt-0.5">{selectedTankerModal.ward}</p>
+                </div>
+                <div>
+                  <span className="text-muted block text-[9px] uppercase tracking-wider">Schedule Time</span>
+                  <p className="font-semibold mt-0.5" style={{ color: accentColor }}>{selectedTankerModal.scheduledTime}</p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Exact Location / Landmark</span>
+                <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2 rounded-xl border border-white/5">
+                  <MapPin className="h-3 w-3 shrink-0" style={{ color: accentColor }} />
+                  {selectedTankerModal.locationDescription}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Driver Contact</span>
+                <p className="text-white font-medium mt-0.5 flex items-center gap-1">
+                  <PhoneCall className="h-3 w-3" style={{ color: accentColor }} />
+                  {selectedTankerModal.driverContact}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-muted block text-[9px] uppercase tracking-wider">Instructions &amp; Notes</span>
+                <p className="text-muted leading-relaxed mt-0.5 bg-black/40 p-2 rounded-xl border border-white/5 text-[11px]">
+                  {selectedTankerModal.notes}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex items-center justify-end">
+              <button
+                onClick={() => setSelectedTankerModal(null)}
+                className="px-3.5 py-1.5 rounded-xl font-semibold text-xs transition-all cursor-pointer shadow-lg"
+                style={{
+                  backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
+                  borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                  color: accentColor,
+                }}
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

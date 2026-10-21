@@ -371,7 +371,15 @@ export default function CivicAIPage() {
   // Real Dispatch Webhook & Supabase Submission Handler with Full Municipal Metadata & Personal Info Sanitization for Public/Radar Views
   const handleSubmitReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim()) return;
+    if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim() || !accountNumber.trim()) {
+      setErrorMessage("All form fields are compulsory in order to send.");
+      return;
+    }
+    if (useCustomAddress && !customAddress.trim()) {
+      setErrorMessage("Please enter your exact address.");
+      return;
+    }
+
     const normalizedReporterPhone = normalizeSouthAfricanPhone(reporterPhone);
     if (!normalizedReporterPhone) {
       setErrorMessage("Enter a valid South African phone number, such as +27 82 123 4567.");
@@ -503,6 +511,7 @@ export default function CivicAIPage() {
 
       setReportTitle("");
       setDescription("");
+      setCustomAddress("");
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 4000);
     } catch (err: any) {
@@ -653,7 +662,7 @@ export default function CivicAIPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <User className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Full Name
+                  <User className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Full Name *
                 </label>
                 <input
                   type="text"
@@ -667,7 +676,7 @@ export default function CivicAIPage() {
 
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Phone className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Contact No.
+                  <Phone className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Contact No. *
                 </label>
                 <input
                   type="tel"
@@ -681,10 +690,11 @@ export default function CivicAIPage() {
 
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Hash className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Account No.
+                  <Hash className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Account No. *
                 </label>
                 <input
                   type="text"
+                  required
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
                   placeholder="e.g. 800459201"
@@ -697,9 +707,10 @@ export default function CivicAIPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Province
+                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Province *
                 </label>
                 <select
+                  required
                   value={selectedProvince}
                   onChange={(e) => handleProvinceChange(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors cursor-pointer pointer-events-auto"
@@ -712,9 +723,10 @@ export default function CivicAIPage() {
 
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipality / City
+                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipality / City *
                 </label>
                 <select
+                  required
                   value={selectedMunicipality}
                   onChange={(e) => handleMunicipalityChange(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors cursor-pointer pointer-events-auto"
@@ -727,9 +739,10 @@ export default function CivicAIPage() {
 
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Ward
+                  <Building className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Ward *
                 </label>
                 <select
+                  required
                   value={selectedWard}
                   onChange={(e) => setSelectedWard(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors cursor-pointer pointer-events-auto"
@@ -747,7 +760,7 @@ export default function CivicAIPage() {
             <div className="panel-reflection pointer-events-none" />
 
             <div>
-              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Issue Headline</label>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Issue Headline *</label>
               <input
                 type="text"
                 required
@@ -759,7 +772,7 @@ export default function CivicAIPage() {
             </div>
 
             <div>
-              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details &amp; Impact</label>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details &amp; Impact *</label>
               <textarea
                 rows={3}
                 required
@@ -776,7 +789,7 @@ export default function CivicAIPage() {
             <div className="panel-reflection pointer-events-none" />
             
             <div className="flex items-center justify-between">
-              <label className="text-[11px] sm:text-xs font-medium text-muted block">Location</label>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block">Location *</label>
               <button
                 type="button"
                 onClick={handleToggleAddressSource}

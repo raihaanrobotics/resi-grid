@@ -625,7 +625,7 @@ export default function HomePage() {
 
                 <StatusItem
                   icon={Zap}
-                  label="Energy"
+                  label="Power"
                   status={energyStatus}
                   color="energy"
                 />

@@ -19,6 +19,7 @@ import {
   Wrench,
   MessageCircle,
   Send,
+  Truck,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { openWhatsApp } from "@/lib/phone";
@@ -45,12 +46,34 @@ interface ReportItem {
   coords?: { lat: number; lng: number };
 }
 
+interface WaterTankerDispatch {
+  dispatchId: string;
+  tankerUnit: string;
+  province: string;
+  municipality: string;
+  ward: string;
+  locationDescription: string;
+  capacityLiters: string;
+  scheduledTime: string;
+  driverContact: string;
+  status: "En Route" | "On Station" | "Completed";
+  notes: string;
+  timestamp: number;
+}
+
 const DEPOT_UNITS = [
   "Msunduzi Water Rapid Response - Unit 1",
   "Msunduzi Electricity & High Voltage - Unit 4",
   "Msunduzi Roads & Stormwater - Unit 2",
   "Edendale Service Center - Unit 3",
   "Northdale Infrastructure Depot - Unit 5",
+];
+
+const TANKER_UNITS = [
+  "Msunduzi Emergency Water Bowser - T1 (10,000L)",
+  "Msunduzi Community Water Tanker - T2 (5,000L)",
+  "Edendale Rapid Relief Water Truck - T3 (10,000L)",
+  "Northdale Mobile Water Station - T4 (8,000L)",
 ];
 
 // South African Provinces, Cities, and Wards Hierarchy Dataset
@@ -226,6 +249,18 @@ export default function MunicipalDashboardPage() {
   const [assigningJob, setAssigningJob] = useState<ReportItem | null>(null);
   const [selectedCrewUnit, setSelectedCrewUnit] = useState<string>(DEPOT_UNITS[0]);
 
+  // Water Tanker Dispatch Modal & List State
+  const [showTankerModal, setShowTankerModal] = useState<boolean>(false);
+  const [tankerUnit, setTankerUnit] = useState<string>(TANKER_UNITS[0]);
+  const [tankerProvince, setTankerProvince] = useState<string>("KwaZulu-Natal");
+  const [tankerMunicipality, setTankerMunicipality] = useState<string>("Pietermaritzburg (Msunduzi)");
+  const [tankerWard, setTankerWard] = useState<string>("Ward 26 (CBD / Central)");
+  const [tankerLocation, setTankerLocation] = useState<string>("");
+  const [tankerSchedule, setTankerSchedule] = useState<string>("");
+  const [tankerDriverContact, setTankerDriverContact] = useState<string>("");
+  const [tankerNotes, setTankerNotes] = useState<string>("");
+  const [activeTankers, setActiveTankers] = useState<WaterTankerDispatch[]>([]);
+
   const handleProvinceChange = (province: string) => {
     setSelectedProvince(province);
     const citiesInProv = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[province] || {};
@@ -283,18 +318,59 @@ export default function MunicipalDashboardPage() {
     }
   };
 
+  const fetchSupabaseTankers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("water_tankers")
+        .select("*")
+        .order("timestamp", { ascending: false });
+
+      if (!error && data) {
+        const mappedTankers: WaterTankerDispatch[] = data.map((row: any) => ({
+          dispatchId: row.dispatch_id || `TNK-${row.id}`,
+          tankerUnit: row.tanker_unit,
+          province: row.province,
+          municipality: row.municipality,
+          ward: row.ward,
+          locationDescription: row.location_description,
+          capacityLiters: row.capacity_liters,
+          scheduledTime: row.scheduled_time,
+          driverContact: row.driver_contact,
+          status: row.status || "En Route",
+          notes: row.notes,
+          timestamp: row.timestamp ? new Date(row.timestamp).getTime() : Date.now(),
+        }));
+        setActiveTankers(mappedTankers);
+        localStorage.setItem("resigrid_active_tankers", JSON.stringify(mappedTankers));
+      }
+    } catch (err) {
+      console.error("Error fetching water tankers from Supabase:", err);
+      try {
+        const savedTankers = localStorage.getItem("resigrid_active_tankers");
+        if (savedTankers) setActiveTankers(JSON.parse(savedTankers));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchSupabaseReports();
-    const refreshInterval = window.setInterval(fetchSupabaseReports, 20000);
+    fetchSupabaseTankers();
+    const refreshInterval = window.setInterval(() => {
+      fetchSupabaseReports();
+      fetchSupabaseTankers();
+    }, 20000);
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
 
       broadcastChannel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
-        if (type === "NEW_REPORT" || type === "STATUS_UPDATE" || type === "CREW_ASSIGNED") {
+        const { type } = event.data || {};
+        if (type === "NEW_REPORT" || type === "STATUS_UPDATE" || type === "CREW_ASSIGNED" || type === "TANKER_DISPATCH") {
           fetchSupabaseReports();
+          fetchSupabaseTankers();
         }
       };
     }
@@ -304,18 +380,93 @@ export default function MunicipalDashboardPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => {
         void fetchSupabaseReports();
       })
-      .subscribe((status, error) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.error("Municipal live report sync unavailable:", error ?? status);
-        }
-      });
+      .subscribe();
+
+    const tankerChannel = supabase
+      .channel("municipal-tanker-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "water_tankers" }, () => {
+        void fetchSupabaseTankers();
+      })
+      .subscribe();
 
     return () => {
       window.clearInterval(refreshInterval);
       if (broadcastChannel) broadcastChannel.close();
       void supabase.removeChannel(reportChannel);
+      void supabase.removeChannel(tankerChannel);
     };
   }, []);
+
+  // Handle Water Tanker Dispatch Submission to Supabase & Broadcast
+  const handleTankerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tankerLocation || !tankerSchedule) return;
+
+    const dispatchId = `TNK-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newTankerPayload = {
+      dispatch_id: dispatchId,
+      tanker_unit: tankerUnit,
+      province: tankerProvince,
+      municipality: tankerMunicipality,
+      ward: tankerWard,
+      location_description: tankerLocation,
+      capacity_liters: tankerUnit.includes("10,000L") ? "10,000L" : tankerUnit.includes("8,000L") ? "8,000L" : "5,000L",
+      scheduled_time: tankerSchedule,
+      driver_contact: tankerDriverContact || "+27 82 000 1234",
+      status: "En Route",
+      notes: tankerNotes || "Emergency water tanker provisioning deployed to ward.",
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      const { error } = await supabase.from("water_tankers").insert([newTankerPayload]);
+      if (error) {
+        console.error("Error inserting tanker into Supabase:", error);
+      }
+    } catch (err) {
+      console.error("Supabase tanker insertion exception:", err);
+    }
+
+    const newTanker: WaterTankerDispatch = {
+      dispatchId,
+      tankerUnit,
+      province: tankerProvince,
+      municipality: tankerMunicipality,
+      ward: tankerWard,
+      locationDescription: tankerLocation,
+      capacityLiters: newTankerPayload.capacity_liters,
+      scheduledTime: tankerSchedule,
+      driverContact: newTankerPayload.driver_contact,
+      status: "En Route",
+      notes: newTankerPayload.notes,
+      timestamp: Date.now(),
+    };
+
+    const updatedTankers = [newTanker, ...activeTankers];
+    setActiveTankers(updatedTankers);
+    try {
+      localStorage.setItem("resigrid_active_tankers", JSON.stringify(updatedTankers));
+    } catch (err) {
+      console.error("Error saving tanker to localStorage:", err);
+    }
+
+    // Broadcast update across radar & home notifications
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      const bc = new BroadcastChannel("resigrid_reports_dispatch");
+      bc.postMessage({
+        type: "TANKER_DISPATCH",
+        payload: newTanker,
+      });
+      bc.close();
+    }
+
+    setShowTankerModal(false);
+    setTankerLocation("");
+    setTankerSchedule("");
+    setTankerDriverContact("");
+    setTankerNotes("");
+    window.alert(`Water Tanker successfully dispatched and synced to Supabase & Radar!`);
+  };
 
   // Assign Specific Crew Unit and Sync to Supabase & /crew portal
   const handleConfirmCrewAssignment = async (e: React.FormEvent) => {
@@ -374,6 +525,7 @@ export default function MunicipalDashboardPage() {
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await fetchSupabaseReports();
+    await fetchSupabaseTankers();
     setIsRefreshing(false);
   };
 
@@ -416,13 +568,24 @@ export default function MunicipalDashboardPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xs sm:text-sm font-semibold tracking-[0.2em] text-white">
-                  MUNICIPAL DISPATCH CONTROL
+                  MUNICIPAL CONTROL
                 </h1>
               </div>
               <p className="mt-0.5 text-[8px] sm:text-[9px] tracking-[0.15em] text-muted">
-                REAL-TIME WARD TRIAGE &amp; CREW DEPLOYMENT DASHBOARD
+                REAL-TIME TRIAGE DASHBOARD
               </p>
             </div>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleManualRefresh}
+              title="Refresh Feed"
+              className="glass-action px-3 py-1.5 text-xs text-accent-dynamic border-[var(--accent)]/30 hover:bg-[var(--accent)]/20 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Sync System</span>
+            </button>
           </div>
         </header>
 
@@ -433,17 +596,6 @@ export default function MunicipalDashboardPage() {
         )}
 
         {/* METRICS & WARD OVERVIEW */}
-        <div className="flex justify-end">
-          <button
-            onClick={handleManualRefresh}
-            title="Sync System"
-            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-accent-dynamic hover:bg-[var(--accent)]/30 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
-            <span>Sync</span>
-          </button>
-        </div>
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
@@ -666,19 +818,37 @@ export default function MunicipalDashboardPage() {
                   </div>
 
                   {/* STATUS UPDATE & ASSIGNMENT CONTROLS */}
-                  <div className="flex items-center gap-2 border-t md:border-t-0 border-white/10 pt-3 md:pt-0 shrink-0 flex-wrap">
+                  <div className="flex items-center gap-1.5 border-t md:border-t-0 border-white/10 pt-3 md:pt-0 shrink-0 flex-wrap">
+                    {item.category === "water" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTankerLocation(item.locationAddress);
+                          if (item.province) setTankerProvince(item.province);
+                          if (item.municipality) setTankerMunicipality(item.municipality);
+                          if (item.ward) setTankerWard(item.ward);
+                          setTankerNotes(`Water Tanker requested for incident: ${item.displayId} - ${item.title}`);
+                          setShowTankerModal(true);
+                        }}
+                        title="Dispatch Water Tanker"
+                        className="p-2 rounded-lg text-xs font-semibold bg-[var(--accent)]/20 text-accent-dynamic hover:bg-[var(--accent)]/30 border border-[var(--accent)]/40 transition-all flex items-center justify-center cursor-pointer"
+                      >
+                        <Truck className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => setAssigningJob(item)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[var(--accent)]/20 text-accent-dynamic hover:bg-[var(--accent)]/30 border border-[var(--accent)]/40 transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-[var(--accent)]/20 text-accent-dynamic hover:bg-[var(--accent)]/30 border border-[var(--accent)]/40 transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <Wrench className="h-3.5 w-3.5" /> Assign Crew
+                      <Wrench className="h-3.5 w-3.5" /> Assign
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setActiveReportDetail(item)}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
+                      className="px-2 py-1.5 rounded-lg text-[11px] font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center gap-1 cursor-pointer"
                     >
                       <FileSpreadsheet className="h-3.5 w-3.5 text-accent-dynamic" /> Inspect
                     </button>
@@ -699,6 +869,146 @@ export default function MunicipalDashboardPage() {
         </div>
 
       </div>
+
+      {/* WATER TANKER DISPATCH MODAL */}
+      {showTankerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="glass-panel w-full max-w-md p-4 relative border-[var(--accent)]/30 space-y-3 max-h-[85vh] overflow-y-auto rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div>
+                <span className="text-[11px] font-mono text-accent-dynamic font-bold">
+                  DISPATCH CONSOLE
+                </span>
+                <h3 className="text-xs font-bold text-white truncate max-w-[280px]">
+                  Emergency Water Tanker Dispatch
+                </h3>
+              </div>
+            </div>
+
+            <form onSubmit={handleTankerSubmit} className="space-y-2.5 text-xs">
+              <div>
+                <label className="text-[9px] uppercase tracking-wider text-accent-dynamic font-semibold block mb-0.5">
+                  Select Water Bowser / Tanker Unit
+                </label>
+                <select
+                  value={tankerUnit}
+                  onChange={(e) => setTankerUnit(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50 cursor-pointer"
+                >
+                  {TANKER_UNITS.map((unit) => (
+                    <option key={unit} value={unit} className="bg-neutral-900 text-white">
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-muted block mb-0.5">Province</label>
+                  <input
+                    type="text"
+                    required
+                    value={tankerProvince}
+                    onChange={(e) => setTankerProvince(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50 truncate"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-muted block mb-0.5">Municipality</label>
+                  <input
+                    type="text"
+                    required
+                    value={tankerMunicipality}
+                    onChange={(e) => setTankerMunicipality(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50 truncate"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] uppercase tracking-wider text-accent-dynamic font-semibold block mb-0.5">
+                  Target Ward / Zone
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={tankerWard}
+                  onChange={(e) => setTankerWard(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white font-medium focus:outline-none focus:border-[var(--accent)]/50 truncate"
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] uppercase tracking-wider text-accent-dynamic font-semibold block mb-0.5">
+                  Specific Street Location / Landmark *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={tankerLocation}
+                  onChange={(e) => setTankerLocation(e.target.value)}
+                  placeholder="e.g. Corner of Victoria Road"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50 truncate"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-accent-dynamic font-semibold block mb-0.5">
+                    Schedule / Time *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={tankerSchedule}
+                    onChange={(e) => setTankerSchedule(e.target.value)}
+                    placeholder="e.g. 14:00 - 17:00"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] uppercase tracking-wider text-muted block mb-0.5">Driver Phone</label>
+                  <input
+                    type="text"
+                    value={tankerDriverContact}
+                    onChange={(e) => setTankerDriverContact(e.target.value)}
+                    placeholder="+27 82 123 4567"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] uppercase tracking-wider text-muted block mb-0.5">Collection Notes</label>
+                <textarea
+                  rows={2}
+                  value={tankerNotes}
+                  onChange={(e) => setTankerNotes(e.target.value)}
+                  placeholder="Residents advised to bring clean 20L containers..."
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-[var(--accent)]/50 resize-none"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-white/10 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTankerModal(false)}
+                  className="px-4 py-2 rounded-xl bg-white/5 text-muted hover:text-white text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-[var(--accent)]/20 border border-[var(--accent)]/30 text-accent-dynamic font-semibold text-xs hover:bg-[var(--accent)]/30 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Truck className="h-3.5 w-3.5" /> Broadcast Tanker Alert
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ASSIGN CREW MODAL */}
       {assigningJob && (

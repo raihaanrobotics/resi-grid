@@ -941,9 +941,14 @@ export default function VoltShieldPage() {
                 </div>
               ) : (
                 deduplicatedPowerReports.map((report) => {
-                  const status = normalizeReportStatus(report.status, report.assignedDepotUnit);
-                  const isResolved = status === "Resolved";
-                  const statusColor = isResolved ? "#10b981" : "#f59e0b";
+                  const normalizedStatus = normalizeReportStatus(report.status, report.assignedDepotUnit);
+                  const statusLower = normalizedStatus.toLowerCase();
+                  const statusBadgeClass =
+                    statusLower.includes("resolved") || statusLower.includes("fixed")
+                      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                      : statusLower.includes("dispatched") || statusLower.includes("crew") || statusLower.includes("progress")
+                      ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
+                      : "border-sky-500/30 bg-sky-500/15 text-sky-300";
 
                   return (
                     <div
@@ -952,24 +957,22 @@ export default function VoltShieldPage() {
                     >
                       <div className="flex items-center justify-between flex-wrap gap-1">
                         <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
-                          {report.displayId || report.id} {report.formattedDistance ? `• ${report.formattedDistance}` : ""}
+                          {report.category} • {report.displayId || report.id}
                         </span>
-                        <span 
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                          style={{
-                            color: statusColor,
-                            backgroundColor: `color-mix(in srgb, ${statusColor} 12%, transparent)`,
-                            borderColor: `color-mix(in srgb, ${statusColor} 25%, transparent)`,
-                          }}
-                        >
-                          {status}
+                        <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusBadgeClass}`}>
+                          {normalizedStatus}
                         </span>
                       </div>
-                      {report.estimatedFixTime && report.estimatedFixTime.toLowerCase() !== "pending triage" && (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
-                          <Clock className="h-3 w-3" /> Fix: {report.estimatedFixTime}
+
+                      <div className="flex items-center justify-between text-[11px] text-muted font-mono">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" style={{ color: "var(--accent)" }} />
+                          {report.time}
                         </span>
-                      )}
+                        {report.estimatedFixTime && report.estimatedFixTime.toLowerCase() !== "pending triage" && (
+                          <span className="text-amber-300">Fix: {report.estimatedFixTime}</span>
+                        )}
+                      </div>
 
                       <h3 className="text-xs sm:text-sm font-bold text-white">{report.title}</h3>
                       <p className="text-[11px] text-muted leading-relaxed">{report.description}</p>
@@ -978,7 +981,6 @@ export default function VoltShieldPage() {
                         <span className="flex items-center gap-1 font-mono truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
                           <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> <span className="truncate">{report.locationAddress}</span>
                         </span>
-                        <span className="shrink-0">{report.time}</span>
                       </div>
                     </div>
                   );

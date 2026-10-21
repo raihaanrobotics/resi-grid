@@ -185,7 +185,7 @@ export default function RadarPage() {
             location: row.location_address || streetAddress,
             locationAddress: row.location_address,
             severity: row.priority ? (row.priority.toLowerCase() as any) : "high",
-            time: formatReportTimestamp(row.created_at) || row.time_str || "Recently",
+            time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
             latitude: typeof row.latitude === "number" ? row.latitude : -29.6,
             longitude: typeof row.longitude === "number" ? row.longitude : 30.3,
             coordinates: coords,
@@ -502,6 +502,15 @@ export default function RadarPage() {
                 ) : (
                   displayIncidents.map((incident) => {
                     const isSelected = selectedIncident?.id === incident.id;
+                    const normalizedStatus = normalizeReportStatus(incident.status, incident.assignedDepotUnit);
+                    const statusLower = normalizedStatus.toLowerCase();
+                    const statusBadgeClass =
+                      statusLower.includes("resolved") || statusLower.includes("fixed")
+                        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300"
+                        : statusLower.includes("dispatched") || statusLower.includes("crew") || statusLower.includes("progress")
+                        ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
+                        : "border-sky-500/30 bg-sky-500/15 text-sky-300";
+
                     return (
                       <div
                         key={incident.id}
@@ -517,8 +526,8 @@ export default function RadarPage() {
                           <span className="text-[10px] font-mono font-bold uppercase tracking-wider truncate" style={{ color: accentColor }}>
                             {incident.category || incident.type} • {incident.displayId || incident.id}
                           </span>
-                          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[9px] font-semibold text-white/80">
-                            {normalizeReportStatus(incident.status, incident.assignedDepotUnit)}
+                          <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-semibold ${statusBadgeClass}`}>
+                            {normalizedStatus}
                           </span>
                           {currentUserId && incident.reporterUserId === currentUserId && (
                             <button
@@ -536,11 +545,16 @@ export default function RadarPage() {
                             </button>
                           )}
                         </div>
-                        {hasEstimatedFixTime(incident.estimatedFixTime) && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/25 bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-300">
-                            <Clock className="h-3 w-3" /> Fix: {incident.estimatedFixTime}
+
+                        <div className="flex items-center justify-between text-[11px] text-muted font-mono">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" style={{ color: accentColor }} />
+                            {incident.time}
                           </span>
-                        )}
+                          {hasEstimatedFixTime(incident.estimatedFixTime) && (
+                            <span className="text-teal-300">Fix: {incident.estimatedFixTime}</span>
+                          )}
+                        </div>
 
                         <div>
                           <h3 className="text-xs sm:text-sm font-bold text-white">{incident.title}</h3>

@@ -18,7 +18,6 @@ import {
   Building,
   ShieldAlert,
   Hash,
-  Home,
 } from "lucide-react";
 import { useUserLocation } from "@/hooks/useUserLocation";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
@@ -209,7 +208,6 @@ export default function CivicAIPage() {
   const [reporterName, setReporterName] = useState("");
   const [reporterPhone, setReporterPhone] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
-  const [standNumber, setStandNumber] = useState("");
   
   // Hierarchical Geographic Selection States
   const [selectedProvince, setSelectedProvince] = useState("KwaZulu-Natal");
@@ -258,7 +256,6 @@ export default function CivicAIPage() {
         if (parsed.fullName) setReporterName(parsed.fullName);
         if (parsed.phone) setReporterPhone(parsed.phone);
         if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
-        if (parsed.standNumber) setStandNumber(parsed.standNumber);
         if (parsed.streetAddress) {
           setCustomAddress(parsed.streetAddress);
         }
@@ -418,7 +415,6 @@ export default function CivicAIPage() {
       reporter_name: reporterName.trim(),
       reporter_phone: normalizedReporterPhone,
       account_number: accountNumber.trim(),
-      stand_number: standNumber.trim(),
       assigned_depot: "Depot Rapid Response Queue",
       estimated_fix_time: "Pending Triage",
       latitude: location ? location.latitude : null,
@@ -442,7 +438,6 @@ export default function CivicAIPage() {
       reporterName: fullPayload.reporter_name,
       reporterPhone: fullPayload.reporter_phone,
       accountNumber: fullPayload.account_number,
-      standNumber: fullPayload.stand_number,
       assignedDepotUnit: fullPayload.assigned_depot,
       estimatedFixTime: fullPayload.estimated_fix_time,
       coords: location ? { lat: location.latitude, lng: location.longitude } : undefined,
@@ -597,7 +592,7 @@ export default function CivicAIPage() {
         {/* SUCCESS NOTIFICATION TOAST */}
         {submitSuccess && (
           <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
-            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent)" }} /> Report successfully dispatched to municipal rapid response queue & Supabase storage.
+            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent)" }} /> Dispatching... Report successfully dispatched to municipal rapid response queue &amp; Supabase storage.
           </div>
         )}
 
@@ -655,7 +650,7 @@ export default function CivicAIPage() {
           <div className="glass-panel p-4 sm:p-6 space-y-4 w-full">
             <div className="panel-reflection pointer-events-none" />
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
                   <User className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Full Name
@@ -681,6 +676,19 @@ export default function CivicAIPage() {
                   onChange={(e) => setReporterPhone(e.target.value)}
                   placeholder="e.g. +27 82 123 4567"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                  <Hash className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Account No.
+                </label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="e.g. 800459201"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto font-mono"
                 />
               </div>
             </div>
@@ -734,39 +742,6 @@ export default function CivicAIPage() {
             </div>
           </div>
 
-          {/* Official Municipal Account & Property Details Tile */}
-          <div className="glass-panel p-4 sm:p-6 space-y-4 w-full">
-            <div className="panel-reflection pointer-events-none" />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Hash className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Municipal Account Number
-                </label>
-                <input
-                  type="text"
-                  value={accountNumber}
-                  onChange={(e) => setAccountNumber(e.target.value)}
-                  placeholder="e.g. 800459201"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                  <Home className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> Stand / Erf Number
-                </label>
-                <input
-                  type="text"
-                  value={standNumber}
-                  onChange={(e) => setStandNumber(e.target.value)}
-                  placeholder="e.g. Erf 1452 Scottsville"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Issue Details Tile */}
           <div className="glass-panel p-4 sm:p-6 space-y-4 w-full">
             <div className="panel-reflection pointer-events-none" />
@@ -784,7 +759,7 @@ export default function CivicAIPage() {
             </div>
 
             <div>
-              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details & Impact</label>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Details &amp; Impact</label>
               <textarea
                 rows={3}
                 required

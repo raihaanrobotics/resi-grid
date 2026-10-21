@@ -12,11 +12,11 @@ import {
   LogOut,
   Trash2,
   Hash,
-  Home,
   Mail,
   Lock,
   ArrowRight,
   KeyRound,
+  Loader2,
 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
@@ -200,12 +200,18 @@ export default function ProfilePage() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
   const [stagedAccent, setStagedAccent] = useState<string>("teal");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  // Action feedback states
+  const [isSigningOut, setIsSigningOut] = useState<boolean>(false);
+  const [isDeletingData, setIsDeletingData] = useState<boolean>(false);
 
   // Profile & Contact States (Clean/Blank initial states)
   const [fullName, setFullName] = useState("");
@@ -214,7 +220,6 @@ export default function ProfilePage() {
   const [selectedWard, setSelectedWard] = useState("");
   const [streetAddress, setStreetAddress] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
-  const [standNumber, setStandNumber] = useState("");
 
   // Check Supabase Auth Session and load persistent profile on Mount
   useEffect(() => {
@@ -244,7 +249,6 @@ export default function ProfilePage() {
           setSelectedWard(meta.ward || parsedLocal.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
           setStreetAddress(meta.street_address || parsedLocal.streetAddress || "");
           setAccountNumber(meta.account_number || parsedLocal.accountNumber || "");
-          setStandNumber(meta.stand_number || parsedLocal.standNumber || "");
         }
       } catch (err) {
         console.error("Auth check error:", err);
@@ -302,6 +306,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setAuthError("");
     setAuthMessage("");
+    setIsAuthenticating(true);
 
     try {
       if (authMode === "signup") {
@@ -360,6 +365,8 @@ export default function ProfilePage() {
       router.replace("/");
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -385,6 +392,7 @@ export default function ProfilePage() {
 
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setIsSaving(true);
 
     const matchedPalette = ACCENT_PALETTES.find((p) => p.id === stagedAccent);
     if (matchedPalette) {
@@ -405,7 +413,6 @@ export default function ProfilePage() {
       selectedWard,
       streetAddress,
       accountNumber,
-      standNumber,
     };
 
     try {
@@ -420,13 +427,14 @@ export default function ProfilePage() {
             city: selectedCity,
             ward: selectedWard,
             street_address: streetAddress,
-            account_number: accountNumber,
-            stand_number: standNumber
+            account_number: accountNumber
           }
         });
       }
     } catch (err) {
       console.error("Error saving user profile metadata to Supabase:", err);
+    } finally {
+      setIsSaving(false);
     }
 
     setSuccessMessage("Preferences saved successfully and synced with cloud database");
@@ -435,10 +443,13 @@ export default function ProfilePage() {
   };
 
   const handleSignOut = async () => {
+    setIsSigningOut(true);
     try {
       await supabase.auth.signOut();
     } catch (err) {
       console.error("Supabase sign out error:", err);
+    } finally {
+      setIsSigningOut(false);
     }
     localStorage.removeItem("resigrid_account_role");
     setIsAuthenticated(false);
@@ -446,12 +457,15 @@ export default function ProfilePage() {
 
   const handleDeleteAllData = async () => {
     if (window.confirm("Are you sure you want to delete all ResiGrid data across the app and remote databases? This action cannot be undone.")) {
+      setIsDeletingData(true);
       try {
         await supabase.from("reports").delete().neq("id", 0);
         await supabase.from("water_nodes").delete().neq("id", 0);
         await supabase.from("power_nodes").delete().neq("id", 0);
       } catch (err) {
         console.error("Cloud table clear error:", err);
+      } finally {
+        setIsDeletingData(false);
       }
 
       localStorage.clear();
@@ -547,10 +561,20 @@ export default function ProfilePage() {
 
             <button
               type="submit"
-              className="w-full py-3 rounded-xl border bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+              disabled={isAuthenticating}
+              className="w-full py-3 rounded-xl border bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
             >
-              <span>{authMode === "login" ? "Sign In to Resident App" : "Create Resident Account"}</span>
-              <ArrowRight className="w-4 h-4" />
+              {isAuthenticating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                <>
+                  <span>{authMode === "login" ? "Sign In to Resident App" : "Create Resident Account"}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
 
             <div className="flex items-center justify-between pt-2 text-xs">
@@ -805,33 +829,18 @@ export default function ProfilePage() {
               </div>
 
               {accountType === "resident" && (
-                <>
-                  <div>
-                    <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                      <Hash className="h-3 w-3 text-accent-dynamic shrink-0" /> Municipal Account Number
-                    </label>
-                    <input
-                      type="text"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      placeholder="e.g. 800459201"
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
-                      <Home className="h-3 w-3 text-accent-dynamic shrink-0" /> Stand / Erf Number
-                    </label>
-                    <input
-                      type="text"
-                      value={standNumber}
-                      onChange={(e) => setStandNumber(e.target.value)}
-                      placeholder="e.g. Erf 1452 Scottsville"
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
-                    />
-                  </div>
-                </>
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
+                    <Hash className="h-3 w-3 text-accent-dynamic shrink-0" /> Municipal Account Number
+                  </label>
+                  <input
+                    type="text"
+                    value={accountNumber}
+                    onChange={(e) => setAccountNumber(e.target.value)}
+                    placeholder="e.g. 800459201"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono"
+                  />
+                </div>
               )}
 
               <div className="sm:col-span-2">
@@ -851,16 +860,26 @@ export default function ProfilePage() {
           <div className="flex justify-end pt-2">
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => handleSave()}
-              className="w-full sm:w-auto px-6 py-3 rounded-full border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none"
+              className="w-full sm:w-auto px-6 py-3 rounded-full border text-accent-dynamic font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer relative z-30 shadow-lg select-none disabled:opacity-50"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
                 borderColor: "color-mix(in srgb, var(--accent) 45%, transparent)",
                 touchAction: "manipulation",
               }}
             >
-              <Save className="w-4 h-4 pointer-events-none" />
-              <span className="pointer-events-none">Save All Preferences</span>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin pointer-events-none" />
+                  <span className="pointer-events-none">Saving Preferences...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 pointer-events-none" />
+                  <span className="pointer-events-none">Save All Preferences</span>
+                </>
+              )}
             </button>
           </div>
 
@@ -886,20 +905,42 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <button
                   type="button"
+                  disabled={isSigningOut}
                   onClick={() => handleSignOut()}
-                  className="w-full py-2.5 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none"
+                  className="w-full py-2.5 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none disabled:opacity-50"
                   style={{ touchAction: "manipulation" }}
                 >
-                  <LogOut className="w-3.5 h-3.5 pointer-events-none" /> <span className="pointer-events-none">Sign Out Session</span>
+                  {isSigningOut ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin pointer-events-none" />
+                      <span className="pointer-events-none">Signing Out...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="w-3.5 h-3.5 pointer-events-none" />
+                      <span className="pointer-events-none">Sign Out Session</span>
+                    </>
+                  )}
                 </button>
 
                 <button
                   type="button"
+                  disabled={isDeletingData}
                   onClick={() => handleDeleteAllData()}
-                  className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none"
+                  className="w-full py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/25 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer relative z-30 select-none disabled:opacity-50"
                   style={{ touchAction: "manipulation" }}
                 >
-                  <Trash2 className="w-3.5 h-3.5 pointer-events-none" /> <span className="pointer-events-none">Delete All App Data</span>
+                  {isDeletingData ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin pointer-events-none" />
+                      <span className="pointer-events-none">Deleting Data...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
+                      <span className="pointer-events-none">Delete All App Data</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

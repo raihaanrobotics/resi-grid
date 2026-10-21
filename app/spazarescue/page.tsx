@@ -377,7 +377,7 @@ export default function SpazaRescuePage() {
 
             <div className="min-w-0">
               <h1 className="text-xs font-semibold tracking-[0.15em] sm:tracking-[0.18em] text-white sm:text-sm truncate">
-                SPAZARESCUE
+                FOODRESCUE
               </h1>
               <p className="mt-0.5 truncate text-[8px] sm:text-[10px] tracking-[0.1em] text-muted">
                 FOOD SECURITY & SPOILAGE CLEARANCE

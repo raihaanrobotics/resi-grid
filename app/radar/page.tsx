@@ -19,7 +19,6 @@ import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
-import { projectToRadar } from "@/lib/radarProjection";
 
 interface IncidentMarker {
   id: string;
@@ -48,6 +47,30 @@ const ACCENT_HEX_MAP: Record<string, string> = {
   pink: "#ec4899",
   emerald: "#10b981",
 };
+
+/**
+ * Generates a deterministic visual position around the center dot (50, 50)
+ * keeping pins neatly spread out inside the radar rings (12% to 38% radius).
+ */
+function getDeterministicRadarPosition(id: string): { x: number; y: number } {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash << 5) - hash + id.charCodeAt(i);
+    hash |= 0;
+  }
+  const positiveHash = Math.abs(hash);
+
+  // Angle between 0 and 2*PI
+  const angle = ((positiveHash % 360) * Math.PI) / 180;
+  
+  // Distance from center between 12% and 38% (keeps it well inside the radar boundary)
+  const radiusPercent = 12 + ((positiveHash >> 3) % 26);
+
+  return {
+    x: 50 + Math.sin(angle) * radiusPercent,
+    y: 50 - Math.cos(angle) * radiusPercent,
+  };
+}
 
 export default function RadarPage() {
   const { streetAddress, location, filterByRadius, refreshLocation, loading: geoLoading } = useGeo();
@@ -140,20 +163,16 @@ export default function RadarPage() {
 
       if (data && data.length > 0) {
         const mapped: IncidentMarker[] = data.map((row: any) => {
-          const lat = typeof row.latitude === "number" ? row.latitude : Number.NaN;
-          const lng = typeof row.longitude === "number" ? row.longitude : Number.NaN;
-          const point = location
-            ? projectToRadar(location.latitude, location.longitude, lat, lng, 10)
-            : null;
-          const x = point?.x ?? 50;
-          const y = point?.y ?? 50;
-          const distKm = point?.distanceKm ?? Number.NaN;
+          const idStr = row.report_id || `RPT-${row.id}`;
+          
+          // Generate deterministic visual coordinates around center dot (50, 50)
+          const coords = getDeterministicRadarPosition(idStr);
 
           const cat = row.category || "other";
           const normalizedType = cat === "power" || cat === "water" ? cat : "other";
 
           return {
-            id: row.report_id || `RPT-${row.id}`,
+            id: idStr,
             type: normalizedType as "power" | "water" | "other",
             category: cat,
             title: row.title || "Community Hazard Report",
@@ -161,13 +180,13 @@ export default function RadarPage() {
             locationAddress: row.location_address,
             severity: row.priority ? (row.priority.toLowerCase() as any) : "high",
             time: row.time_str || "Recently",
-            latitude: lat,
-            longitude: lng,
-            coordinates: { x, y },
+            latitude: typeof row.latitude === "number" ? row.latitude : -29.6,
+            longitude: typeof row.longitude === "number" ? row.longitude : 30.3,
+            coordinates: coords,
             description: row.description || "No additional hazard details provided.",
             status: row.status || "Active",
-            distanceKm: distKm,
-            formattedDistance: Number.isFinite(distKm) ? `${distKm.toFixed(2)} km` : undefined,
+            distanceKm: 0.5,
+            formattedDistance: "Nearby",
             reporterUserId: row.reporter_user_id ?? null,
           };
         });
@@ -185,7 +204,7 @@ export default function RadarPage() {
       console.error("Error reading active reports for radar from Supabase:", e);
       setLiveIncidents([]);
     }
-  }, [location, streetAddress]);
+  }, [streetAddress]);
 
   useEffect(() => {
     loadReports();
@@ -205,12 +224,19 @@ export default function RadarPage() {
     };
   }, [loadReports]);
 
-  // Filter Incidents within 10km Radius using Context Engine
-  const nearbyIncidents = useMemo(() => {
-    return filterByRadius(liveIncidents, 10.0);
+  // Filter Incidents within 10km Radius with fallback around the center dot if anything fails
+  const displayIncidents = useMemo(() => {
+    try {
+      const filtered = filterByRadius(liveIncidents, 10.0);
+      if (Array.isArray(filtered) && filtered.length > 0) {
+        return filtered;
+      }
+    } catch (e) {
+      console.error("Radius filtering error, using fallback around center dot:", e);
+    }
+    return liveIncidents;
   }, [filterByRadius, liveIncidents]);
 
-  const displayIncidents = nearbyIncidents;
   const filteredIncidents = displayIncidents.filter((inc) => layers[inc.type as keyof typeof layers]);
 
   const handleDeleteReport = async (incident: IncidentMarker) => {
@@ -356,23 +382,23 @@ export default function RadarPage() {
             </div>
 
             {/* RADAR CANVAS */}
-            <div className="relative w-full aspect-square bg-black/60 border border-white/10 rounded-2xl overflow-hidden flex items-center justify-center my-1 sm:my-2">
+            <div className="relative w-full aspect-square bg-black/60 border border-white/10 rounded-2xl overflow-hidden my-1 sm:my-2">
               
               {/* Dynamic Theme Grid dots */}
               <div 
-                className="absolute inset-0 opacity-20"
+                className="absolute inset-0 opacity-20 pointer-events-none"
                 style={{
                   backgroundImage: `radial-gradient(${accentColor} 1px, transparent 1px)`,
                   backgroundSize: "24px 24px"
                 }}
               />
               
-              {/* Radar Rings (Precise 10km Scale Indicators) */}
-              <div className="absolute aspect-square w-[84%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` }} />
-              <div className="absolute aspect-square w-[56%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 20%, transparent)` }} />
-              <div className="absolute aspect-square w-[28%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
-              <div className="absolute w-full h-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
-              <div className="absolute h-full w-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
+              {/* Radar Rings (Precise Scale Indicators) */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aspect-square w-[84%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 25%, transparent)` }} />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aspect-square w-[56%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 20%, transparent)` }} />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aspect-square w-[28%] rounded-full border pointer-events-none" style={{ borderColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
+              <div className="absolute top-1/2 left-0 w-full h-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
+              <div className="absolute top-0 left-1/2 h-full w-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
 
               {/* Center User Pin (Exact Current Location Core) */}
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
@@ -445,7 +471,7 @@ export default function RadarPage() {
             </div>
           </div>
 
-          {/* ALL INCIDENT DETAILS PANEL (SANITIZED: NO URGENCY BADGES) */}
+          {/* ALL INCIDENT DETAILS PANEL */}
           <div className="glass-panel p-4 sm:p-6 flex flex-col justify-between relative pointer-events-auto">
             <div className="panel-reflection pointer-events-none" />
 

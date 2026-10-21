@@ -38,11 +38,19 @@ export function projectToRadar(
     Math.cos(latitude1) * Math.sin(latitude2) -
       Math.sin(latitude1) * Math.cos(latitude2) * Math.cos(longitudeDelta)
   );
-  const radialPercent = distanceKm / radiusKm * 42;
+  
+  const radialPercent = (distanceKm / radiusKm) * 42;
+
+  const x = 50 + Math.sin(bearing) * radialPercent;
+  const y = 50 - Math.cos(bearing) * radialPercent;
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
 
   return {
-    x: 50 + Math.sin(bearing) * radialPercent,
-    y: 50 - Math.cos(bearing) * radialPercent,
+    x,
+    y,
     distanceKm,
   };
 }

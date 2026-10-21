@@ -16,6 +16,7 @@ import {
   CloudSun, 
   Landmark,
   Building2,
+  Utensils,
   Wrench
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -50,7 +51,7 @@ const subFeaturesGroup2 = [
 ];
 
 const subFeaturesGroup3 = [
-  { label: "Spaza", href: "/spazarescue", icon: Shield },
+  { label: "Food", href: "/spazarescue", icon: Utensils },
 ];
 
 export default function NavigationDock() {

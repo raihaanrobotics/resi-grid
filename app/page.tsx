@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   Info,
+  Utensils,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useGeo } from "@/context/GeoContext";
@@ -60,10 +61,10 @@ const modules = [
     color: "energy",
   },
   {
-    title: "Local Shops",
+    title: "Local Shops & Food Aid",
     description: "Find food & emergency supplies",
     href: "/spazarescue",
-    icon: Store,
+    icon: Utensils,
     color: "food",
   },
   {

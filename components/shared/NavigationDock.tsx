@@ -93,7 +93,7 @@ export default function NavigationDock() {
     <nav className="floating-dock w-[96%] max-w-xl mx-auto">
       <div className="floating-dock-inner overflow-x-auto no-scrollbar px-2 sm:px-3 py-2 flex items-center justify-between">
         {dockView === "staff" ? (
-          <div className="flex items-center justify-around gap-2 w-full">
+          <div className="flex items-center justify-center gap-2.5 w-fit mx-auto">
             <Link
               href={isMunicipalContext ? "/dashboard" : "/crew"}
               className={`dock-item shrink-0 px-4 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/dashboard") || (isCrewContext && pathname === "/crew") ? "dock-active" : ""}`}

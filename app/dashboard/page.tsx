@@ -433,22 +433,23 @@ export default function MunicipalDashboardPage() {
         )}
 
         {/* METRICS & WARD OVERVIEW */}
+        <div className="flex justify-end">
+          <button
+            onClick={handleManualRefresh}
+            title="Sync System"
+            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-accent-dynamic hover:bg-[var(--accent)]/30 transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
+            <span>Sync</span>
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
               <span className="eyebrow text-accent-dynamic">TOTAL DISPATCHES</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleManualRefresh}
-                  title="Sync System"
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-accent-dynamic hover:bg-[var(--accent)]/30 transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
-                  <span>Sync</span>
-                </button>
-                <Building2 className="h-4 w-4 text-accent-dynamic" />
-              </div>
+              <Building2 className="h-4 w-4 text-accent-dynamic" />
             </div>
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-extrabold text-white">{reports.length}</span>
@@ -459,8 +460,8 @@ export default function MunicipalDashboardPage() {
           <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
-              <span className="eyebrow text-amber-400">PENDING CREW REVIEW</span>
-              <Clock className="h-4 w-4 text-amber-400" />
+              <span className="eyebrow text-accent-dynamic">PENDING CREW REVIEW</span>
+              <Clock className="h-4 w-4 text-accent-dynamic" />
             </div>
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-extrabold text-white">
@@ -487,8 +488,8 @@ export default function MunicipalDashboardPage() {
           <div className="glass-panel p-4 sm:p-5 relative">
             <div className="panel-reflection" />
             <div className="flex items-center justify-between">
-              <span className="eyebrow text-cyan-400">RESOLVED TODAY</span>
-              <CheckCircle2 className="h-4 w-4 text-cyan-400" />
+              <span className="eyebrow text-accent-dynamic">RESOLVED TODAY</span>
+              <CheckCircle2 className="h-4 w-4 text-accent-dynamic" />
             </div>
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-extrabold text-white">

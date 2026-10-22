@@ -17,6 +17,7 @@ import {
   Navigation,
   RefreshCw,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
@@ -36,6 +37,7 @@ interface ListingItem {
   longitude: number;
   contactPhone?: string;
   isUserCreated?: boolean;
+  ownerUserId?: string | null;
   distanceKm?: number;
   formattedDistance?: string;
 }
@@ -93,6 +95,7 @@ export default function MarketplacePage() {
   const [activeCategory, setActiveCategory] = useState<"all" | "power" | "water" | "goods" | "services">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [listings, setListings] = useState<ListingItem[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Modal State for New Listing Creation
@@ -103,6 +106,16 @@ export default function MarketplacePage() {
   const [newSeller, setNewSeller] = useState("");
   const [newLocation, setNewLocation] = useState("");
   const [newPhone, setNewPhone] = useState("");
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not load marketplace listing owner:", error);
+        return;
+      }
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
 
   // Fetch live marketplace, water, and power nodes from Supabase and sync across HydroMesh & VoltShield
   useEffect(() => {
@@ -139,6 +152,7 @@ export default function MarketplacePage() {
               latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
               longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
               isUserCreated: node.is_user_created,
+              ownerUserId: node.owner_user_id || null,
             });
           });
         }
@@ -157,6 +171,7 @@ export default function MarketplacePage() {
               latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
               longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
               isUserCreated: node.is_user_created,
+              ownerUserId: node.owner_user_id || null,
             });
           });
         }
@@ -175,6 +190,7 @@ export default function MarketplacePage() {
               latitude: typeof rep.latitude === "number" ? rep.latitude : Number.NaN,
               longitude: typeof rep.longitude === "number" ? rep.longitude : Number.NaN,
               isUserCreated: true,
+              ownerUserId: rep.reporter_user_id || null,
             });
           });
         }
@@ -193,6 +209,11 @@ export default function MarketplacePage() {
 
   const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      window.alert("Sign in before posting a listing.");
+      return;
+    }
     if (!newTitle || !newPrice || !newSeller || !newLocation) return;
     const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
     if (!normalizedPhone) {
@@ -211,6 +232,7 @@ export default function MarketplacePage() {
       status: "Available",
       contactPhone: normalizedPhone,
       isUserCreated: true,
+      ownerUserId: userData.user.id,
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
     };
@@ -218,7 +240,7 @@ export default function MarketplacePage() {
     // Push to Supabase tables depending on category so HydroMesh and VoltShield stay fully connected & synchronized
     try {
       if (newCategory === "water") {
-        await supabase.from("water_nodes").insert([
+        const { error } = await supabase.from("water_nodes").insert([
           {
             node_id: uniqueId,
             owner: newSeller.trim(),
@@ -228,12 +250,14 @@ export default function MarketplacePage() {
             location: newLocation.trim(),
             whatsapp_phone: newListingItem.contactPhone,
             is_user_created: true,
+            owner_user_id: userData.user.id,
             latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
             longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
           }
         ]);
+        if (error) throw error;
       } else if (newCategory === "power") {
-        await supabase.from("power_nodes").insert([
+        const { error } = await supabase.from("power_nodes").insert([
           {
             node_id: uniqueId,
             owner: newSeller.trim(),
@@ -243,12 +267,14 @@ export default function MarketplacePage() {
             location: newLocation.trim(),
             whatsapp_phone: newListingItem.contactPhone,
             is_user_created: true,
+            owner_user_id: userData.user.id,
             latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
             longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
           }
         ]);
+        if (error) throw error;
       } else {
-        await supabase.from("reports").insert([
+        const { error } = await supabase.from("reports").insert([
           {
             report_id: uniqueId,
             category: "goods",
@@ -263,14 +289,18 @@ export default function MarketplacePage() {
             time_str: "Just now",
             reporter_name: newSeller.trim(),
             reporter_phone: newListingItem.contactPhone,
+            reporter_user_id: userData.user.id,
             estimated_fix_time: newPrice.trim(),
             latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
             longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
           }
         ]);
+        if (error) throw error;
       }
     } catch (err) {
       console.error("Failed to sync new listing to Supabase:", err);
+      window.alert("Could not post your listing. Please try again.");
+      return;
     }
 
     const updatedListings = [newListingItem, ...listings];
@@ -289,6 +319,26 @@ export default function MarketplacePage() {
   const handleTradeContact = (item: ListingItem) => {
     const message = `Hello ${item.seller}, I am inquiring about your ResiMarket listing: "${item.title}" priced at ${item.price}.\nIs this still available?`;
     openWhatsApp(item.contactPhone || "", message);
+  };
+
+  const handleDeleteListing = async (item: ListingItem) => {
+    if (!currentUserId || item.ownerUserId !== currentUserId) return;
+    if (!window.confirm("Delete this listing? This cannot be undone.")) return;
+
+    try {
+      const isNode = item.category === "water" || item.category === "power";
+      const table = item.category === "water" ? "water_nodes" : item.category === "power" ? "power_nodes" : "reports";
+      const rowId = isNode ? "node_id" : "report_id";
+      const ownerColumn = isNode ? "owner_user_id" : "reporter_user_id";
+      const { error } = await supabase.from(table).delete().eq(rowId, item.id).eq(ownerColumn, currentUserId);
+      if (error) throw error;
+      const updatedListings = listings.filter((listing) => listing.id !== item.id);
+      setListings(updatedListings);
+      writeOfflineData("resigrid_marketplace_listings", updatedListings);
+    } catch (error) {
+      console.error("Failed to delete marketplace listing:", error);
+      window.alert("Could not delete this listing. Please try again.");
+    }
   };
 
   // Filter listings within 10km radius using GeoContext filterByRadius engine
@@ -462,6 +512,17 @@ export default function MarketplacePage() {
                       {item.category === "goods" && <Tag className="w-3 h-3" />}
                       {item.category.toUpperCase()}
                     </span>
+                    {(item.isUserCreated || item.ownerUserId === currentUserId || (!item.ownerUserId && item.isUserCreated)) && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteListing(item)}
+                        aria-label="Delete your listing"
+                        title="Delete your listing"
+                        className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
 
                   <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
@@ -637,7 +698,7 @@ export default function MarketplacePage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact *</label>
+                  <label className="text-[11px] sm:text-xs text-muted event-input block mb-1">WhatsApp Contact *</label>
                   <input
                     type="text"
                     required

@@ -24,6 +24,9 @@ import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
 import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 import { normalizeSouthAfricanPhone } from "@/lib/phone";
+import { findNearbyActiveReport, getReportDisplayId, type NearbyReportCandidate } from "@/lib/reportUtils";
+import { useReportUpvotes } from "@/lib/useReportUpvotes";
+import ReportImpactButton from "@/components/shared/ReportImpactButton";
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -218,6 +221,10 @@ export default function CivicAIPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [nearbyIncident, setNearbyIncident] = useState<NearbyReportCandidate | null>(null);
+  const { upvotedReportIds, markUpvoted } = useReportUpvotes(
+    nearbyIncident ? [nearbyIncident.report_id] : []
+  );
 
   // Bulletproof Theme Persistence & Profile Auto-Fill on Mount
   useEffect(() => {
@@ -369,8 +376,8 @@ export default function CivicAIPage() {
   };
 
   // Real Dispatch Webhook & Supabase Submission Handler with Full Municipal Metadata & Personal Info Sanitization for Public/Radar Views
-  const handleSubmitReport = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitReport = async (e?: React.FormEvent, forceNewReport = false) => {
+    e?.preventDefault();
     if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim() || !accountNumber.trim()) {
       setErrorMessage("All form fields are compulsory in order to send.");
       return;
@@ -402,6 +409,42 @@ export default function CivicAIPage() {
       ? streetAddress
       : "Current GPS Position";
 
+    if (!forceNewReport && !useCustomAddress && location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
+      const latitudeDelta = 50 / 111_320;
+      const longitudeDelta = 50 / (111_320 * Math.cos((location.latitude * Math.PI) / 180));
+      try {
+        const { data: nearbyReports, error: nearbyReportsError } = await supabase
+          .from("reports")
+          .select("id, report_id, category, title, description, location_address, status, latitude, longitude, impact_count")
+          .eq("category", category)
+          .gte("latitude", location.latitude - latitudeDelta)
+          .lte("latitude", location.latitude + latitudeDelta)
+          .gte("longitude", location.longitude - longitudeDelta)
+          .lte("longitude", location.longitude + longitudeDelta)
+          .order("created_at", { ascending: false })
+          .limit(250);
+
+        if (nearbyReportsError) throw nearbyReportsError;
+
+        const match = findNearbyActiveReport(
+          (nearbyReports || []) as NearbyReportCandidate[],
+          category,
+          location.latitude,
+          location.longitude
+        );
+        if (match) {
+          setNearbyIncident(match);
+          setIsSubmitting(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Could not check for nearby active reports:", error);
+        setErrorMessage("Could not check for nearby incidents. Please retry before submitting.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     const timestamp = new Date().toLocaleTimeString("en-ZA", {
       hour: "2-digit",
       minute: "2-digit",
@@ -418,6 +461,8 @@ export default function CivicAIPage() {
       ward: selectedWard,
       priority,
       status: "Pending Review",
+      impact_count: 1,
+      separate_incident: forceNewReport,
       time_str: `Today, ${timestamp} SAST`,
       created_at: new Date().toISOString(),
       reporter_name: reporterName.trim(),
@@ -450,6 +495,8 @@ export default function CivicAIPage() {
       estimatedFixTime: fullPayload.estimated_fix_time,
       coords: location ? { lat: location.latitude, lng: location.longitude } : undefined,
       reporterUserId: userData.user.id,
+      impactCount: 1,
+      separateIncident: forceNewReport,
     };
 
     // Sanitized Payload for Public/Radar Pages (Personal Information Stripped)
@@ -469,6 +516,8 @@ export default function CivicAIPage() {
       estimatedFixTime: localReportItem.estimatedFixTime,
       coords: localReportItem.coords,
       reporterUserId: userData.user.id,
+      impactCount: 1,
+      separateIncident: forceNewReport,
     };
 
     try {
@@ -512,6 +561,7 @@ export default function CivicAIPage() {
       setReportTitle("");
       setDescription("");
       setCustomAddress("");
+      setNearbyIncident(null);
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 4000);
     } catch (err: any) {
@@ -520,6 +570,17 @@ export default function CivicAIPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleConfirmNearbyIncident = (reportId: string) => {
+    markUpvoted(reportId);
+    setNearbyIncident(null);
+    setReportTitle("");
+    setDescription("");
+    setCustomAddress("");
+    setSubmitSuccess(true);
+    setErrorMessage(null);
+    window.setTimeout(() => setSubmitSuccess(false), 4000);
   };
 
   const currentCities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
@@ -598,10 +659,58 @@ export default function CivicAIPage() {
           </div>
         </div>
 
+        {nearbyIncident && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+            <div className="glass-panel w-full max-w-lg space-y-4 rounded-2xl border border-amber-500/30 p-5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+                <div>
+                  <h2 className="text-sm font-bold text-white">Active Incident Detected Nearby!</h2>
+                  <p className="mt-1 text-xs text-muted">
+                    An active {nearbyIncident.category} incident is already logged within 50 metres.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2 rounded-xl border border-white/10 bg-black/30 p-3">
+                <p className="text-xs font-mono font-bold text-teal-300">
+                  {nearbyIncident.title} • {getReportDisplayId(nearbyIncident.report_id, nearbyIncident.id)}
+                </p>
+                <p className="text-xs text-muted">{nearbyIncident.description}</p>
+                <p className="text-[11px] text-white/70">{nearbyIncident.location_address}</p>
+                <p className="text-[10px] text-amber-200">Same category · within 50 metres</p>
+              </div>
+              <ReportImpactButton
+                reportId={nearbyIncident.report_id}
+                impactCount={nearbyIncident.impact_count || 1}
+                hasUpvoted={upvotedReportIds.has(nearbyIncident.report_id)}
+                onUpvoted={handleConfirmNearbyIncident}
+                className="justify-center"
+              />
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setNearbyIncident(null)}
+                  className="rounded-xl border border-white/10 px-4 py-2.5 text-xs text-muted hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSubmitReport(undefined, true)}
+                  disabled={isSubmitting}
+                  className="rounded-xl border border-amber-500/30 bg-amber-500/15 px-4 py-2.5 text-xs font-semibold text-amber-200 disabled:opacity-50"
+                >
+                  {isSubmitting ? "Submitting..." : "Report Different Issue"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SUCCESS NOTIFICATION TOAST */}
         {submitSuccess && (
           <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
-            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent)" }} /> Dispatching... Report successfully dispatched to municipal rapid response queue &amp; Supabase storage.
+            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent)" }} /> Your incident response has been recorded and the municipal queue has been updated.
           </div>
         )}
 

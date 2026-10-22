@@ -22,13 +22,16 @@ import {
   Activity,
   Gauge,
   Clock,
+  Users,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
-import { formatReportTimestamp, getReportDisplayId, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
+import { formatReportTimestamp, getReportDisplayId, mergeNearbyActiveReports, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
+import { useReportUpvotes } from "@/lib/useReportUpvotes";
+import ReportDeleteButton from "@/components/shared/ReportDeleteButton";
 import { upsertGlobalNotification } from "@/lib/notifications/globalNotifications";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
@@ -57,6 +60,7 @@ interface WaterNode {
   location: string;
   whatsappPhone: string;
   isUserCreated?: boolean;
+  ownerUserId?: string | null;
 }
 
 interface WaterReportItem {
@@ -75,6 +79,10 @@ interface WaterReportItem {
   priority?: "High" | "Medium" | "Low" | "Critical";
   assignedDepotUnit?: string;
   estimatedFixTime?: string;
+  impactCount: number;
+  separateIncident?: boolean;
+  reporterUserId?: string | null;
+  createdTimestamp?: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -129,7 +137,19 @@ export default function HydroMeshPage() {
 
   // Water Reports & P2P Nodes State
   const [waterReports, setWaterReports] = useState<WaterReportItem[]>([]);
+  const { upvotedReportIds, markUpvoted } = useReportUpvotes(waterReports.map((report) => report.id));
   const [waterNodesList, setWaterNodesList] = useState<WaterNode[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not load water-listing owner:", error);
+        return;
+      }
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
 
   // Share Tank Modal State
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -207,17 +227,7 @@ export default function HydroMeshPage() {
   const nearbyNodes = filterByRadius(waterNodesList, 10.0);
   const nearbyReports = filterByRadius(waterReports, 10.0);
 
-  const deduplicatedWaterReports = nearbyReports.reduce((acc: typeof nearbyReports, current) => {
-    const isDuplicate = acc.some(
-      (item) =>
-        item.locationAddress.trim().toLowerCase() === current.locationAddress.trim().toLowerCase() &&
-        item.title.trim().toLowerCase() === current.title.trim().toLowerCase()
-    );
-    if (!isDuplicate) {
-      acc.push(current);
-    }
-    return acc;
-  }, []);
+  const deduplicatedWaterReports = mergeNearbyActiveReports(nearbyReports);
   const hasNearbyWaterReport = deduplicatedWaterReports.some(
     (report) => report.category === "water" &&
       report.status !== "Resolved"
@@ -272,7 +282,7 @@ export default function HydroMeshPage() {
       const { data: reportsData, error: reportsError } = await supabase
         .from("reports")
         .select("*")
-        .order("id", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (reportsError) {
         console.error("Error fetching reports from Supabase on HydroMesh:", reportsError);
@@ -290,6 +300,10 @@ export default function HydroMeshPage() {
           time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
           assignedDepotUnit: row.assigned_depot || undefined,
           estimatedFixTime: row.estimated_fix_time || undefined,
+          impactCount: row.impact_count || 1,
+          separateIncident: row.separate_incident || false,
+          reporterUserId: row.reporter_user_id || null,
+          createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
           latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
           longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           ward: row.ward || "Ward 26",
@@ -300,7 +314,13 @@ export default function HydroMeshPage() {
         writeOfflineData("resigrid_water_reports", waterReportsOnly);
       } else {
         const cachedReports = readOfflineData<WaterReportItem[]>("resigrid_water_reports");
-        if (Array.isArray(cachedReports)) setWaterReports(cachedReports);
+        if (Array.isArray(cachedReports)) {
+          setWaterReports(cachedReports.map((report) => ({
+            ...report,
+            displayId: report.displayId || getReportDisplayId(report.id),
+            impactCount: report.impactCount || 1,
+          })));
+        }
       }
 
       // Fetch shared water nodes from Supabase if table exists, fallback to localStorage/defaults
@@ -327,7 +347,8 @@ export default function HydroMeshPage() {
           longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           location: row.location || "Sector 4",
           whatsappPhone: row.whatsapp_phone || "",
-          isUserCreated: row.is_user_created ?? true,
+          isUserCreated: row.is_user_created || row.owner_user_id != null,
+          ownerUserId: row.owner_user_id || null,
         }));
         setWaterNodesList(mappedNodes);
         localStorage.setItem("resigrid_water_nodes", JSON.stringify(mappedNodes));
@@ -552,6 +573,11 @@ export default function HydroMeshPage() {
 
   const handleAddTank = async (e: React.FormEvent) => {
     e.preventDefault();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      window.alert("Sign in before posting a water listing.");
+      return;
+    }
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Tank") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
     const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
@@ -568,17 +594,15 @@ export default function HydroMeshPage() {
       price: newPrice.trim(),
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
+      distance: "0.1 km away",
       location: streetAddress,
       whatsappPhone: normalizedPhone,
       isUserCreated: true,
+      ownerUserId: userData.user.id,
     };
 
-    const updatedNodes = [newNode, ...waterNodesList];
-    setWaterNodesList(updatedNodes);
-    localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
-
     try {
-      await supabase.from("water_nodes").insert([
+      const { error } = await supabase.from("water_nodes").insert([
         {
           node_id: newNode.id,
           owner: newNode.owner,
@@ -590,10 +614,17 @@ export default function HydroMeshPage() {
           location: newNode.location,
           whatsapp_phone: newNode.whatsappPhone,
           is_user_created: true,
+          owner_user_id: userData.user.id,
         },
       ]);
+      if (error) throw error;
+      const updatedNodes = [newNode, ...waterNodesList];
+      setWaterNodesList(updatedNodes);
+      localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
     } catch (err) {
       console.error("Failed to insert water node into Supabase:", err);
+      window.alert("Could not post your water listing. Please try again.");
+      return;
     }
 
     setIsShareModalOpen(false);
@@ -606,16 +637,21 @@ export default function HydroMeshPage() {
     setNewPhone("");
   };
 
-  const handleRemoveTankNode = async (nodeId: string, isUserCreated?: boolean) => {
-    if (!isUserCreated) return;
-    const updatedNodes = waterNodesList.filter((node) => node.id !== nodeId);
-    setWaterNodesList(updatedNodes);
-    localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
+  const handleRemoveTankNode = async (nodeId: string) => {
+    if (!currentUserId) return;
+    if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
-      await supabase.from("water_nodes").delete().eq("node_id", nodeId);
+      const { error } = await supabase.from("water_nodes").delete()
+        .eq("node_id", nodeId)
+        .eq("owner_user_id", currentUserId);
+      if (error) throw error;
+      const updatedNodes = waterNodesList.filter((item) => item.id !== nodeId);
+      setWaterNodesList(updatedNodes);
+      localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
     } catch (err) {
       console.error("Failed to delete water node from Supabase:", err);
+      window.alert("Could not delete this listing. Please try again.");
     }
   };
 
@@ -1083,13 +1119,20 @@ export default function HydroMeshPage() {
                       key={report.id}
                       className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all space-y-1.5 relative z-20 pointer-events-auto"
                     >
-                      <div className="flex items-center justify-between flex-wrap gap-1">
-                        <span className="text-xs font-mono font-bold" style={{ color: accentColor }}>
-                          {report.category} • {report.displayId || report.id}
-                        </span>
-                        <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusBadgeClass}`}>
-                          {normalizedStatus}
-                        </span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono font-bold" style={{ color: accentColor }}>
+                            {report.category} • {report.displayId || report.id}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusBadgeClass}`}>
+                            {normalizedStatus}
+                          </span>
+                        </div>
+                        <ReportDeleteButton
+                          reportId={report.id}
+                          reporterUserId={report.reporterUserId}
+                          onDeleted={(reportId) => setWaterReports((previous) => previous.filter((item) => item.id !== reportId))}
+                        />
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] text-muted font-mono">
@@ -1109,6 +1152,34 @@ export default function HydroMeshPage() {
                         <span className="flex items-center gap-1 font-mono truncate" style={{ color: `color-mix(in srgb, ${accentColor} 85%, white)` }}>
                           <MapPin className="h-3 w-3 shrink-0" style={{ color: accentColor }} /> <span className="truncate">{report.locationAddress}</span>
                         </span>
+                      </div>
+
+                      <div className="pt-1 flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 bg-white text-black px-2.5 py-0.5 rounded-full text-[10px] font-semibold shadow-sm">
+                          <Users className="w-3 h-3 text-neutral-800" />
+                          <span>{report.impactCount} {report.impactCount === 1 ? "resident" : "residents"} affected</span>
+                        </div>
+                        {!upvotedReportIds.has(report.id) && normalizedStatus !== "Resolved" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newCount = report.impactCount + 1;
+                              markUpvoted(report.id);
+                              setWaterReports((previous) => previous.map((item) =>
+                                item.id === report.id ? { ...item, impactCount: newCount } : item
+                              ));
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer border"
+                            style={{
+                              borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                              backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+                              color: accentColor,
+                            }}
+                          >
+                            Also Affected
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1152,13 +1223,6 @@ export default function HydroMeshPage() {
             ) : (
               nearbyNodes.map((node) => {
                 const isSelected = activeDispatchNode?.id === node.id;
-                
-                const estimatedVolumeSavedKl = 4;
-                const potentialCostWithoutNode = Math.round((monthlyUsageLiters / 1000 + estimatedVolumeSavedKl) * 28 + 340);
-                const estimatedRandSavedByUsingNode = Math.max(25, potentialCostWithoutNode - estimatedMunicipalBill);
-                const estimatedPercentSavedByUsingNode = Math.min(35, Math.max(8, Math.round((estimatedRandSavedByUsingNode / estimatedMunicipalBill) * 100)));
-                
-                const currentBadgeText = `Using this node saves ~R${estimatedRandSavedByUsingNode} (${estimatedPercentSavedByUsingNode}%) vs municipal pricing`;
 
                 return (
                   <div
@@ -1181,15 +1245,16 @@ export default function HydroMeshPage() {
                         </div>
                       </div>
 
-                      {node.isUserCreated && (
+                      {(node.isUserCreated || node.ownerUserId === currentUserId || (!node.ownerUserId && node.isUserCreated)) && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRemoveTankNode(node.id, node.isUserCreated);
+                            handleRemoveTankNode(node.id);
                           }}
-                          title="Remove Listing"
-                          className="text-muted hover:text-rose-400 transition-colors p-1 cursor-pointer touch-manipulation relative z-30 shrink-0 pointer-events-auto"
+                          aria-label="Delete your listing"
+                          title="Delete your listing"
+                          className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer touch-manipulation relative z-30 shrink-0 pointer-events-auto"
                         >
                           <Trash2 className="h-4 w-4 pointer-events-none" />
                         </button>
@@ -1200,10 +1265,6 @@ export default function HydroMeshPage() {
                       <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: accentColor }} />
                       <span className="truncate">{node.location} ({node.formattedDistance})</span>
                     </p>
-
-                    <div className="px-2.5 py-1 bg-sky-500/10 border border-sky-500/20 rounded-lg text-[10px] text-sky-300 font-medium">
-                      {currentBadgeText}
-                    </div>
 
                     <div className="border-t border-white/10 pt-3 flex items-center justify-between gap-3">
                       <div>

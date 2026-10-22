@@ -645,7 +645,7 @@ export default function CrewProfilePage() {
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                FIELD CREW ACCOUNT
+                FIELD PERSONNEL ACCOUNT
               </p>
             </div>
           </div>

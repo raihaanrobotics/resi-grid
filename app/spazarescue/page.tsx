@@ -16,6 +16,7 @@ import {
   HeartHandshake,
   Clock,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
@@ -35,6 +36,8 @@ interface SpazaFoodStore {
   contactPhone: string;
   latitude: number;
   longitude: number;
+  ownerUserId?: string | null;
+  isUserCreated?: boolean;
 }
 
 interface CommunityFoodAid {
@@ -50,6 +53,8 @@ interface CommunityFoodAid {
   foodEssentials?: string[];
   latitude: number;
   longitude: number;
+  ownerUserId?: string | null;
+  isUserCreated?: boolean;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -104,6 +109,8 @@ export default function SpazaRescuePage() {
 
   const [stores, setStores] = useState<SpazaFoodStore[]>([]);
   const [foodAidList, setFoodAidList] = useState<CommunityFoodAid[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isBusinessRegistered, setIsBusinessRegistered] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "stores" | "aid">("all");
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -119,8 +126,6 @@ export default function SpazaRescuePage() {
   const [isAidModalOpen, setIsAidModalOpen] = useState(false);
   const [aidListingChoice, setAidListingChoice] = useState<"relief" | "spaza">("relief");
   const [aidTitle, setAidTitle] = useState("");
-  const [aidTypeOption, setAidTypeOption] = useState<string>("Soup Kitchen");
-  const [customAidType, setCustomAidType] = useState<string>("");
   const [aidCoordinator, setAidCoordinator] = useState("");
   const [aidAddress, setAidAddress] = useState(streetAddress || "");
   const [aidHours, setAidHours] = useState("");
@@ -128,6 +133,29 @@ export default function SpazaRescuePage() {
   const [aidPhone, setAidPhone] = useState("");
   const [spoilageAlert, setSpoilageAlert] = useState("");
   const [essentialsInput, setEssentialsInput] = useState("");
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not load SpazaRescue account:", error);
+        return;
+      }
+      const user = data.user;
+      setCurrentUserId(user?.id ?? null);
+      const profile = user?.user_metadata?.spaza_business;
+      if (profile && typeof profile === "object") {
+        setIsBusinessRegistered(true);
+        setShopName(profile.shopName || "");
+        setOwnerName(profile.ownerName || "");
+        setStoreAddress(profile.address || "");
+        setShopPhone(profile.phone || "");
+        setAidTitle(profile.shopName || "");
+        setAidCoordinator(profile.ownerName || "");
+        setAidAddress(profile.address || streetAddress || "");
+        setAidPhone(profile.phone || "");
+      }
+    });
+  }, [streetAddress]);
 
   useEffect(() => {
     if (streetAddress && !storeAddress) setStoreAddress(streetAddress);
@@ -166,6 +194,8 @@ export default function SpazaRescuePage() {
               contactPhone: item.contact_phone || "",
               latitude: typeof item.latitude === "number" ? item.latitude : Number.NaN,
               longitude: typeof item.longitude === "number" ? item.longitude : Number.NaN,
+              ownerUserId: item.owner_user_id || null,
+              isUserCreated: item.is_user_created || item.owner_user_id != null,
             }));
           setStores(mappedStores);
           writeOfflineData("resigrid_spaza_stores", mappedStores);
@@ -185,6 +215,8 @@ export default function SpazaRescuePage() {
               foodEssentials: Array.isArray(item.food_essentials) ? item.food_essentials : undefined,
               latitude: typeof item.latitude === "number" ? item.latitude : Number.NaN,
               longitude: typeof item.longitude === "number" ? item.longitude : Number.NaN,
+              ownerUserId: item.owner_user_id || null,
+              isUserCreated: item.is_user_created || item.owner_user_id != null,
             }));
           setFoodAidList(mappedAid);
           writeOfflineData("resigrid_community_food_aid", mappedAid);
@@ -210,52 +242,44 @@ export default function SpazaRescuePage() {
       return;
     }
 
-    const storeId = `SPAZA-${Math.floor(Math.random() * 8999 + 1000)}`;
-    const newStore: SpazaFoodStore = {
-      id: storeId,
+    const { data, error: authError } = await supabase.auth.getUser();
+    if (authError || !data.user) {
+      window.alert("Sign in before registering your business.");
+      return;
+    }
+    const profile = {
       shopName: shopName.trim(),
       ownerName: ownerName.trim(),
-      location: storeAddress.trim(),
-      isOperating: true,
-      hasDryStock: true,
-      foodEssentials: ["Maize Meal", "Canned Goods", "Bread"],
-      contactPhone: normalizedPhone,
-      latitude: location?.latitude ?? Number.NaN,
-      longitude: location?.longitude ?? Number.NaN,
+      address: storeAddress.trim(),
+      phone: normalizedPhone,
     };
-
-    try {
-      await supabase.from("spaza_stores").insert([
-        {
-          store_id: storeId,
-          shop_name: newStore.shopName,
-          owner_name: newStore.ownerName,
-          location: newStore.location,
-          is_operating: true,
-          has_dry_stock: true,
-          food_essentials: newStore.foodEssentials,
-          contact_phone: newStore.contactPhone,
-          latitude: Number.isFinite(newStore.latitude) ? newStore.latitude : null,
-          longitude: Number.isFinite(newStore.longitude) ? newStore.longitude : null,
-        }
-      ]);
-    } catch (err) {
-      console.error("Failed to sync spaza store to Supabase:", err);
+    const { error } = await supabase.auth.updateUser({
+      data: { ...data.user.user_metadata, spaza_business: profile },
+    });
+    if (error) {
+      console.error("Could not save SpazaRescue business information:", error);
+      window.alert("Could not save your business information. Please try again.");
+      return;
     }
 
-    const updatedStores = [newStore, ...stores];
-    setStores(updatedStores);
-    writeOfflineData("resigrid_spaza_stores", updatedStores);
+    setCurrentUserId(data.user.id);
+    setIsBusinessRegistered(true);
+    setAidTitle(profile.shopName);
+    setAidCoordinator(profile.ownerName);
+    setAidAddress(profile.address);
+    setAidPhone(profile.phone);
 
     setIsStoreModalOpen(false);
-    setShopName("");
-    setOwnerName("");
-    setStoreAddress(streetAddress || "");
-    setShopPhone("");
   };
 
   const handlePostAid = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isBusinessRegistered || !currentUserId) {
+      setIsAidModalOpen(false);
+      window.alert("Register your business first using the Register button. Your registration saves your details but does not post a listing.");
+      setIsStoreModalOpen(true);
+      return;
+    }
     if (!aidTitle || !aidCoordinator || !aidAddress) return;
     if (aidListingChoice === "relief" && !aidDesc) return;
     const normalizedPhone = normalizeSouthAfricanPhone(aidPhone);
@@ -264,9 +288,7 @@ export default function SpazaRescuePage() {
       return;
     }
 
-    const finalAidType = aidListingChoice === "spaza" 
-      ? "Spaza Store" 
-      : (aidTypeOption === "Other" ? (customAidType.trim() || "Community Aid") : aidTypeOption);
+    const finalAidType = aidListingChoice === "spaza" ? "Spaza Store" : "Community Aid";
 
     const aidId = `AID-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newAid: CommunityFoodAid = {
@@ -282,10 +304,12 @@ export default function SpazaRescuePage() {
       foodEssentials: essentialsInput ? essentialsInput.split(",").map((s) => s.trim()) : (aidListingChoice === "spaza" ? ["Maize Meal", "Canned Goods"] : undefined),
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
+      ownerUserId: currentUserId,
+      isUserCreated: true,
     };
 
     try {
-      await supabase.from("community_food_aid").insert([
+      const { error } = await supabase.from("community_food_aid").insert([
         {
           aid_id: aidId,
           title: newAid.title,
@@ -299,10 +323,15 @@ export default function SpazaRescuePage() {
           food_essentials: newAid.foodEssentials || null,
           latitude: Number.isFinite(newAid.latitude) ? newAid.latitude : null,
           longitude: Number.isFinite(newAid.longitude) ? newAid.longitude : null,
+          owner_user_id: currentUserId,
+          is_user_created: true,
         }
       ]);
+      if (error) throw error;
     } catch (err) {
       console.error("Failed to sync community food aid to Supabase:", err);
+      window.alert("Could not post your listing. Please try again.");
+      return;
     }
 
     const updatedAid = [newAid, ...foodAidList];
@@ -318,7 +347,27 @@ export default function SpazaRescuePage() {
     setAidPhone("");
     setSpoilageAlert("");
     setEssentialsInput("");
-    setCustomAidType("");
+  };
+
+  const handleDeleteFoodListing = async (id: string, table: "spaza_stores" | "community_food_aid") => {
+    if (!currentUserId || !window.confirm("Delete this listing? This cannot be undone.")) return;
+    try {
+      const idColumn = table === "spaza_stores" ? "store_id" : "aid_id";
+      const { error } = await supabase.from(table).delete().eq(idColumn, id).eq("owner_user_id", currentUserId);
+      if (error) throw error;
+      if (table === "spaza_stores") {
+        const updated = stores.filter((store) => store.id !== id);
+        setStores(updated);
+        writeOfflineData("resigrid_spaza_stores", updated);
+      } else {
+        const updated = foodAidList.filter((aid) => aid.id !== id);
+        setFoodAidList(updated);
+        writeOfflineData("resigrid_community_food_aid", updated);
+      }
+    } catch (error) {
+      console.error("Could not delete SpazaRescue listing:", error);
+      window.alert("Could not delete this listing. Please try again.");
+    }
   };
 
   const handleContactWhatsApp = (targetPhone: string, storeName: string) => {
@@ -471,7 +520,14 @@ export default function SpazaRescuePage() {
         {/* Post Aid / Listing Button */}
         <button
           type="button"
-          onClick={() => setIsAidModalOpen(true)}
+          onClick={() => {
+            if (!isBusinessRegistered || !currentUserId) {
+              window.alert("Register your business first using the Register button. Registration will not post a listing.");
+              setIsStoreModalOpen(true);
+              return;
+            }
+            setIsAidModalOpen(true);
+          }}
           className="p-2 rounded-xl border transition-all flex items-center justify-center cursor-pointer hover:opacity-95 shrink-0"
           style={{
             color: accentColor,
@@ -507,6 +563,11 @@ export default function SpazaRescuePage() {
                         <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
                           {store.shopName}
                         </h3>
+                        {(store.isUserCreated || store.ownerUserId === currentUserId || (!store.ownerUserId && store.isUserCreated)) && (
+                          <button type="button" onClick={() => void handleDeleteFoodListing(store.id, "spaza_stores")} aria-label="Delete your listing" title="Delete your listing" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 text-xs text-muted mb-2 sm:mb-3 flex-wrap">
@@ -575,6 +636,11 @@ export default function SpazaRescuePage() {
                         <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
                           {aid.title}
                         </h3>
+                        {(aid.isUserCreated || aid.ownerUserId === currentUserId || (!aid.ownerUserId && aid.isUserCreated)) && (
+                          <button type="button" onClick={() => void handleDeleteFoodListing(aid.id, "community_food_aid")} aria-label="Delete your listing" title="Delete your listing" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 mt-2 text-xs text-muted mb-2 flex-wrap">
@@ -863,31 +929,6 @@ export default function SpazaRescuePage() {
                       placeholder="e.g. Sunset Ridge Soup Kitchen"
                       className="w-full bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
                     />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted block mb-0.5">Aid Type *</label>
-                    <select
-                      value={aidTypeOption}
-                      onChange={(e) => setAidTypeOption(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors cursor-pointer mb-1.5"
-                    >
-                      <option value="Soup Kitchen" className="bg-neutral-900 text-white">Soup Kitchen</option>
-                      <option value="Community Pantry" className="bg-neutral-900 text-white">Community Pantry</option>
-                      <option value="Bulk Food Drop" className="bg-neutral-900 text-white">Bulk Food Drop</option>
-                      <option value="Other" className="bg-neutral-900 text-white">Other (Custom)</option>
-                    </select>
-
-                    {aidTypeOption === "Other" && (
-                      <input
-                        type="text"
-                        required
-                        value={customAidType}
-                        onChange={(e) => setCustomAidType(e.target.value)}
-                        placeholder="Enter custom aid type..."
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
-                      />
-                    )}
                   </div>
 
                   <div>

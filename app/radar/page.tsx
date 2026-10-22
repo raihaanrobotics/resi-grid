@@ -17,12 +17,14 @@ import {
   Clock,
   Truck,
   PhoneCall,
+  Users,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
-import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, normalizeReportStatus } from "@/lib/reportUtils";
+import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, mergeNearbyActiveReports, normalizeReportStatus } from "@/lib/reportUtils";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
+import { useReportUpvotes } from "@/lib/useReportUpvotes";
 
 interface IncidentMarker {
   id: string;
@@ -45,6 +47,10 @@ interface IncidentMarker {
   formattedDistance?: string;
   reporterUserId?: string | null;
   ward?: string;
+  impactCount: number;
+  coords?: { lat: number; lng: number };
+  separateIncident?: boolean;
+  createdTimestamp?: number;
 }
 
 interface WaterTankerDispatch {
@@ -100,6 +106,9 @@ export default function RadarPage() {
   const [selectedIncident, setSelectedIncident] = useState<IncidentMarker | null>(null);
   const [scanning] = useState(true);
   const [liveIncidents, setLiveIncidents] = useState<IncidentMarker[]>([]);
+  const { upvotedReportIds, markUpvoted } = useReportUpvotes(
+    liveIncidents.map((incident) => incident.id)
+  );
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -179,12 +188,18 @@ export default function RadarPage() {
       const { data, error } = await supabase
         .from("reports")
         .select("*")
-        .order("id", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Supabase fetch error on Radar:", error);
         const cachedIncidents = readOfflineData<IncidentMarker[]>("resigrid_radar_incidents");
-        setLiveIncidents(Array.isArray(cachedIncidents) ? cachedIncidents : []);
+        setLiveIncidents(Array.isArray(cachedIncidents)
+          ? cachedIncidents.map((incident) => ({
+              ...incident,
+              displayId: incident.displayId || getReportDisplayId(incident.id),
+              impactCount: incident.impactCount || 1,
+            }))
+          : []);
         return;
       }
 
@@ -210,6 +225,9 @@ export default function RadarPage() {
             time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
             latitude: typeof row.latitude === "number" ? row.latitude : -29.6,
             longitude: typeof row.longitude === "number" ? row.longitude : 30.3,
+            coords: typeof row.latitude === "number" && typeof row.longitude === "number"
+              ? { lat: row.latitude, lng: row.longitude }
+              : undefined,
             coordinates: coords,
             description: row.description || "No additional hazard details provided.",
             status: normalizeReportStatus(row.status, row.assigned_depot),
@@ -219,6 +237,9 @@ export default function RadarPage() {
             formattedDistance: "Nearby",
             reporterUserId: row.reporter_user_id ?? null,
             ward: row.ward || "Ward 26",
+            impactCount: row.impact_count || 1,
+            separateIncident: row.separate_incident || false,
+            createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
           };
         });
 
@@ -303,15 +324,26 @@ export default function RadarPage() {
     try {
       const filtered = filterByRadius(liveIncidents, 10.0);
       if (Array.isArray(filtered) && filtered.length > 0) {
-        return filtered;
+        return mergeNearbyActiveReports(filtered);
       }
     } catch (e) {
       console.error("Radius filtering error, using fallback around center dot:", e);
     }
-    return liveIncidents;
+    return mergeNearbyActiveReports(liveIncidents);
   }, [filterByRadius, liveIncidents]);
 
   const filteredIncidents = displayIncidents.filter((inc) => layers[inc.type as keyof typeof layers]);
+
+  const handleIncidentUpvoted = (reportId: string, impactCount: number) => {
+    markUpvoted(reportId);
+    setLiveIncidents((previous) => previous.map((incident) =>
+      incident.id === reportId ? { ...incident, impactCount } : incident
+    ));
+    setSelectedIncident((previous) => previous?.id === reportId
+      ? { ...previous, impactCount }
+      : previous
+    );
+  };
 
   const handleDeleteReport = async (incident: IncidentMarker) => {
     if (!currentUserId || incident.reporterUserId !== currentUserId) return;
@@ -636,6 +668,30 @@ export default function RadarPage() {
                             <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} />
                             <span className="truncate">{incident.location}</span>
                           </p>
+                        </div>
+
+                        <div className="pt-1 flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-1.5 bg-white text-black px-2.5 py-0.5 rounded-full text-[10px] font-semibold shadow-sm">
+                            <Users className="w-3 h-3 text-neutral-800" />
+                            <span>{incident.impactCount} {incident.impactCount === 1 ? "resident" : "residents"} affected</span>
+                          </div>
+                          {!upvotedReportIds.has(incident.id) && normalizedStatus !== "Resolved" && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleIncidentUpvoted(incident.id, incident.impactCount + 1);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer border"
+                              style={{
+                                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
+                                color: accentColor,
+                              }}
+                            >
+                              Also Affected
+                            </button>
+                          )}
                         </div>
 
                         {matchingTanker && (

@@ -29,7 +29,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { dispatchReportScreenNotification } from "@/lib/notifications/globalNotifications";
 import { openWhatsApp } from "@/lib/phone";
-import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, isCrewAssigned, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
+import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, isCrewAssigned, mergeNearbyActiveReports, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
 
 interface ReportItem {
   id: string;
@@ -53,6 +53,8 @@ interface ReportItem {
   createdTimestamp?: number;
   coords?: { lat: number; lng: number };
   repairNotes?: string;
+  impactCount: number;
+  separateIncident?: boolean;
 }
 
 interface MaterialUsed {
@@ -60,15 +62,6 @@ interface MaterialUsed {
   item: string;
   quantity: number;
 }
-
-const DEPOT_UNITS = [
-  "ALL UNITS",
-  "Msunduzi Water Rapid Response - Unit 1",
-  "Msunduzi Electricity & High Voltage - Unit 4",
-  "Msunduzi Roads & Stormwater - Unit 2",
-  "Edendale Service Center - Unit 3",
-  "Northdale Infrastructure Depot - Unit 5",
-];
 
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
@@ -89,11 +82,15 @@ const getSLAHoursForCategory = (cat: string): number => {
 export default function FieldCrewPortalPage() {
   const [accentColor, setAccentColor] = useState<string>("#14b8a6");
   const [reports, setReports] = useState<ReportItem[]>([]);
-  const [selectedDepot, setSelectedDepot] = useState<string>("ALL UNITS");
+  const [selectedDepot, setSelectedDepot] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [activeJob, setActiveJob] = useState<ReportItem | null>(null);
+  const [activePanel, setActivePanel] = useState<"inspect" | "spares">("inspect");
+  const [statusUpdateJob, setStatusUpdateJob] = useState<ReportItem | null>(null);
+  const [pendingJobStatus, setPendingJobStatus] = useState<"On Site" | "In Progress" | "Resolved">("On Site");
+  const [statusNotes, setStatusNotes] = useState("");
   const [resolvedJobModal, setResolvedJobModal] = useState<ReportItem | null>(null);
   const [reportSyncError, setReportSyncError] = useState("");
 
@@ -101,9 +98,24 @@ export default function FieldCrewPortalPage() {
   const [materials, setMaterials] = useState<MaterialUsed[]>([]);
   const [newMaterialName, setNewMaterialName] = useState("");
   const [newMaterialQty, setNewMaterialQty] = useState(1);
-  const [completionNotes, setCompletionNotes] = useState("");
   const [isSubmittingLog, setIsSubmittingLog] = useState(false);
   const [isSavingEstimatedFixTime, setIsSavingEstimatedFixTime] = useState(false);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not load crew unit:", error);
+        setReportSyncError("Could not verify your crew unit. Sign in again and retry.");
+        return;
+      }
+      const depot = data.user?.user_metadata?.assigned_depot;
+      if (typeof depot !== "string" || !depot.trim()) {
+        setReportSyncError("No crew unit is assigned to this account.");
+        return;
+      }
+      setSelectedDepot(depot);
+    });
+  }, []);
 
   // Theme Accent Sync
   useEffect(() => {
@@ -143,11 +155,13 @@ export default function FieldCrewPortalPage() {
 
   // Fetch Assigned Field Jobs from Supabase
   const fetchCrewJobs = async () => {
+    if (!selectedDepot) return;
     try {
       const { data, error } = await supabase
         .from("reports")
         .select("*")
-        .order("id", { ascending: false });
+        .eq("assigned_depot", selectedDepot)
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching crew jobs from Supabase:", error);
@@ -181,12 +195,16 @@ export default function FieldCrewPortalPage() {
             estimatedFixTime: row.estimated_fix_time || "",
             targetResolutionHours: targetHours,
             createdTimestamp: createdAt,
-            coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
+            coords: Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+              ? { lat: row.latitude, lng: row.longitude }
+              : undefined,
             repairNotes: row.repair_notes || "",
+            impactCount: row.impact_count || 1,
+            separateIncident: row.separate_incident || false,
           };
         });
 
-        setReports(formatted);
+        setReports(mergeNearbyActiveReports(formatted));
         setReportSyncError("");
       }
     } catch (err) {
@@ -227,7 +245,7 @@ export default function FieldCrewPortalPage() {
       if (broadcastChannel) broadcastChannel.close();
       void supabase.removeChannel(reportChannel);
     };
-  }, []);
+  }, [selectedDepot]);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
@@ -251,6 +269,7 @@ export default function FieldCrewPortalPage() {
         .from("reports")
         .update(updatePayload)
         .eq("report_id", reportId)
+        .eq("assigned_depot", selectedDepot)
         .select("report_id")
         .maybeSingle();
 
@@ -298,6 +317,7 @@ export default function FieldCrewPortalPage() {
         .from("reports")
         .update({ estimated_fix_time: estimatedFixTime })
         .eq("report_id", activeJob.id)
+        .eq("assigned_depot", selectedDepot)
         .select("report_id")
         .maybeSingle();
 
@@ -352,31 +372,54 @@ export default function FieldCrewPortalPage() {
     setMaterials(materials.filter((m) => m.id !== id));
   };
 
-  // Finalize Job & Close Work Order
-  const handleCompleteWorkOrder = async (e: React.FormEvent) => {
+  const beginStatusUpdate = (job: ReportItem, status: "On Site" | "In Progress" | "Resolved") => {
+    setStatusUpdateJob(job);
+    setPendingJobStatus(status);
+    setStatusNotes("");
+  };
+
+  const handleSubmitStatusUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeJob) return;
+    if (!statusUpdateJob) return;
+    if (!statusNotes.trim()) {
+      window.alert(pendingJobStatus === "Resolved" ? "Enter closeout notes before signing off." : "Enter repair notes before sending this update.");
+      return;
+    }
 
     setIsSubmittingLog(true);
-
-    const materialsSummary = materials.length > 0
-      ? `\n\nMaterials Used:\n` + materials.map((m) => `- ${m.quantity}x ${m.item}`).join("\n")
-      : "";
-    const repairNotesVal = (completionNotes.trim() ? completionNotes.trim() : "Site repairs completed successfully.") + materialsSummary;
-
     try {
-      const updated = await updateJobStatus(activeJob.id, "Resolved", repairNotesVal);
+      const noteLabel = pendingJobStatus === "Resolved" ? "Closeout notes" : `${pendingJobStatus} repair notes`;
+      const repairNotes = [statusUpdateJob.repairNotes, `${noteLabel}: ${statusNotes.trim()}`]
+        .filter(Boolean)
+        .join("\n\n");
+      const updated = await updateJobStatus(statusUpdateJob.id, pendingJobStatus, repairNotes);
       if (!updated) return;
 
-      // Notify citizen via WhatsApp automatically
-      const whatsappMsg = `Hello ${activeJob.reporterName}, Municipal Field Crew ${activeJob.assignedDepotUnit} has fixed your ticket (${activeJob.displayId}) at ${activeJob.locationAddress}.\n\nWork Done: ${completionNotes || "Site repairs completed successfully."}`;
-      handleNotifyCitizenWhatsApp(activeJob, whatsappMsg);
-
-      setActiveJob(null);
-      setMaterials([]);
-      setCompletionNotes("");
+      const message = pendingJobStatus === "Resolved"
+        ? `Hello ${statusUpdateJob.reporterName}, Municipal Field Crew ${statusUpdateJob.assignedDepotUnit} has fixed your ticket (${statusUpdateJob.displayId}) at ${statusUpdateJob.locationAddress}.\n\nCloseout notes: ${statusNotes.trim()}`
+        : `Hello ${statusUpdateJob.reporterName}, Municipal Field Crew updated your report (${statusUpdateJob.displayId}) to *${pendingJobStatus}* at ${statusUpdateJob.locationAddress}.\n\nRepair notes: ${statusNotes.trim()}`;
+      handleNotifyCitizenWhatsApp(statusUpdateJob, message);
+      setStatusUpdateJob(null);
+      setStatusNotes("");
     } catch (err) {
-      console.error("Failed to submit work log:", err);
+      console.error("Failed to submit crew status and notes:", err);
+    } finally {
+      setIsSubmittingLog(false);
+    }
+  };
+
+  const handleSaveSpares = async () => {
+    if (!activeJob) return;
+    const materialsSummary = materials.length > 0
+      ? `Materials used:\n${materials.map((material) => `- ${material.quantity}x${material.item}`).join("\n")}`
+      : "No spares required.";
+    const repairNotes = [activeJob.repairNotes, materialsSummary].filter(Boolean).join("\n\n");
+    setIsSubmittingLog(true);
+    try {
+      if (await updateJobStatus(activeJob.id, activeJob.status, repairNotes)) {
+        setActiveJob(null);
+        setMaterials([]);
+      }
     } finally {
       setIsSubmittingLog(false);
     }
@@ -453,22 +496,12 @@ export default function FieldCrewPortalPage() {
         </p>
       )}
 
-      {/* DEPOT UNIT SELECTOR PANEL */}
+      {/* Crew access is locked to the depot saved on this account. */}
       <div className="glass-panel p-3.5 sm:p-4 space-y-1.5 sm:space-y-2">
         <label className="text-[10px] uppercase tracking-wider text-teal-400 font-semibold block" style={{ color: accentColor }}>
-          Active Municipal Crew Unit
+          Your Municipal Crew Unit
         </label>
-        <select
-          value={selectedDepot}
-          onChange={(e) => setSelectedDepot(e.target.value)}
-          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-teal-500/50 cursor-pointer"
-        >
-          {DEPOT_UNITS.map((unit) => (
-            <option key={unit} value={unit} className="bg-neutral-900 text-white">
-              {unit}
-            </option>
-          ))}
-        </select>
+        <p className="text-xs font-semibold text-white">{selectedDepot || "Verifying crew unit..."}</p>
       </div>
 
       {/* METRICS OVERVIEW CARDS */}
@@ -614,6 +647,9 @@ export default function FieldCrewPortalPage() {
                         <Clock className="w-3 h-3" style={{ color: accentColor }} /> Fix: {job.estimatedFixTime}
                       </span>
                     )}
+                    <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white/80 font-medium">
+                      {job.impactCount} {job.impactCount === 1 ? "Resident Affected" : "Residents Affected"}
+                    </span>
                   </div>
 
                   <h3 className="text-xs sm:text-sm font-bold text-white">{job.title}</h3>
@@ -646,14 +682,30 @@ export default function FieldCrewPortalPage() {
                       <ChevronRight className="h-3.5 w-3.5 text-teal-400" style={{ color: accentColor }} />
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setActiveJob(job)}
-                      className="w-full px-3 py-2 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <span>Inspect &amp; Spares</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-teal-400" style={{ color: accentColor }} />
-                    </button>
+                    <div className="grid grid-cols-2 gap-1.5 w-full">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveJob(job);
+                          setActivePanel("inspect");
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Inspect</span>
+                        <ChevronRight className="h-3.5 w-3.5" style={{ color: accentColor }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveJob(job);
+                          setActivePanel("spares");
+                        }}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-white/5 text-white hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Spares</span>
+                        <Package className="h-3.5 w-3.5" style={{ color: accentColor }} />
+                      </button>
+                    </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-1.5 w-full sm:flex sm:flex-wrap">
@@ -661,7 +713,7 @@ export default function FieldCrewPortalPage() {
                       <button
                         key={status}
                         type="button"
-                        onClick={() => updateJobStatus(job.id, status)}
+                        onClick={() => beginStatusUpdate(job, status)}
                         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer text-center ${
                           job.status === status
                             ? status === "Resolved"
@@ -673,15 +725,6 @@ export default function FieldCrewPortalPage() {
                         {status}
                       </button>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => handleNotifyCitizenWhatsApp(job)}
-                      title="WhatsApp Citizen"
-                      className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      <span className="text-[11px] sm:hidden">WhatsApp</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -697,7 +740,7 @@ export default function FieldCrewPortalPage() {
             <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div className="min-w-0 flex items-center gap-2">
                 <Wrench className="h-4 w-4 text-teal-400" style={{ color: accentColor }} />
-                <h3 className="text-xs font-bold text-white">Work Order Inspection &amp; Spares</h3>
+                <h3 className="text-xs font-bold text-white">{activePanel === "inspect" ? "Inspect Work Order" : "Requisition Spares"}</h3>
               </div>
             </div>
 
@@ -730,7 +773,7 @@ export default function FieldCrewPortalPage() {
                 </p>
               </div>
 
-              <div className="space-y-1">
+              {activePanel === "inspect" && <div className="space-y-1">
                 <span className="text-muted block text-[9px] uppercase tracking-wider">Estimated Fix Time</span>
                 <div className="flex gap-2">
                   <input
@@ -749,10 +792,10 @@ export default function FieldCrewPortalPage() {
                     {isSavingEstimatedFixTime ? "Saving..." : "Save"}
                   </button>
                 </div>
-              </div>
+              </div>}
 
               {/* Log Spares & Materials Form */}
-              <div className="space-y-1.5 pt-1 border-t border-white/10">
+              {activePanel === "spares" && <div className="space-y-1.5 pt-1 border-t border-white/10">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-muted flex items-center gap-1">
                   <Package className="h-3 w-3 text-teal-400" style={{ color: accentColor }} /> Requisition Materials &amp; Spares
                 </span>
@@ -800,42 +843,72 @@ export default function FieldCrewPortalPage() {
                     ))}
                   </div>
                 )}
-              </div>
+              </div>}
 
-              {/* Work Log Form - Only show repair log notes on active jobs for final sign-off when closing */}
-              <form onSubmit={handleCompleteWorkOrder} className="space-y-2 pt-1 border-t border-white/10">
-                <div>
-                  <span className="text-muted block text-[9px] uppercase tracking-wider mb-1">Artisan Repair &amp; Closeout Notes</span>
-                  <textarea
-                    rows={2}
-                    value={completionNotes}
-                    onChange={(e) => setCompletionNotes(e.target.value)}
-                    placeholder="Provide details on the fix executed on-site..."
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none resize-none"
-                  />
-                </div>
-
-                <div className="pt-2 border-t border-white/10 flex items-center justify-end gap-2">
+              <div className="pt-2 border-t border-white/10 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveJob(null)}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-muted text-xs hover:text-white transition-all cursor-pointer"
+                >
+                  Close
+                </button>
+                {activePanel === "inspect" ? (
                   <button
                     type="button"
-                    onClick={() => setActiveJob(null)}
-                    className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-muted text-xs hover:text-white transition-all cursor-pointer"
-                  >
-                    Close
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmittingLog}
+                    onClick={async () => {
+                      const accepted = await updateJobStatus(activeJob.id, "On Site");
+                      if (accepted) setActiveJob(null);
+                    }}
                     className="px-3.5 py-1.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer shadow-lg flex items-center gap-1"
                   >
                     <CheckCircle2 className="h-3 w-3 shrink-0" />
-                    <span>{isSubmittingLog ? "Signing..." : "Finalize & Sign Off"}</span>
+                    <span>Accept Job</span>
                   </button>
-                </div>
-              </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveSpares()}
+                    disabled={isSubmittingLog}
+                    className="px-3.5 py-1.5 rounded-xl bg-teal-500/20 border border-teal-500/30 text-teal-300 font-semibold text-xs hover:bg-teal-500/30 transition-all cursor-pointer shadow-lg flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    <span>{isSubmittingLog ? "Saving..." : "Save"}</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {statusUpdateJob && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4">
+          <form onSubmit={handleSubmitStatusUpdate} className="glass-panel w-full max-w-sm p-4 space-y-3 rounded-2xl border border-teal-500/30">
+            <div className="flex items-center gap-2 border-b border-white/10 pb-2">
+              <Wrench className="h-4 w-4" style={{ color: accentColor }} />
+              <h3 className="text-sm font-bold text-white">
+                {pendingJobStatus === "Resolved" ? "Closeout Notes & Sign Off" : `${pendingJobStatus} Repair Notes`}
+              </h3>
+            </div>
+            <p className="text-xs text-muted">{statusUpdateJob.displayId} · {statusUpdateJob.title}</p>
+            <textarea
+              rows={5}
+              required
+              value={statusNotes}
+              onChange={(event) => setStatusNotes(event.target.value)}
+              placeholder={pendingJobStatus === "Resolved" ? "Describe the completed fix and closeout..." : "Describe the repair work or site update..."}
+              className="w-full resize-none rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-xs text-white focus:outline-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setStatusUpdateJob(null)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-muted hover:text-white">
+                Cancel
+              </button>
+              <button type="submit" disabled={isSubmittingLog} className="rounded-xl border border-teal-500/30 bg-teal-500/20 px-3 py-2 text-xs font-semibold text-teal-300 disabled:opacity-50">
+                {isSubmittingLog ? "Saving..." : pendingJobStatus === "Resolved" ? "Sign Off & WhatsApp" : "Send Update & WhatsApp"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

@@ -606,7 +606,7 @@ export default function MunicipalProfilePage() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xs font-semibold tracking-[0.18em] text-white sm:text-sm">
-                  MUNICIPAL DISPATCH ADMINISTRATION
+                  PROFILE
                 </h1>
                 <span 
                   className="rounded-full border px-2 py-0.5 text-[8px] font-medium tracking-[0.15em] text-accent-dynamic shrink-0 transition-all"
@@ -619,7 +619,7 @@ export default function MunicipalProfilePage() {
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                RESTRICTED PORTAL: DISPATCH &amp; PROFILE ACCESS ONLY
+                MUNICIPAL AUTHORITIES ACCOUNT
               </p>
             </div>
           </div>

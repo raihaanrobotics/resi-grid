@@ -291,7 +291,7 @@ export default function HomePage() {
         const { data, error } = await supabase
           .from("reports")
           .select("report_id, category, title, description, location_address, province, municipality, ward, status, latitude, longitude")
-          .order("id", { ascending: false });
+          .order("created_at", { ascending: false });
 
         if (error) {
           console.error("Error fetching reports from Supabase for home summary:", error);

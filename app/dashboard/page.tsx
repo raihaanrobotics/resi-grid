@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { openWhatsApp } from "@/lib/phone";
-import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, isCrewAssigned, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
+import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, isCrewAssigned, mergeNearbyActiveReports, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
 
 interface ReportItem {
   id: string;
@@ -35,6 +35,8 @@ interface ReportItem {
   time: string;
   displayId: string;
   createdTimestamp?: number;
+  impactCount: number;
+  separateIncident?: boolean;
   province?: string;
   municipality?: string;
   ward?: string;
@@ -279,7 +281,7 @@ export default function MunicipalDashboardPage() {
       const { data, error } = await supabase
         .from("reports")
         .select("*")
-        .order("id", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error("Error fetching reports from Supabase:", error);
@@ -298,18 +300,22 @@ export default function MunicipalDashboardPage() {
           status: normalizeReportStatus(row.status, row.assigned_depot),
           time: row.time_str || "Today",
           createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
+          impactCount: row.impact_count || 1,
+          separateIncident: row.separate_incident || false,
+          coords: Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+            ? { lat: row.latitude, lng: row.longitude }
+            : undefined,
           province: row.province || "KwaZulu-Natal",
           municipality: row.municipality || "Pietermaritzburg (Msunduzi)",
           ward: row.ward || "Ward 26 (CBD / Central)",
           reporterName: row.reporter_name || "Anonymous",
           reporterPhone: row.reporter_phone || "N/A",
           accountNumber: row.account_number || "N/A",
-          assignedDepotUnit: row.assigned_depot || "Unassigned",
+          assignedDepotUnit: row.assigned_depot || "Depot Rapid Response Queue",
           estimatedFixTime: row.estimated_fix_time || "Pending Triage",
-          coords: row.latitude && row.longitude ? { lat: row.latitude, lng: row.longitude } : undefined,
         }));
 
-        setReports(formattedReports);
+        setReports(mergeNearbyActiveReports(formattedReports));
         setReportSyncError("");
       }
     } catch (err) {
@@ -794,6 +800,9 @@ export default function MunicipalDashboardPage() {
                           <Clock className="h-3 w-3" /> Fix: {item.estimatedFixTime}
                         </span>
                       )}
+                      <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-white/80 font-medium">
+                        {item.impactCount} {item.impactCount === 1 ? "Resident Affected" : "Residents Affected"}
+                      </span>
                     </div>
 
                     <h3 className="text-sm font-bold text-white">{item.title}</h3>

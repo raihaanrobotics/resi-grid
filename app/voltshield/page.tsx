@@ -27,12 +27,16 @@ import {
   Cpu,
   Gauge,
   Clock,
+  Users,
 } from "lucide-react";
 import { useCallback, useEffect, useState, useRef } from "react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
 import { supabase } from "@/lib/supabase";
-import { formatReportTimestamp, getReportDisplayId, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
+import { formatReportTimestamp, getReportDisplayId, mergeNearbyActiveReports, normalizeReportStatus, type ReportStatus } from "@/lib/reportUtils";
+import { useReportUpvotes } from "@/lib/useReportUpvotes";
+import ReportImpactButton from "@/components/shared/ReportImpactButton";
+import ReportDeleteButton from "@/components/shared/ReportDeleteButton";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 import { Device } from "@capacitor/device";
 import { normalizeSouthAfricanPhone, openWhatsApp } from "@/lib/phone";
@@ -50,6 +54,7 @@ interface PowerNode {
   location: string;
   whatsappPhone: string;
   isUserCreated?: boolean;
+  ownerUserId?: string | null;
 }
 
 interface PowerReportItem {
@@ -70,6 +75,10 @@ interface PowerReportItem {
   reporterPhone?: string;
   assignedDepotUnit?: string;
   estimatedFixTime?: string;
+  impactCount: number;
+  separateIncident?: boolean;
+  reporterUserId?: string | null;
+  createdTimestamp?: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -121,7 +130,19 @@ export default function VoltShieldPage() {
 
   // Power Reports & P2P Nodes State
   const [powerReports, setPowerReports] = useState<PowerReportItem[]>([]);
+  const { upvotedReportIds, markUpvoted } = useReportUpvotes(powerReports.map((report) => report.id));
   const [powerNodesList, setPowerNodesList] = useState<PowerNode[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not load power-listing owner:", error);
+        return;
+      }
+      setCurrentUserId(data.user?.id ?? null);
+    });
+  }, []);
 
   // Share Backup Node Modal State
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -198,17 +219,7 @@ export default function VoltShieldPage() {
   const nearbyNodes = filterByRadius(powerNodesList, 10.0);
   const nearbyReports = filterByRadius(powerReports, 10.0);
 
-  const deduplicatedPowerReports = nearbyReports.reduce((acc: typeof nearbyReports, current) => {
-    const isDuplicate = acc.some(
-      (item) =>
-        item.locationAddress.trim().toLowerCase() === current.locationAddress.trim().toLowerCase() &&
-        item.title.trim().toLowerCase() === current.title.trim().toLowerCase()
-    );
-    if (!isDuplicate) {
-      acc.push(current);
-    }
-    return acc;
-  }, []);
+  const deduplicatedPowerReports = mergeNearbyActiveReports(nearbyReports);
 
   // Fetch reports and power nodes directly from Supabase with localStorage fallback and BroadcastChannel sync
   const loadSupabaseData = useCallback(async () => {
@@ -217,7 +228,7 @@ export default function VoltShieldPage() {
       const { data: reportsData, error: reportsError } = await supabase
         .from("reports")
         .select("*")
-        .order("id", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (reportsError) {
         console.error("Error fetching reports from Supabase on VoltShield:", reportsError);
@@ -239,13 +250,23 @@ export default function VoltShieldPage() {
           priority: row.priority || "High",
           assignedDepotUnit: row.assigned_depot || undefined,
           estimatedFixTime: row.estimated_fix_time || undefined,
+          impactCount: row.impact_count || 1,
+          separateIncident: row.separate_incident || false,
+          reporterUserId: row.reporter_user_id || null,
+          createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
         }));
         const powerReportsOnly = formattedReports.filter((r) => r.category === "power");
         setPowerReports(powerReportsOnly);
         writeOfflineData("resigrid_power_reports", powerReportsOnly);
       } else {
         const cachedReports = readOfflineData<PowerReportItem[]>("resigrid_power_reports");
-        if (Array.isArray(cachedReports)) setPowerReports(cachedReports);
+        if (Array.isArray(cachedReports)) {
+          setPowerReports(cachedReports.map((report) => ({
+            ...report,
+            displayId: report.displayId || getReportDisplayId(report.id),
+            impactCount: report.impactCount || 1,
+          })));
+        }
       }
 
       // Fetch shared power nodes from Supabase if table exists, fallback to localStorage/defaults
@@ -272,7 +293,8 @@ export default function VoltShieldPage() {
           longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
           location: row.location || "Sector 4",
           whatsappPhone: row.whatsapp_phone || "",
-          isUserCreated: row.is_user_created ?? true,
+          isUserCreated: row.is_user_created || row.owner_user_id != null,
+          ownerUserId: row.owner_user_id || null,
         }));
         setPowerNodesList(mappedNodes);
         localStorage.setItem("resigrid_power_nodes", JSON.stringify(mappedNodes));
@@ -352,29 +374,36 @@ export default function VoltShieldPage() {
   // Real Hardware & Shunt Scan with Smooth Animated Telemetry Progression
   const startShuntScan = async () => {
     setErrorMessage(null);
-    setIsScanning(true);
-    setScanPhase("analyzing");
-    setScanProgress(0);
-
-    let progress = 0;
-    const intervalTime = 40; // smooth progression
-
-    const progressTimer = setInterval(() => {
-      progress += 2;
-      if (progress <= 100) {
-        setScanProgress(progress);
-      }
-    }, intervalTime);
-
     try {
       const info = await Device.getBatteryInfo();
       const isCharging = typeof info.isCharging === "boolean" ? info.isCharging : true;
+      
+      if (!isCharging) {
+        setScanPhase("error");
+        setErrorMessage("Please plug in your device to run the power charging and voltage test.");
+        return;
+      }
+
+      setIsScanning(true);
+      setScanPhase("analyzing");
+      setScanProgress(0);
+
+      let progress = 0;
+      const intervalTime = 40; // smooth progression
+
+      const progressTimer = setInterval(() => {
+        progress += 2;
+        if (progress <= 100) {
+          setScanProgress(progress);
+        }
+      }, intervalTime);
+
       const level = typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : 78;
 
       // Simulate robust voltage / current shunt sensing metrics based on hardware charging state
-      const simulatedVoltage = isCharging ? 232 + Math.floor(Math.random() * 4) : 198 + Math.floor(Math.random() * 8);
-      const simulatedCurrent = isCharging ? 1420 + Math.floor(Math.random() * 180) : -450 - Math.floor(Math.random() * 120);
-      const stability = isCharging ? "Stable AC Grid" : "Voltage Sag / Outage Imminent";
+      const simulatedVoltage = 232 + Math.floor(Math.random() * 4);
+      const simulatedCurrent = 1420 + Math.floor(Math.random() * 180);
+      const stability = "Stable AC Grid";
 
       await new Promise((resolve) => setTimeout(resolve, 2200));
       clearInterval(progressTimer);
@@ -390,20 +419,11 @@ export default function VoltShieldPage() {
 
       setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       setScanPhase("complete");
+      setIsScanning(false);
     } catch (error) {
-      clearInterval(progressTimer);
       console.error("Hardware shunt telemetry error:", error);
-      setErrorMessage("Could not poll hardware shunt sensors. Using fallback battery state.");
-      setBatteryInfo({
-        charging: true,
-        level: 82,
-        supported: true,
-        voltageMv: 230,
-        currentMa: 1200,
-        gridStability: "Nominal Grid",
-      });
-      setScanPhase("complete");
-    } finally {
+      setScanPhase("error");
+      setErrorMessage("Please plug in your device to run the power charging and voltage test.");
       setIsScanning(false);
     }
   };
@@ -428,6 +448,11 @@ export default function VoltShieldPage() {
 
   const handleAddNode = async (e: React.FormEvent) => {
     e.preventDefault();
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) {
+      window.alert("Sign in before posting a power listing.");
+      return;
+    }
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Power Node") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
     const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
@@ -448,14 +473,11 @@ export default function VoltShieldPage() {
       location: streetAddress,
       whatsappPhone: normalizedPhone,
       isUserCreated: true,
+      ownerUserId: userData.user.id,
     };
 
-    const updatedNodes = [newNode, ...powerNodesList];
-    setPowerNodesList(updatedNodes);
-    localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
-
     try {
-      await supabase.from("power_nodes").insert([
+      const { error } = await supabase.from("power_nodes").insert([
         {
           node_id: newNode.id,
           owner: newNode.owner,
@@ -467,10 +489,17 @@ export default function VoltShieldPage() {
           location: newNode.location,
           whatsapp_phone: newNode.whatsappPhone,
           is_user_created: true,
+          owner_user_id: userData.user.id,
         },
       ]);
+      if (error) throw error;
+      const updatedNodes = [newNode, ...powerNodesList];
+      setPowerNodesList(updatedNodes);
+      localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
     } catch (err) {
       console.error("Failed to insert power node into Supabase:", err);
+      window.alert("Could not post your power listing. Please try again.");
+      return;
     }
 
     setIsShareModalOpen(false);
@@ -483,16 +512,21 @@ export default function VoltShieldPage() {
     setNewPhone("");
   };
 
-  const handleRemoveNode = async (nodeId: string, isUserCreated?: boolean) => {
-    if (!isUserCreated) return;
-    const updatedNodes = powerNodesList.filter((node) => node.id !== nodeId);
-    setPowerNodesList(updatedNodes);
-    localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
+  const handleRemoveNode = async (nodeId: string) => {
+    if (!currentUserId) return;
+    if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
-      await supabase.from("power_nodes").delete().eq("node_id", nodeId);
+      const { error } = await supabase.from("power_nodes").delete()
+        .eq("node_id", nodeId)
+        .eq("owner_user_id", currentUserId);
+      if (error) throw error;
+      const updatedNodes = powerNodesList.filter((item) => item.id !== nodeId);
+      setPowerNodesList(updatedNodes);
+      localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
     } catch (err) {
       console.error("Failed to delete power node from Supabase:", err);
+      window.alert("Could not delete this listing. Please try again.");
     }
   };
 
@@ -702,9 +736,22 @@ export default function VoltShieldPage() {
                   {/* ERROR STATE */}
                   {scanPhase === "error" && (
                     <div className="text-center py-3">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-400">
-                        <AlertTriangle className="h-6 w-6" />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void startShuntScan();
+                        }}
+                        className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border transition-transform cursor-pointer touch-manipulation hover:scale-105 active:scale-95 shadow-xl"
+                        style={{
+                          borderColor: "color-mix(in srgb, var(--accent) 60%, transparent)",
+                          backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                          color: "var(--accent)",
+                          boxShadow: "0 0 25px color-mix(in srgb, var(--accent) 30%, transparent)"
+                        }}
+                        title="Tap to Test Again"
+                      >
+                        <Power className="h-7 w-7" />
+                      </button>
                       <p className="text-xs font-medium text-rose-300 max-w-xs mx-auto">
                         {errorMessage}
                       </p>
@@ -955,13 +1002,20 @@ export default function VoltShieldPage() {
                       key={report.id}
                       className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all space-y-1.5 relative z-20 pointer-events-auto"
                     >
-                      <div className="flex items-center justify-between flex-wrap gap-1">
-                        <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
-                          {report.category} • {report.displayId || report.id}
-                        </span>
-                        <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusBadgeClass}`}>
-                          {normalizedStatus}
-                        </span>
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono font-bold" style={{ color: "var(--accent)" }}>
+                            {report.category} • {report.displayId || report.id}
+                          </span>
+                          <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusBadgeClass}`}>
+                            {normalizedStatus}
+                          </span>
+                        </div>
+                        <ReportDeleteButton
+                          reportId={report.id}
+                          reporterUserId={report.reporterUserId}
+                          onDeleted={(reportId) => setPowerReports((previous) => previous.filter((item) => item.id !== reportId))}
+                        />
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] text-muted font-mono">
@@ -981,6 +1035,34 @@ export default function VoltShieldPage() {
                         <span className="flex items-center gap-1 font-mono truncate" style={{ color: "color-mix(in srgb, var(--accent) 85%, white)" }}>
                           <MapPin className="h-3 w-3 shrink-0" style={{ color: "var(--accent)" }} /> <span className="truncate">{report.locationAddress}</span>
                         </span>
+                      </div>
+
+                      <div className="pt-1 flex items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-1.5 bg-white text-black px-2.5 py-0.5 rounded-full text-[10px] font-semibold shadow-sm">
+                          <Users className="w-3 h-3 text-neutral-800" />
+                          <span>{report.impactCount} {report.impactCount === 1 ? "resident" : "residents"} affected</span>
+                        </div>
+                        {!upvotedReportIds.has(report.id) && normalizedStatus !== "Resolved" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newCount = report.impactCount + 1;
+                              markUpvoted(report.id);
+                              setPowerReports((previous) => previous.map((item) =>
+                                item.id === report.id ? { ...item, impactCount: newCount } : item
+                              ));
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer border"
+                            style={{
+                              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+                              backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
+                              color: "var(--accent)",
+                            }}
+                          >
+                            Also Affected
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1023,15 +1105,8 @@ export default function VoltShieldPage() {
                 No backup power sharing nodes found within 10km. Be the first to share a backup node!
               </div>
             ) : (
-              nearbyNodes.map((node, index) => {
+              nearbyNodes.map((node) => {
                 const isSelected = activeDispatchNode?.id === node.id;
-                
-                const estimatedKwhSaved = index === 0 ? 45 : index === 1 ? 80 : 30;
-                const potentialCostWithoutNode = Math.round((monthlyUsageKwh + estimatedKwhSaved) * 3.2 + 280);
-                const estimatedRandSavedByUsingNode = Math.max(45, potentialCostWithoutNode - estimatedMunicipalBill);
-                const estimatedPercentSavedByUsingNode = Math.min(40, Math.max(10, Math.round((estimatedRandSavedByUsingNode / estimatedMunicipalBill) * 100)));
-                
-                const currentBadgeText = `💡 Using this node saves ~R${estimatedRandSavedByUsingNode} (${estimatedPercentSavedByUsingNode}%) vs grid pricing at your volume`;
 
                 return (
                   <div
@@ -1054,15 +1129,16 @@ export default function VoltShieldPage() {
                         </div>
                       </div>
 
-                      {node.isUserCreated && (
+                      {(node.isUserCreated || node.ownerUserId === currentUserId || (!node.ownerUserId && node.isUserCreated)) && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRemoveNode(node.id, node.isUserCreated);
+                            handleRemoveNode(node.id);
                           }}
-                          title="Remove Listing"
-                          className="text-muted hover:text-rose-400 transition-colors p-1 cursor-pointer touch-manipulation relative z-30 shrink-0 pointer-events-auto"
+                          aria-label="Delete your listing"
+                          title="Delete your listing"
+                          className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer touch-manipulation relative z-30 shrink-0 pointer-events-auto"
                         >
                           <Trash2 className="h-4 w-4 pointer-events-none" />
                         </button>
@@ -1073,10 +1149,6 @@ export default function VoltShieldPage() {
                       <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: ENERGY_YELLOW }} />
                       <span className="truncate">{node.location} ({node.formattedDistance})</span>
                     </p>
-
-                    <div className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] text-amber-300 font-medium">
-                      {currentBadgeText}
-                    </div>
 
                     <div className="border-t border-white/10 pt-3 flex items-center justify-between gap-3">
                       <div>

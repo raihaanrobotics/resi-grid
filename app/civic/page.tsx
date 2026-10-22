@@ -255,27 +255,34 @@ export default function CivicAIPage() {
 
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
 
-    // Auto-fill profile data & municipal account details from profile storage if available
+    // Auto-fill profile data & municipal account details from profile storage if available (including resigrid_civic_profile)
     try {
-      const savedProfile = localStorage.getItem("resigrid_user_profile");
-      if (savedProfile) {
-        const parsed = JSON.parse(savedProfile);
+      const loadProfileData = (rawProfile: string | null) => {
+        if (!rawProfile) return false;
+        const parsed = JSON.parse(rawProfile);
         if (parsed.fullName) setReporterName(parsed.fullName);
+        else if (parsed.full_name) setReporterName(parsed.full_name);
         if (parsed.phone) setReporterPhone(parsed.phone);
         if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
-        if (parsed.streetAddress) {
-          setCustomAddress(parsed.streetAddress);
-        }
-        if (parsed.selectedProvince && SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[parsed.selectedProvince]) {
-          setSelectedProvince(parsed.selectedProvince);
-          const cities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[parsed.selectedProvince];
-          if (parsed.selectedCity && cities[parsed.selectedCity]) {
-            setSelectedMunicipality(parsed.selectedCity);
-            if (parsed.selectedWard && cities[parsed.selectedCity].includes(parsed.selectedWard)) {
-              setSelectedWard(parsed.selectedWard);
+        else if (parsed.account_number) setAccountNumber(parsed.account_number);
+        const prov = parsed.selectedProvince || parsed.province;
+        if (prov && SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[prov]) {
+          setSelectedProvince(prov);
+          const cities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[prov];
+          const city = parsed.selectedCity || parsed.city;
+          if (city && cities[city]) {
+            setSelectedMunicipality(city);
+            const ward = parsed.selectedWard || parsed.ward;
+            if (ward && cities[city].includes(ward)) {
+              setSelectedWard(ward);
             }
           }
         }
+        return true;
+      };
+
+      if (!loadProfileData(localStorage.getItem("resigrid_civic_profile"))) {
+        loadProfileData(localStorage.getItem("resigrid_user_profile"));
       }
     } catch (e) {
       console.error("Error reading profile auto-fill:", e);
@@ -563,7 +570,7 @@ export default function CivicAIPage() {
       setCustomAddress("");
       setNearbyIncident(null);
       setSubmitSuccess(true);
-      setTimeout(() => setSubmitSuccess(false), 4000);
+      setTimeout(() => setSubmitSuccess(false), 6000);
     } catch (err: any) {
       console.error("Submission exception:", err);
       setErrorMessage(`Submission failed: ${err?.message || "Unknown error"}`);
@@ -580,7 +587,7 @@ export default function CivicAIPage() {
     setCustomAddress("");
     setSubmitSuccess(true);
     setErrorMessage(null);
-    window.setTimeout(() => setSubmitSuccess(false), 4000);
+    window.setTimeout(() => setSubmitSuccess(false), 6000);
   };
 
   const currentCities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[selectedProvince] || {};
@@ -641,7 +648,7 @@ export default function CivicAIPage() {
                   <span className="text-[10px] sm:text-xs truncate" style={{ color: "var(--accent)" }}>LOCATING STREET...</span>
                 ) : (
                   <span className="truncate font-semibold text-white text-[10px] sm:text-xs">
-                    {useCustomAddress && customAddress.trim() ? customAddress : streetAddress}
+                    {streetAddress}
                   </span>
                 )}
               </div>
@@ -658,6 +665,25 @@ export default function CivicAIPage() {
             </div>
           </div>
         </div>
+
+        {/* SUCCESS NOTIFICATION BANNER WITH RADAR LINK */}
+        {submitSuccess && (
+          <div className="p-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-200 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn relative z-20 w-full shadow-lg">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+              <div>
+                <strong className="block text-xs uppercase tracking-wider font-bold text-white">Dispatched Successfully!</strong>
+                <span>Your incident report has been dispatched and logged into the municipal queue.</span>
+              </div>
+            </div>
+            <Link
+              href="/radar"
+              className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-bold text-xs shrink-0 hover:bg-emerald-400 transition-colors shadow-md"
+            >
+              View in Radar →
+            </Link>
+          </div>
+        )}
 
         {nearbyIncident && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
@@ -704,13 +730,6 @@ export default function CivicAIPage() {
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* SUCCESS NOTIFICATION TOAST */}
-        {submitSuccess && (
-          <div className="p-3 bg-white/10 border border-white/20 rounded-xl text-white text-xs font-medium flex items-center gap-2 animate-fadeIn relative z-20 w-full">
-            <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent)" }} /> Your incident response has been recorded and the municipal queue has been updated.
           </div>
         )}
 

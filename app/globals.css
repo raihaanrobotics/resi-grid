@@ -1089,3 +1089,28 @@ a {
 .module-inner-glow {
   pointer-events: none !important;
 }
+
+
+/* Hide scrollbars for Chrome, Safari and Opera */
+::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbars for IE, Edge and Firefox */
+html {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Force hide scrollbars and native overflow bars on all elements for mobile webviews */
+*, body, html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}

@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'out',
   plugins: {
     App: {
-      disableBackButtonHandler: true,
+      disableBackButtonHandler: false,
     },
     StatusBar: {
       overlaysWebView: true,

@@ -269,15 +269,21 @@ export default function HomePage() {
 
     let savedName = "Raihaan";
     try {
-      const profileData = localStorage.getItem("resigrid_user_profile");
-      if (profileData) {
-        const parsed = JSON.parse(profileData);
-        if (parsed.fullName) {
-          savedName = parsed.fullName.split(" ")[0];
+      const loadProfileName = (rawProfile: string | null) => {
+        if (!rawProfile) return null;
+        const parsed = JSON.parse(rawProfile);
+        const fullName = parsed.fullName || parsed.full_name;
+        if (fullName) {
+          return fullName.trim().split(/\s+/)[0];
         }
-      } else {
-        savedName = localStorage.getItem("resigrid-user-name") || "Raihaan";
-      }
+        return null;
+      };
+
+      savedName = 
+        loadProfileName(localStorage.getItem("resigrid_civic_profile")) ||
+        loadProfileName(localStorage.getItem("resigrid_user_profile")) ||
+        localStorage.getItem("resigrid-user-name")?.trim().split(/\s+/)[0] ||
+        "Raihaan";
     } catch {
       savedName = "Raihaan";
     }
@@ -810,7 +816,7 @@ export default function HomePage() {
                       ? "Screen alerts need setup."
                       : pushStatus === "denied"
                         ? "Allow alerts in browser settings."
-                        : "Screen alerts aren't supported here.")}
+                        : "")}
                   </p>
                 ) : (
                   <div>

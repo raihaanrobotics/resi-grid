@@ -309,6 +309,9 @@ export default function ProfilePage() {
     setIsAuthenticating(true);
 
     try {
+      let activeSession = null;
+      let activeUser = null;
+
       if (authMode === "signup") {
         const { data, error } = await supabase.auth.signUp({
           email: authEmail,
@@ -329,6 +332,8 @@ export default function ProfilePage() {
           setAuthMessage("Confirmation email sent. Open the link to verify your email, then sign in.");
           return;
         }
+        activeSession = data.session;
+        activeUser = data.user;
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: authEmail,
@@ -358,10 +363,29 @@ export default function ProfilePage() {
         setEmail(data.session.user.email || authEmail);
         setFullName(meta.full_name || "");
         setPhone(meta.phone || "");
+        activeSession = data.session;
+        activeUser = data.user;
       }
 
       setEmail(authEmail);
       localStorage.setItem("resigrid_account_role", "resident");
+      
+      // Save profile details to localStorage for civic page access before routing to home
+      const profileData = {
+        fullName,
+        email: authEmail,
+        phone,
+        selectedProvince,
+        selectedCity,
+        selectedWard,
+        streetAddress,
+        accountNumber,
+      };
+      if (activeUser?.id) {
+        localStorage.setItem(`resigrid_profile_${activeUser.id}`, JSON.stringify(profileData));
+      }
+      localStorage.setItem("resigrid_civic_profile", JSON.stringify(profileData));
+
       router.replace("/");
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : "Authentication failed");
@@ -431,6 +455,8 @@ export default function ProfilePage() {
           }
         });
       }
+      // Also save to civic profile storage key for instant sharing across pages
+      localStorage.setItem("resigrid_civic_profile", JSON.stringify(profileData));
     } catch (err) {
       console.error("Error saving user profile metadata to Supabase:", err);
     } finally {
@@ -595,7 +621,7 @@ export default function ProfilePage() {
 
   // AUTHENTICATED PROFILE VIEW TAILORED TO ACCOUNT TYPE
   return (
-    <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
+    <main className="resigrid-shell min-h-screen w-full overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
       <div className="ambient-background pointer-events-none" aria-hidden="true">
         <div className="ambient-orb orb-one" />
         <div className="ambient-orb orb-two" />
@@ -603,11 +629,11 @@ export default function ProfilePage() {
         <div className="ambient-grid" />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-[1920px] space-y-4 px-3 pb-32 pt-4 sm:space-y-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-7">
+      <div className="relative z-10 mx-auto w-full max-w-7xl space-y-4 px-3 pb-32 pt-4 sm:space-y-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-7 box-border">
         
         {/* HEADER */}
-        <header className="glass-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 sm:p-5 relative z-20">
-          <div className="flex items-center gap-3">
+        <header className="glass-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3.5 sm:p-5 relative z-20 w-full box-border">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="feature-icon feature-civic shrink-0">
               <User className="w-5 h-5 text-accent-dynamic" />
             </div>
@@ -634,10 +660,10 @@ export default function ProfilePage() {
         </header>
 
         {/* HERO CARD */}
-        <div className="glass-panel p-4 sm:p-6 relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 pointer-events-auto z-20 w-full">
+        <div className="glass-panel p-4 sm:p-6 relative flex flex-col sm:flex-row sm:items-center justify-between gap-4 pointer-events-auto z-20 w-full box-border">
           <div className="panel-reflection pointer-events-none" />
 
-          <div className="flex items-center gap-4 min-w-0">
+          <div className="flex items-center gap-4 min-w-0 w-full">
             <div 
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl border border-white/20 flex items-center justify-center text-lg sm:text-xl font-black text-white shrink-0 transition-all shadow-[0_0_20px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
               style={{ backgroundColor: "var(--accent)" }}
@@ -645,14 +671,14 @@ export default function ProfilePage() {
               {fullName ? fullName.split(" ").map((n) => n[0]).join("").toUpperCase() : "RG"}
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <h2 className="text-base sm:text-lg font-bold text-white truncate">{fullName || "Citizen User"}</h2>
                 <CheckCircle2 className="w-4 h-4 text-accent-dynamic shrink-0" />
               </div>
               <p className="text-xs text-muted truncate mt-0.5">{email}</p>
               <div className="flex items-center gap-2 mt-1.5 text-[10px] sm:text-[11px] text-muted flex-wrap">
-                <span className="flex items-center gap-1 text-accent-dynamic">
+                <span className="flex items-center gap-1 text-accent-dynamic truncate">
                   <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {wardNumberOnly}
                 </span>
               </div>
@@ -671,10 +697,10 @@ export default function ProfilePage() {
         )}
 
         {/* SETTINGS PANELS */}
-        <div className="space-y-5 relative z-20 w-full">
+        <div className="space-y-5 relative z-20 w-full box-border">
           
           {/* THEME ACCENT SELECTOR */}
-          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
+          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full box-border overflow-hidden">
             <div className="panel-reflection pointer-events-none" />
 
             <div className="border-b border-white/10 pb-3">
@@ -686,7 +712,7 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-1">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1">
               {ACCENT_PALETTES.map((pal) => {
                 const isSelected = stagedAccent === pal.id;
                 return (
@@ -694,26 +720,26 @@ export default function ProfilePage() {
                     key={pal.id}
                     type="button"
                     onClick={() => handleSelectAccent(pal.id)}
-                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-2 transition-all cursor-pointer relative z-30 select-none bg-black/30 hover:bg-white/5 ${
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer relative z-30 select-none bg-black/30 hover:bg-white/5 ${
                       isSelected
-                        ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/50 scale-[1.02]"
+                        ? "border-white ring-1 ring-white/70 scale-[1.02]"
                         : "border-white/10"
                     }`}
                     style={{ touchAction: "manipulation" }}
                   >
-                    <div className="relative flex items-center justify-center p-1 pointer-events-none">
+                    <div className="relative flex items-center justify-center p-0.5 pointer-events-none">
                       <span 
-                        className={`absolute inset-0 rounded-full blur-[3px] transition-opacity duration-300 pointer-events-none ${
-                          isSelected ? "opacity-45 scale-105" : "opacity-15"
+                        className={`absolute inset-0 rounded-full blur-[2px] transition-opacity duration-300 pointer-events-none ${
+                          isSelected ? "opacity-30 scale-105" : "opacity-10"
                         }`}
                         style={{ backgroundColor: pal.hex }}
                       />
                       <span 
-                        className="w-7 h-7 rounded-full relative flex items-center justify-center overflow-hidden transition-all duration-300 border border-white/20 shadow-inner pointer-events-none"
+                        className="w-5 h-5 sm:w-6 sm:h-6 rounded-full relative flex items-center justify-center overflow-hidden transition-all duration-300 border border-white/25 shadow-inner pointer-events-none"
                         style={{
                           backgroundColor: pal.hex,
                           boxShadow: isSelected 
-                            ? `inset 0 1px 1px rgba(255,255,255,0.6), 0 0 6px ${pal.hex}` 
+                            ? `inset 0 1px 1px rgba(255,255,255,0.6), 0 0 4px ${pal.hex}` 
                             : `inset 0 1px 1px rgba(255,255,255,0.3)`
                         }}
                       >
@@ -725,7 +751,7 @@ export default function ProfilePage() {
                         />
                       </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-white pointer-events-none">{pal.name}</span>
+                    <span className="text-[9px] sm:text-[10px] font-semibold text-white pointer-events-none truncate max-w-full">{pal.name}</span>
                   </button>
                 );
               })}
@@ -733,7 +759,7 @@ export default function ProfilePage() {
           </div>
 
           {/* PERSONAL & ROLE DETAILS */}
-          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
+          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full box-border overflow-hidden">
             <div className="panel-reflection pointer-events-none" />
 
             <div className="border-b border-white/10 pb-3">
@@ -746,7 +772,7 @@ export default function ProfilePage() {
             </div>
 
             <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1 relative z-20">
-              <div>
+              <div className="w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Full Name</label>
                 <input
                   type="text"
@@ -754,11 +780,11 @@ export default function ProfilePage() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Sipho Dlamini"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto box-border"
                 />
               </div>
 
-              <div>
+              <div className="w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Email Address</label>
                 <input
                   type="email"
@@ -766,11 +792,11 @@ export default function ProfilePage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.co.za"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto box-border"
                 />
               </div>
 
-              <div>
+              <div className="w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Contact Phone (WhatsApp)</label>
                 <input
                   type="tel"
@@ -779,16 +805,16 @@ export default function ProfilePage() {
                   onChange={(e) => setPhone(e.target.value)}
                   onBlur={handlePhoneBlur}
                   placeholder="+27 82 123 4567"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto box-border"
                 />
               </div>
 
-              <div>
+              <div className="w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Province</label>
                 <select
                   value={selectedProvince}
                   onChange={(e) => handleProvinceChange(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer box-border"
                 >
                   {Object.keys(SOUTH_AFRICAN_PROVINCES_CITIES_WARDS).map((prov) => (
                     <option key={prov} value={prov} className="bg-neutral-900 text-white">
@@ -798,12 +824,12 @@ export default function ProfilePage() {
                 </select>
               </div>
 
-              <div>
+              <div className="w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">City / Municipality</label>
                 <select
                   value={selectedCity}
                   onChange={(e) => handleCityChange(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer box-border"
                 >
                   {Object.keys(currentCities).map((city) => (
                     <option key={city} value={city} className="bg-neutral-900 text-white">
@@ -813,12 +839,12 @@ export default function ProfilePage() {
                 </select>
               </div>
 
-              <div>
+              <div className="w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Assigned Ward</label>
                 <select
                   value={selectedWard}
                   onChange={(e) => setSelectedWard(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer box-border truncate"
                 >
                   {currentWards.map((ward) => (
                     <option key={ward} value={ward} className="bg-neutral-900 text-white">
@@ -829,7 +855,7 @@ export default function ProfilePage() {
               </div>
 
               {accountType === "resident" && (
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 w-full min-w-0">
                   <label className="text-[11px] sm:text-xs font-medium text-muted flex items-center gap-1 mb-1">
                     <Hash className="h-3 w-3 text-accent-dynamic shrink-0" /> Municipal Account Number
                   </label>
@@ -838,26 +864,26 @@ export default function ProfilePage() {
                     value={accountNumber}
                     onChange={(e) => setAccountNumber(e.target.value)}
                     placeholder="e.g. 800459201"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono"
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto font-mono box-border"
                   />
                 </div>
               )}
 
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 w-full min-w-0">
                 <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Default Street Address</label>
                 <input
                   type="text"
                   value={streetAddress}
                   onChange={(e) => setStreetAddress(e.target.value)}
                   placeholder="e.g. 142 Chief Albert Luthuli St"
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto box-border"
                 />
               </div>
             </form>
           </div>
 
           {/* SAVE BUTTON */}
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end pt-2 w-full">
             <button
               type="button"
               disabled={isSaving}
@@ -884,7 +910,7 @@ export default function ProfilePage() {
           </div>
 
           {/* SESSION & SECURITY */}
-          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
+          <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full box-border overflow-hidden">
             <div className="panel-reflection pointer-events-none" />
 
             <div className="border-b border-white/10 pb-3">

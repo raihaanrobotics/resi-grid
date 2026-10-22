@@ -350,11 +350,29 @@ export default function SpazaRescuePage() {
   };
 
   const handleDeleteFoodListing = async (id: string, table: "spaza_stores" | "community_food_aid") => {
-    if (!currentUserId || !window.confirm("Delete this listing? This cannot be undone.")) return;
+    if (!window.confirm("Delete this listing? This cannot be undone.")) return;
+    
     try {
+      const cleanId = id.replace(/^(SPAZA-|AID-)/, "");
       const idColumn = table === "spaza_stores" ? "store_id" : "aid_id";
-      const { error } = await supabase.from(table).delete().eq(idColumn, id).eq("owner_user_id", currentUserId);
-      if (error) throw error;
+      
+      let { error, count } = await supabase
+        .from(table)
+        .delete()
+        .eq(idColumn, cleanId);
+
+      if ((!count || count === 0) && error == null) {
+        const fallbackRes = await supabase
+          .from(table)
+          .delete()
+          .eq("id", cleanId);
+        error = fallbackRes.error;
+      }
+
+      if (error) {
+        throw error;
+      }
+
       if (table === "spaza_stores") {
         const updated = stores.filter((store) => store.id !== id);
         setStores(updated);
@@ -364,9 +382,11 @@ export default function SpazaRescuePage() {
         setFoodAidList(updated);
         writeOfflineData("resigrid_community_food_aid", updated);
       }
-    } catch (error) {
-      console.error("Could not delete SpazaRescue listing:", error);
-      window.alert("Could not delete this listing. Please try again.");
+
+      window.alert("Listing successfully deleted.");
+    } catch (error: any) {
+      console.error("Could not delete SpazaRescue listing:", error.message || error);
+      window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error (Check Supabase RLS policies)"}`);
     }
   };
 
@@ -563,7 +583,7 @@ export default function SpazaRescuePage() {
                         <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
                           {store.shopName}
                         </h3>
-                        {(store.isUserCreated || store.ownerUserId === currentUserId || (!store.ownerUserId && store.isUserCreated)) && (
+                        {(store.isUserCreated || store.ownerUserId === currentUserId || store.ownerUserId == null || store.ownerUserId === "") && (
                           <button type="button" onClick={() => void handleDeleteFoodListing(store.id, "spaza_stores")} aria-label="Delete your listing" title="Delete your listing" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer">
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -636,7 +656,7 @@ export default function SpazaRescuePage() {
                         <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
                           {aid.title}
                         </h3>
-                        {(aid.isUserCreated || aid.ownerUserId === currentUserId || (!aid.ownerUserId && aid.isUserCreated)) && (
+                        {(aid.isUserCreated || aid.ownerUserId === currentUserId || aid.ownerUserId == null || aid.ownerUserId === "") && (
                           <button type="button" onClick={() => void handleDeleteFoodListing(aid.id, "community_food_aid")} aria-label="Delete your listing" title="Delete your listing" className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer">
                             <Trash2 className="h-4 w-4" />
                           </button>

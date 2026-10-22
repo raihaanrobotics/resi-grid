@@ -399,9 +399,9 @@ export default function RadarPage() {
       <div className="relative z-10 mx-auto w-full max-w-[1920px] px-3 pb-32 pt-4 sm:px-6 sm:space-y-6 lg:px-10 lg:pb-12 lg:pt-7 space-y-5">
 
         {/* HEADER */}
-        <header className="glass-header flex items-center justify-between p-3.5 sm:p-4">
+        <header className="glass-header flex items-center justify-between p-3.5 sm:p-4 rounded-[var(--radius)]">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="feature-icon shrink-0" style={{ color: accentColor }}>
+            <div className="feature-icon shrink-0 rounded-[10px]" style={{ color: accentColor }}>
               <RadarIcon className="w-5 h-5 animate-spin" style={{ animationDuration: "12s", color: accentColor }} />
             </div>
             <div className="min-w-0">
@@ -419,7 +419,7 @@ export default function RadarPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6 relative z-20">
           
           {/* RADAR MAP VIEW */}
-          <div className="lg:col-span-2 glass-panel p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden pointer-events-auto">
+          <div className="lg:col-span-2 glass-panel p-3.5 sm:p-6 flex flex-col justify-between relative overflow-hidden pointer-events-auto rounded-[var(--radius)]">
             <div className="panel-reflection pointer-events-none" />
 
             {/* Map Header / Filters */}
@@ -427,7 +427,7 @@ export default function RadarPage() {
               {/* Report Button Pill with Plus Icon */}
               <Link
                 href="/civic"
-                className="glass-panel px-3 py-2 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0"
+                className="glass-panel px-3.5 py-2 flex items-center gap-1.5 text-xs font-semibold text-white transition-all cursor-pointer touch-manipulation pointer-events-auto z-30 hover:opacity-90 shrink-0 rounded-full"
                 style={{
                   borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
                   backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
@@ -438,11 +438,11 @@ export default function RadarPage() {
               </Link>
 
               {/* Layer Filters Toolbar */}
-              <div className="flex items-center gap-1.5 sm:gap-2 bg-black/40 p-1 rounded-xl border border-white/10">
+              <div className="flex items-center gap-1.5 sm:gap-2 bg-black/40 p-1 rounded-full border border-white/10">
                 <button
                   type="button"
                   onClick={() => setMarkersVisible((prev) => !prev)}
-                  className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                  className={`p-1.5 rounded-full text-xs transition-all cursor-pointer ${
                     markersVisible ? "text-white bg-white/10" : "text-muted hover:text-white"
                   }`}
                   title={markersVisible ? "Hide Markers" : "Show Markers"}
@@ -456,7 +456,7 @@ export default function RadarPage() {
                   <button
                     type="button"
                     onClick={() => toggleLayer("power")}
-                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                    className={`p-1.5 rounded-full text-xs transition-all cursor-pointer ${
                       layers.power ? "bg-amber-500/20 text-amber-300" : "text-muted hover:text-white"
                     }`}
                     title="Power Faults"
@@ -466,7 +466,7 @@ export default function RadarPage() {
                   <button
                     type="button"
                     onClick={() => toggleLayer("water")}
-                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                    className={`p-1.5 rounded-full text-xs transition-all cursor-pointer ${
                       layers.water ? "bg-cyan-500/20 text-cyan-300" : "text-muted hover:text-white"
                     }`}
                     title="Water Issues"
@@ -476,7 +476,7 @@ export default function RadarPage() {
                   <button
                     type="button"
                     onClick={() => toggleLayer("other")}
-                    className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                    className={`p-1.5 rounded-full text-xs transition-all cursor-pointer ${
                       layers.other ? "bg-teal-500/20 text-teal-300" : "text-muted hover:text-white"
                     }`}
                     title="Civic & General Hazards"
@@ -488,11 +488,11 @@ export default function RadarPage() {
             </div>
 
             {/* RADAR CANVAS */}
-            <div className="relative w-full aspect-square bg-black/60 border border-white/10 rounded-2xl overflow-hidden my-1 sm:my-2">
+            <div className="relative w-full aspect-square bg-black/60 border border-white/10 rounded-full overflow-visible my-1 sm:my-2 shadow-[inset_0_0_50px_rgba(0,0,0,0.8)]">
               
               {/* Dynamic Theme Grid dots */}
               <div 
-                className="absolute inset-0 opacity-20 pointer-events-none"
+                className="absolute inset-0 opacity-20 pointer-events-none rounded-full overflow-hidden"
                 style={{
                   backgroundImage: `radial-gradient(${accentColor} 1px, transparent 1px)`,
                   backgroundSize: "24px 24px"
@@ -506,16 +506,25 @@ export default function RadarPage() {
               <div className="absolute top-1/2 left-0 w-full h-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
               <div className="absolute top-0 left-1/2 h-full w-[1px] pointer-events-none" style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }} />
 
-              {/* Center User Pin (Exact Current Location Core) */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
-                <span className="absolute w-10 h-10 rounded-full animate-ping opacity-35" style={{ backgroundColor: accentColor }} />
-                <div className="w-3.5 h-3.5 rounded-full bg-white ring-2 shadow-xl" style={{ borderColor: accentColor }} />
+              {/* Center User Pin (Smaller Core with Smaller Pulsing Animation) */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none flex items-center justify-center">
+                <div className="relative flex items-center justify-center w-3 h-3">
+                  <span 
+                    className="absolute inset-0 rounded-full animate-ping opacity-50 pointer-events-none" 
+                    style={{ 
+                      backgroundColor: accentColor, 
+                      animationDuration: "2s",
+                      transform: "scale(2)" 
+                    }} 
+                  />
+                  <div className="w-3 h-3 rounded-full bg-white shadow-lg ring-2 ring-white/30 relative z-10" />
+                </div>
               </div>
 
               {/* Theme Rotating Sweep */}
               {scanning && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-[84%] aspect-square rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-full overflow-hidden">
+                  <div className="w-full aspect-square rounded-full relative animate-spin" style={{ animationDuration: "6s" }}>
                     <div 
                       className="absolute top-0 right-0 w-1/2 h-1/2 origin-bottom-left rounded-tr-full"
                       style={{
@@ -526,7 +535,7 @@ export default function RadarPage() {
                 </div>
               )}
 
-              {/* Incident Markers */}
+              {/* Incident Markers (Strictly Round Circles, Enlarged on Selection/Tap) */}
               {markersVisible && filteredIncidents.map((incident) => {
                 const isSelected = selectedIncident?.id === incident.id;
                 return (
@@ -539,14 +548,16 @@ export default function RadarPage() {
                     title={incident.title}
                   >
                     <div className="relative flex items-center justify-center">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-md transition-transform ${
+                      <span className="absolute w-12 h-12 rounded-full border-2 border-white animate-ping opacity-60 pointer-events-none" style={{ animationDuration: "2s" }} />
+                      <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center font-bold text-xs shadow-md transition-transform ${
                         incident.type === "water" ? "bg-cyan-400 text-cyan-950" :
                         incident.type === "power" ? "bg-amber-400 text-amber-950" :
                         "bg-teal-400 text-teal-950"
-                      } ${isSelected ? "scale-125 ring-2 ring-white shadow-xl" : "hover:scale-110"}`}>
-                        {incident.type === "power" && <Zap className="w-3.5 h-3.5" />}
-                        {incident.type === "water" && <Droplet className="w-3.5 h-3.5" />}
-                        {incident.type === "other" && <FileText className="w-3.5 h-3.5" />}
+                      } ${isSelected ? "scale-125 shadow-xl" : "hover:scale-110"}`}
+                      style={{ borderRadius: "50%" }}>
+                        {incident.type === "power" && <Zap className="w-4 h-4" />}
+                        {incident.type === "water" && <Droplet className="w-4 h-4" />}
+                        {incident.type === "other" && <FileText className="w-4 h-4" />}
                       </div>
                     </div>
                   </button>
@@ -568,7 +579,7 @@ export default function RadarPage() {
                     refreshLocation();
                   }}
                   title="Refresh Location"
-                  className="p-1 rounded-lg border border-white/10 hover:text-white transition-colors cursor-pointer shrink-0"
+                  className="p-1 rounded-full border border-white/10 hover:text-white transition-colors cursor-pointer shrink-0"
                   style={{ color: accentColor }}
                 >
                   <RefreshCw className={`h-3 w-3 ${geoLoading ? "animate-spin" : ""}`} />
@@ -578,7 +589,7 @@ export default function RadarPage() {
           </div>
 
           {/* ALL INCIDENT DETAILS PANEL */}
-          <div className="glass-panel p-4 sm:p-6 flex flex-col justify-between relative pointer-events-auto">
+          <div className="glass-panel p-4 sm:p-6 flex flex-col justify-between relative pointer-events-auto rounded-[var(--radius)]">
             <div className="panel-reflection pointer-events-none" />
 
             <div className="w-full">
@@ -751,6 +762,7 @@ export default function RadarPage() {
                 </div>
               </div>
 
+data-id="exact-location"
               <div>
                 <span className="text-muted block text-[9px] uppercase tracking-wider">Exact Location / Landmark</span>
                 <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2 rounded-xl border border-white/5">

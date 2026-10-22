@@ -292,7 +292,7 @@ export default function HydroMeshPage() {
         const formattedReports: WaterReportItem[] = reportsData.map((row: any) => ({
           id: row.report_id || `RPT-${row.id}`,
           displayId: getReportDisplayId(row.report_id, row.id),
-          category: row.category || "water",
+          category: row.category || "Water",
           title: row.title || "Untitled Incident",
           description: row.description || "",
           locationAddress: row.location_address || "Unknown Location",

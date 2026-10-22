@@ -238,7 +238,7 @@ export default function VoltShieldPage() {
         const formattedReports: PowerReportItem[] = reportsData.map((row: any) => ({
           id: row.report_id || `RPT-${row.id}`,
           displayId: getReportDisplayId(row.report_id, row.id),
-          category: row.category || "power",
+          category: row.category || "Power",
           title: row.title || "Untitled Incident",
           description: row.description || "",
           locationAddress: row.location_address || "Unknown Location",

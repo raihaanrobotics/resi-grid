@@ -211,13 +211,13 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
 
     let cancelled = false;
     let removeListener: (() => void) | undefined;
-    void CapacitorApp.addListener("backButton", ({ canGoBack }) => {
-      if (canGoBack || window.history.length > 1) {
-        window.history.back();
-      } else if (pathname === "/profile" && !authenticated) {
-        void CapacitorApp.exitApp();
-      } else if (pathname !== "/") {
-        router.replace("/");
+    void CapacitorApp.addListener("backButton", () => {
+      if (window.location.pathname !== "/") {
+        if (window.history.length > 1) {
+          router.back();
+        } else {
+          router.replace("/");
+        }
       } else {
         void CapacitorApp.exitApp();
       }
@@ -235,7 +235,7 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
       cancelled = true;
       removeListener?.();
     };
-  }, [authenticated, pathname, router]);
+  }, [router]);
 
   useEffect(() => {
     if (!sessionChecked || !userId || !Capacitor.isNativePlatform()) return;

@@ -1,7 +1,9 @@
 "use client";
 
 import "./globals.css";
+
 import NavigationDock from "@/components/shared/NavigationDock";
+
 import AppRuntime from "@/components/shared/AppRuntime";
 
 export default function RootLayout({

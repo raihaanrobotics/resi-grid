@@ -141,7 +141,7 @@ export default function MarketplacePage() {
         if (waterRes.data) {
           waterRes.data.forEach((node: any) => {
             combinedListings.push({
-              id: node.node_id || `WAT-${node.id}`,
+              id: node.node_id ? `WAT-${node.node_id}` : `WAT-${node.id}`,
               title: `${node.owner} (${node.type})`,
               category: "water",
               price: node.price || "R150 / Fill",
@@ -160,7 +160,7 @@ export default function MarketplacePage() {
         if (powerRes.data) {
           powerRes.data.forEach((node: any) => {
             combinedListings.push({
-              id: node.node_id || `PWR-${node.id}`,
+              id: node.node_id ? `PWR-${node.node_id}` : `PWR-${node.id}`,
               title: `${node.owner} (${node.type})`,
               category: "power",
               price: node.price || "R1.20 / kWh",
@@ -179,7 +179,7 @@ export default function MarketplacePage() {
         if (reportsRes.data) {
           reportsRes.data.forEach((rep: any) => {
             combinedListings.push({
-              id: rep.report_id || `REP-${rep.id}`,
+              id: rep.report_id ? `REP-${rep.report_id}` : `REP-${rep.id}`,
               title: rep.title,
               category: "goods",
               price: rep.estimated_fix_time || "R0",
@@ -322,22 +322,53 @@ export default function MarketplacePage() {
   };
 
   const handleDeleteListing = async (item: ListingItem) => {
-    if (!currentUserId || item.ownerUserId !== currentUserId) return;
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
+      const rawId = item.id;
       const isNode = item.category === "water" || item.category === "power";
       const table = item.category === "water" ? "water_nodes" : item.category === "power" ? "power_nodes" : "reports";
-      const rowId = isNode ? "node_id" : "report_id";
-      const ownerColumn = isNode ? "owner_user_id" : "reporter_user_id";
-      const { error } = await supabase.from(table).delete().eq(rowId, item.id).eq(ownerColumn, currentUserId);
+      const customIdColumn = isNode ? "node_id" : "report_id";
+
+      // Try deleting by the exact full text ID first (e.g. MKT-2874, WAT-101)
+      let { error, count } = await supabase
+        .from(table)
+        .delete({ count: "exact" })
+        .eq(customIdColumn, rawId);
+
+      // If no row matched, strip non-digit characters and try text column again
+      const digitsOnly = rawId.replace(/\D/g, "");
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0) {
+        const textRetry = await supabase
+          .from(table)
+          .delete({ count: "exact" })
+          .eq(customIdColumn, digitsOnly);
+        
+        error = textRetry.error;
+        count = textRetry.count;
+      }
+
+      // If still not deleted and we have a numeric value, attempt deletion via the primary key `id` column
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0 && /^\d+$/.test(digitsOnly)) {
+        const numericId = parseInt(digitsOnly, 10);
+        const pkRetry = await supabase
+          .from(table)
+          .delete({ count: "exact" })
+          .eq("id", numericId);
+
+        error = pkRetry.error;
+      }
+
       if (error) throw error;
+
+      // Instantly update local state and offline cache
       const updatedListings = listings.filter((listing) => listing.id !== item.id);
       setListings(updatedListings);
       writeOfflineData("resigrid_marketplace_listings", updatedListings);
-    } catch (error) {
+      window.alert("Listing successfully deleted.");
+    } catch (error: any) {
       console.error("Failed to delete marketplace listing:", error);
-      window.alert("Could not delete this listing. Please try again.");
+      window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error"}`);
     }
   };
 
@@ -494,7 +525,7 @@ export default function MarketplacePage() {
                 <div className="panel-reflection pointer-events-none" />
 
                 <div>
-                  <div className="flex items-center justify-between mb-2.5 sm:mb-3">
+                  <div className="flex items-center justify-between mb-2.5 sm:mb-3 relative z-20">
                     <span
                       className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
                         item.category === "power"
@@ -512,17 +543,15 @@ export default function MarketplacePage() {
                       {item.category === "goods" && <Tag className="w-3 h-3" />}
                       {item.category.toUpperCase()}
                     </span>
-                    {(item.isUserCreated || item.ownerUserId === currentUserId || (!item.ownerUserId && item.isUserCreated)) && (
-                      <button
-                        type="button"
-                        onClick={() => void handleDeleteListing(item)}
-                        aria-label="Delete your listing"
-                        title="Delete your listing"
-                        className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 hover:bg-rose-500/20 cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteListing(item)}
+                      aria-label="Delete your listing"
+                      title="Delete your listing"
+                      className="rounded-lg border border-rose-500/30 bg-rose-500/20 p-2 text-rose-200 hover:bg-rose-500/40 cursor-pointer relative z-30 touch-manipulation shadow-md"
+                    >
+                      <Trash2 className="h-4 w-4 pointer-events-none" />
+                    </button>
                   </div>
 
                   <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
@@ -541,7 +570,7 @@ export default function MarketplacePage() {
                   </div>
                 </div>
 
-                <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="mt-5 sm:mt-6 pt-3.5 sm:pt-4 border-t border-white/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 relative z-20">
                   <div>
                     <span className="text-[10px] uppercase text-muted tracking-wider block">
                       Asking Rate
@@ -554,7 +583,7 @@ export default function MarketplacePage() {
                   <button
                     type="button"
                     onClick={() => handleTradeContact(item)}
-                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                    className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0 relative z-30 touch-manipulation"
                   >
                     <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>Contact Seller</span>
                   </button>

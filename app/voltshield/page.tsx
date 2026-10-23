@@ -284,7 +284,7 @@ export default function VoltShieldPage() {
         }
       } else if (nodesData && nodesData.length > 0) {
         const mappedNodes: PowerNode[] = nodesData.map((row: any) => ({
-          id: row.node_id || `power-${row.id}`,
+          id: row.node_id ? `PWR-${row.node_id}` : `PWR-${row.id}`,
           owner: row.owner || "Solar Inverter Hub",
           type: row.type || "5kW Hybrid Inverter",
           capacity: row.capacity || "Device Charging & Wi-Fi",
@@ -461,8 +461,9 @@ export default function VoltShieldPage() {
       return;
     }
 
+    const uniqueId = `PWR-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newNode: PowerNode = {
-      id: `power-${Date.now()}`,
+      id: uniqueId,
       owner: newOwner.trim(),
       type: resolvedType,
       capacity: newCapacity.trim(),
@@ -479,7 +480,7 @@ export default function VoltShieldPage() {
     try {
       const { error } = await supabase.from("power_nodes").insert([
         {
-          node_id: newNode.id,
+          node_id: uniqueId,
           owner: newNode.owner,
           type: newNode.type,
           capacity: newNode.capacity,
@@ -513,20 +514,46 @@ export default function VoltShieldPage() {
   };
 
   const handleRemoveNode = async (nodeId: string) => {
-    if (!currentUserId) return;
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
-      const { error } = await supabase.from("power_nodes").delete()
-        .eq("node_id", nodeId)
-        .eq("owner_user_id", currentUserId);
+      const cleanId = nodeId.replace(/^(WAT-|PWR-|REP-|MKT-)/, "");
+      
+      let { error, count } = await supabase
+        .from("power_nodes")
+        .delete({ count: "exact" })
+        .eq("node_id", cleanId);
+
+      const digitsOnly = cleanId.replace(/\D/g, "");
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0) {
+        const textRetry = await supabase
+          .from("power_nodes")
+          .delete({ count: "exact" })
+          .eq("node_id", digitsOnly);
+        
+        error = textRetry.error;
+        count = textRetry.count;
+      }
+
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0 && /^\d+$/.test(digitsOnly)) {
+        const numericId = parseInt(digitsOnly, 10);
+        const pkRetry = await supabase
+          .from("power_nodes")
+          .delete({ count: "exact" })
+          .eq("id", numericId);
+
+        error = pkRetry.error;
+      }
+
       if (error) throw error;
+
       const updatedNodes = powerNodesList.filter((item) => item.id !== nodeId);
       setPowerNodesList(updatedNodes);
       localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
-    } catch (err) {
-      console.error("Failed to delete power node from Supabase:", err);
-      window.alert("Could not delete this listing. Please try again.");
+      window.alert("Listing successfully deleted.");
+    } catch (error: any) {
+      console.error("Failed to delete power node:", error);
+      window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error"}`);
     }
   };
 

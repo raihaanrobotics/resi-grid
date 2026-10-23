@@ -17,6 +17,7 @@ import {
   Clock,
   Truck,
   PhoneCall,
+  Tag,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
@@ -477,7 +478,7 @@ export default function RadarPage() {
                     type="button"
                     onClick={() => toggleLayer("other")}
                     className={`p-1.5 rounded-full text-xs transition-all cursor-pointer ${
-                      layers.other ? "bg-teal-500/20 text-teal-300" : "text-muted hover:text-white"
+                      layers.other ? "bg-purple-500/20 text-purple-300" : "text-muted hover:text-white"
                     }`}
                     title="Civic & General Hazards"
                   >
@@ -552,7 +553,7 @@ export default function RadarPage() {
                       <div className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center font-bold text-xs shadow-md transition-transform ${
                         incident.type === "water" ? "bg-cyan-400 text-cyan-950" :
                         incident.type === "power" ? "bg-amber-400 text-amber-950" :
-                        "bg-teal-400 text-teal-950"
+                        "bg-purple-400 text-purple-950"
                       } ${isSelected ? "scale-125 shadow-xl" : "hover:scale-110"}`}
                       style={{ borderRadius: "50%" }}>
                         {incident.type === "power" && <Zap className="w-4 h-4" />}
@@ -639,8 +640,19 @@ export default function RadarPage() {
                         }}
                       >
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider truncate" style={{ color: accentColor }}>
-                            {incident.category || incident.type} • {incident.displayId || incident.id}
+                          <span
+                            className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
+                              incident.type === "power"
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : incident.type === "water"
+                                ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20"
+                                : "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                            }`}
+                          >
+                            {incident.type === "power" && <Zap className="w-3 h-3" />}
+                            {incident.type === "water" && <Droplet className="w-3 h-3" />}
+                            {incident.type === "other" && <FileText className="w-3 h-3" />}
+                            {(incident.category || incident.type).toUpperCase()} • {incident.displayId || incident.id}
                           </span>
                           <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-semibold ${statusBadgeClass}`}>
                             {normalizedStatus}

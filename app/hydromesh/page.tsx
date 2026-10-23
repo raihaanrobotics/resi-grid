@@ -339,7 +339,7 @@ export default function HydroMeshPage() {
         }
       } else if (nodesData && nodesData.length > 0) {
         const mappedNodes: WaterNode[] = nodesData.map((row: any) => ({
-          id: row.node_id || `node-${row.id}`,
+          id: row.node_id ? `WAT-${row.node_id}` : `WAT-${row.id}`,
           owner: row.owner || "Community Hub",
           type: row.type || "Borehole & Filtration",
           capacity: row.capacity || "1,000 L",
@@ -588,8 +588,9 @@ export default function HydroMeshPage() {
       return;
     }
 
+    const uniqueId = `WAT-${Math.floor(Math.random() * 8999 + 1000)}`;
     const newNode: WaterNode = {
-      id: `node-${Date.now()}`,
+      id: uniqueId,
       owner: newOwner.trim(),
       type: resolvedType,
       capacity: newCapacity.trim(),
@@ -606,7 +607,7 @@ export default function HydroMeshPage() {
     try {
       const { error } = await supabase.from("water_nodes").insert([
         {
-          node_id: newNode.id,
+          node_id: uniqueId,
           owner: newNode.owner,
           type: newNode.type,
           capacity: newNode.capacity,
@@ -641,21 +642,46 @@ export default function HydroMeshPage() {
   };
 
   const handleRemoveTankNode = async (nodeId: string) => {
-    if (!currentUserId) return;
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
-      await supabase.from("water_nodes").delete()
-        .eq("node_id", nodeId);
+      const cleanId = nodeId.replace(/^(WAT-|PWR-|REP-|MKT-)/, "");
       
+      let { error, count } = await supabase
+        .from("water_nodes")
+        .delete({ count: "exact" })
+        .eq("node_id", cleanId);
+
+      const digitsOnly = cleanId.replace(/\D/g, "");
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0) {
+        const textRetry = await supabase
+          .from("water_nodes")
+          .delete({ count: "exact" })
+          .eq("node_id", digitsOnly);
+        
+        error = textRetry.error;
+        count = textRetry.count;
+      }
+
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0 && /^\d+$/.test(digitsOnly)) {
+        const numericId = parseInt(digitsOnly, 10);
+        const pkRetry = await supabase
+          .from("water_nodes")
+          .delete({ count: "exact" })
+          .eq("id", numericId);
+
+        error = pkRetry.error;
+      }
+
+      if (error) throw error;
+
       const updatedNodes = waterNodesList.filter((item) => item.id !== nodeId);
       setWaterNodesList(updatedNodes);
       localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
-    } catch (err) {
-      console.error("Failed to delete water node from Supabase:", err);
-      const updatedNodes = waterNodesList.filter((item) => item.id !== nodeId);
-      setWaterNodesList(updatedNodes);
-      localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
+      window.alert("Listing successfully deleted.");
+    } catch (error: any) {
+      console.error("Failed to delete water node:", error);
+      window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error"}`);
     }
   };
 

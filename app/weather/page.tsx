@@ -994,23 +994,27 @@ export default function WeatherClimatePage() {
         </button>
       </div>
 
-      {/* WEATHER BRIEFING MODAL WITH TRANSPARENT BACKDROP AND CLEAN CONTAINER */}
+      {/* WEATHER BRIEFING MODAL WITH BLURRED BACKDROP AND GLASS PANEL STYLING */}
       {isSummaryOpen && (
         <div 
           key={modalKey}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-transparent pointer-events-none transition-all duration-300 animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md pointer-events-auto transition-all duration-300 animate-in fade-in"
         >
           <div 
-            className="relative overflow-hidden rounded-[2.5rem] border border-white/15 bg-black/95 text-white shadow-2xl w-full max-w-md h-[500px] flex flex-col justify-between p-6 sm:p-7 animate-in zoom-in-95 slide-in-from-bottom-4 mb-20 pointer-events-auto"
-            style={{ borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)" }}
+            className="glass-panel relative overflow-hidden rounded-2xl border bg-black/90 text-white shadow-2xl w-full max-w-md h-[460px] flex flex-col justify-between p-5 sm:p-6 animate-in zoom-in-95 slide-in-from-bottom-4"
+            style={{ 
+              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
+              backgroundColor: "color-mix(in srgb, var(--accent) 6%, rgba(10, 15, 26, 0.95))"
+            }}
           >
+            <div className="panel-reflection pointer-events-none" />
+
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 shrink-0 relative z-10">
               <div className="flex items-center gap-2">
                 <Wand2 className="w-4 h-4" style={{ color: "var(--accent)" }} />
                 <h3 
-                  className="text-sm font-extrabold tracking-wider uppercase"
-                  style={{ color: "var(--accent)" }}
+                  className="text-xs font-bold tracking-[0.15em] uppercase text-white"
                 >
                   INTELLIGENT BRIEFING
                 </h3>
@@ -1019,48 +1023,67 @@ export default function WeatherClimatePage() {
               <button
                 type="button"
                 onClick={() => setIsSummaryOpen(false)}
-                className="p-1.5 rounded-full bg-white/5 hover:bg-white/15 text-white/80 hover:text-white transition-colors cursor-pointer"
+                className="p-1 rounded-full bg-white/5 hover:bg-white/15 text-white/80 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Scrollable Content Area with Hidden Scrollbar & Friendly, Actionable Insights */}
-            <div className="overflow-y-auto no-scrollbar space-y-3.5 text-xs text-white/90 leading-snug py-2 animate-slow-blur shrink">
-              <div className="p-3 rounded-xl border border-white/10 space-y-1" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 10%, transparent)" }}>
+            {/* Scrollable Content Area with Short, Concise, Actionable Insights */}
+            <div className="overflow-y-auto no-scrollbar space-y-3 text-xs text-white/90 leading-relaxed py-2 animate-slow-blur shrink relative z-10">
+              
+              <div className="p-3 rounded-xl border border-white/10 bg-black/40 space-y-1">
                 <p className="font-bold text-white text-xs">{currentProvData.statusTitle}</p>
-                <p className="text-white/80 text-[11px] leading-relaxed">{currentProvData.warningMessage}</p>
+                <p className="text-white/70 text-[11px]">{currentProvData.warningMessage}</p>
               </div>
 
-              <div className="space-y-3 text-white/85 px-1">
-                <p className="leading-relaxed">
-                  🌡️ <strong className="text-white">Temperature &amp; Comfort:</strong> It's currently {temperature !== null ? `${temperature}°C` : "pleasant"} (feels like {apparentTemp !== null ? `${apparentTemp}°C` : "normal"}). {temperature !== null && temperature > 30 ? "It's quite hot out there—remember to drink plenty of water and stay cool." : temperature !== null && temperature < 10 ? "It's a chilly day, so bundle up warmly and check on your indoor heating." : "The temperature is comfortable for everyday activities and stepping outside."}
-                </p>
+              <div className="space-y-2.5 text-white/85 px-0.5">
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--accent)] font-bold">🌡️</span>
+                  <p>
+                    <strong className="text-white">Temp:</strong> {temperature !== null ? `${temperature}°C` : "--"} (Feels like {apparentTemp !== null ? `${apparentTemp}°C` : "--"}). {temperature !== null && temperature > 30 ? "High heat alert—stay hydrated." : temperature !== null && temperature < 10 ? "Chilly day—bundle up." : "Comfortable ambient conditions."}
+                  </p>
+                </div>
 
-                <p className="leading-relaxed">
-                  ☀️ <strong className="text-white">Sun &amp; UV Protection:</strong> The UV index is running at {uvIndex !== null ? uvIndex : "moderate levels"}. {uvIndex !== null && uvIndex >= 8 ? "Very strong sun today! Make sure to wear sunscreen, sunglasses, and a hat." : uvIndex !== null && uvIndex >= 6 ? "Strong sunshine today—good idea to put on some sunscreen if you're heading out." : "Enjoy the sunshine safely with standard outdoor protection."}
-                </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--accent)] font-bold">☀️</span>
+                  <p>
+                    <strong className="text-white">UV Index:</strong> {uvIndex !== null ? uvIndex : "--"}. {uvIndex !== null && uvIndex >= 6 ? "Strong sun—wear sunscreen and a hat." : "Moderate sun strength."}
+                  </p>
+                </div>
 
-                <p className="leading-relaxed">
-                  ☂️ <strong className="text-white">Rain &amp; Weather Check:</strong> There's a {currentRainChance !== null ? `${currentRainChance}% chance of rain` : "low chance of rain"} today ({dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "minimal"} expected). {peakRainChance !== null && peakRainChance > 40 ? `Keep an umbrella handy; peak rain is expected around ${peakRainTime}.` : "Conditions look mostly dry and clear for your plans today."}
-                </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--accent)] font-bold">☂️</span>
+                  <p>
+                    <strong className="text-white">Rain:</strong> {currentRainChance !== null ? `${currentRainChance}% chance` : "--"} ({dailyPrecipitationSum !== null ? `${dailyPrecipitationSum} mm` : "0 mm"}). {peakRainChance !== null && peakRainChance > 40 ? `Peak rain expected around ${peakRainTime}.` : "Dry weather ahead."}
+                  </p>
+                </div>
 
-                <p className="leading-relaxed">
-                  🌱 <strong className="text-white">Garden &amp; Soil Care:</strong> Soil moisture is around {soilMoisture !== null ? `${(soilMoisture * 100).toFixed(1)}%` : "stable"}. {soilMoisture !== null && soilMoisture < 0.2 ? "The soil is a bit dry—your plants or lawn would love a good watering today." : "Your garden soil has plenty of hydration and looks healthy."}
-                </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--accent)] font-bold">🌱</span>
+                  <p>
+                    <strong className="text-white">Soil Moisture:</strong> {soilMoisture !== null ? `${(soilMoisture * 100).toFixed(1)}%` : "--"}. {soilMoisture !== null && soilMoisture < 0.2 ? "Soil is dry—consider watering your garden." : "Soil moisture is stable."}
+                  </p>
+                </div>
 
-                <p className="leading-relaxed">
-                  ⚡ <strong className="text-white">Solar Power &amp; Battery:</strong> Sunlight intensity is at {directRadiation !== null ? `${directRadiation} W/m²` : "normal levels"}. {cloudCover !== null && cloudCover > 70 ? "With heavier clouds around, your solar panels might charge a little slower than usual." : "Great sunshine conditions for charging up your home solar batteries and inverters."}
-                </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--accent)] font-bold">⚡</span>
+                  <p>
+                    <strong className="text-white">Solar Potential:</strong> {directRadiation !== null ? `${directRadiation} W/m²` : "--"}. {cloudCover !== null && cloudCover > 70 ? "Cloudy skies will slow solar charging." : "Optimal solar panel generation."}
+                  </p>
+                </div>
 
-                <p className="leading-relaxed">
-                  🌬️ <strong className="text-white">Wind &amp; Breeze:</strong> Winds are blowing at {windSpeed !== null ? `${windSpeed} km/h` : "light speeds"} with gusts up to {windGusts !== null ? `${windGusts} km/h` : "normal"}. {windGusts !== null && windGusts > 40 ? "It's quite windy—best to secure outdoor chairs, umbrellas, or bins." : "Calm and pleasant breezes outside with no wind worries."}
-                </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-[var(--accent)] font-bold">🌬️</span>
+                  <p>
+                    <strong className="text-white">Wind:</strong> {windSpeed !== null ? `${windSpeed} km/h` : "--"} (Gusts {windGusts !== null ? `${windGusts} km/h` : "--"}). {windGusts !== null && windGusts > 40 ? "Windy—secure outdoor items." : "Calm breeze."}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Footer Dismiss Button in Theme Color */}
-            <div className="pt-2 flex justify-end border-t border-white/10 shrink-0">
+            <div className="pt-2 flex justify-end border-t border-white/10 shrink-0 relative z-10">
               <button
                 type="button"
                 onClick={() => setIsSummaryOpen(false)}

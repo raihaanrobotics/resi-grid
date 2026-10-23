@@ -10,7 +10,6 @@ interface ReportImpactButtonProps {
   hasUpvoted: boolean;
   onUpvoted: (reportId: string, impactCount: number) => void;
   className?: string;
-  votingClosed?: boolean;
 }
 
 export default function ReportImpactButton({
@@ -19,13 +18,12 @@ export default function ReportImpactButton({
   hasUpvoted,
   onUpvoted,
   className = "",
-  votingClosed = false,
 }: ReportImpactButtonProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const handleUpvote = async () => {
-    if (hasUpvoted || isSubmitting || votingClosed) return;
+    if (hasUpvoted || isSubmitting) return;
     setIsSubmitting(true);
     setErrorMessage("");
 
@@ -50,18 +48,17 @@ export default function ReportImpactButton({
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-white">
-        <Users className="h-3.5 w-3.5 text-teal-300" />
-        {impactCount} {impactCount === 1 ? "Resident Affected" : "Residents Affected"}
-      </span>
       <button
         type="button"
         onClick={handleUpvote}
-        disabled={hasUpvoted || isSubmitting || votingClosed}
-        className="rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-1 text-[10px] font-semibold text-teal-300 transition-colors hover:bg-teal-500/20 disabled:cursor-default disabled:opacity-70"
-        aria-label={hasUpvoted ? "Your impact is counted" : votingClosed ? "Voting is closed" : "Confirm you are affected"}
+        disabled={hasUpvoted || isSubmitting}
+        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-semibold text-white transition-colors hover:bg-white/10 disabled:cursor-default disabled:hover:bg-white/5"
+        aria-label={hasUpvoted ? "Your impact is counted" : "Confirm you are affected"}
       >
-        {isSubmitting ? "Saving..." : "+1 Affected"}
+        <Users className="h-3 w-3 text-white" />
+        {isSubmitting
+          ? "Saving..."
+          : `${impactCount} ${impactCount === 1 ? "Resident Affected" : "Residents Affected"}`}
       </button>
       {errorMessage && (
         <span role="alert" className="basis-full text-[10px] text-rose-300">{errorMessage}</span>

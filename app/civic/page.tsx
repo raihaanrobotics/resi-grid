@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Send,
   Zap,
-  Edit3,
   User,
   Phone,
   Building,
@@ -200,8 +199,8 @@ export default function CivicAIPage() {
 
   // Location & Address States
   const [streetAddress, setStreetAddress] = useState<string>("Locating street...");
-  const [useCustomAddress, setUseCustomAddress] = useState<boolean>(false);
-  const [customAddress, setCustomAddress] = useState<string>("");
+  const [streetNumberInput, setStreetNumberInput] = useState<string>("");
+  const [baseGeoAddress, setBaseGeoAddress] = useState<string>("");
   const [isRefreshingGeo, setIsRefreshingGeo] = useState<boolean>(false);
 
   // Full Municipal Real Logging Form State (Detailed Municipality Requirements)
@@ -325,11 +324,6 @@ export default function CivicAIPage() {
       );
       const data = await res.json();
       if (data.address) {
-        const num =
-          data.address.house_number ||
-          data.address.building ||
-          data.address.house_name ||
-          "";
         const road = data.address.road || data.address.pedestrian || "";
         const suburb =
           data.address.suburb ||
@@ -337,13 +331,16 @@ export default function CivicAIPage() {
           data.address.city ||
           "";
 
-        const streetLine = [num, road].filter(Boolean).join(" ");
-        const formatted = [streetLine, suburb].filter(Boolean).join(", ");
-
-        setStreetAddress(formatted || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        const baseFormatted = [road, suburb].filter(Boolean).join(", ");
+        setBaseGeoAddress(baseFormatted || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        
+        const currentNum = streetNumberInput.trim();
+        setStreetAddress(currentNum ? `${currentNum} ${baseFormatted}` : (baseFormatted || `${lat.toFixed(5)}, ${lng.toFixed(5)}`));
       }
     } catch {
-      setStreetAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      const fallback = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      setBaseGeoAddress(fallback);
+      setStreetAddress(streetNumberInput.trim() ? `${streetNumberInput.trim()} ${fallback}` : fallback);
     } finally {
       setIsRefreshingGeo(false);
     }
@@ -354,6 +351,17 @@ export default function CivicAIPage() {
       fetchAddressOnce(location.latitude, location.longitude);
     }
   }, [location?.latitude, location?.longitude]);
+
+  // Handle Street Number Input Change
+  const handleStreetNumberChange = (num: string) => {
+    setStreetNumberInput(num);
+    const cleanNum = num.trim();
+    if (cleanNum) {
+      setStreetAddress(`${cleanNum} ${baseGeoAddress}`);
+    } else {
+      setStreetAddress(baseGeoAddress);
+    }
+  };
 
   // Manual GPS Re-sync Handler
   const handleManualRefreshLocation = (e?: React.SyntheticEvent) => {
@@ -375,22 +383,11 @@ export default function CivicAIPage() {
     setCategory(cat);
   };
 
-  // Address Source Toggle Action
-  const handleToggleAddressSource = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setUseCustomAddress((prev) => !prev);
-  };
-
   // Real Dispatch Webhook & Supabase Submission Handler with Full Municipal Metadata & Personal Info Sanitization for Public/Radar Views
   const handleSubmitReport = async (e?: React.FormEvent, forceNewReport = false) => {
     e?.preventDefault();
     if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim() || !accountNumber.trim()) {
       setErrorMessage("All form fields are compulsory in order to send.");
-      return;
-    }
-    if (useCustomAddress && !customAddress.trim()) {
-      setErrorMessage("Please enter your exact address.");
       return;
     }
 
@@ -410,13 +407,11 @@ export default function CivicAIPage() {
       return;
     }
 
-    const activeAddress = useCustomAddress && customAddress.trim()
-      ? customAddress.trim()
-      : streetAddress !== "Locating street..."
-      ? streetAddress
+    const activeAddress = streetAddress !== "Locating street..." && streetAddress.trim()
+      ? streetAddress.trim()
       : "Current GPS Position";
 
-    if (!forceNewReport && !useCustomAddress && location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
+    if (!forceNewReport && location && Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
       const latitudeDelta = 50 / 111_320;
       const longitudeDelta = 50 / (111_320 * Math.cos((location.latitude * Math.PI) / 180));
       try {
@@ -567,7 +562,7 @@ export default function CivicAIPage() {
 
       setReportTitle("");
       setDescription("");
-      setCustomAddress("");
+      setStreetNumberInput("");
       setNearbyIncident(null);
       setSubmitSuccess(true);
       setTimeout(() => setSubmitSuccess(false), 6000);
@@ -584,7 +579,7 @@ export default function CivicAIPage() {
     setNearbyIncident(null);
     setReportTitle("");
     setDescription("");
-    setCustomAddress("");
+    setStreetNumberInput("");
     setSubmitSuccess(true);
     setErrorMessage(null);
     window.setTimeout(() => setSubmitSuccess(false), 6000);
@@ -666,22 +661,35 @@ export default function CivicAIPage() {
           </div>
         </div>
 
-        {/* SUCCESS NOTIFICATION BANNER WITH RADAR LINK */}
+        {/* SUCCESS CONFIRMATION MODAL POPUP (CENTERED, WHITE) */}
         {submitSuccess && (
-          <div className="p-4 bg-emerald-500/15 border border-emerald-500/30 rounded-2xl text-emerald-200 text-xs sm:text-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn relative z-20 w-full shadow-lg">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
-              <div>
-                <strong className="block text-xs uppercase tracking-wider font-bold text-white">Dispatched Successfully!</strong>
-                <span>Your incident report has been dispatched and logged into the municipal queue.</span>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+            <div className="glass-panel w-full max-w-md rounded-3xl border border-white/20 bg-black/90 p-6 text-center shadow-2xl space-y-5 animate-fadeIn">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                <CheckCircle2 className="h-8 w-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white tracking-wide">Dispatched Successfully</h3>
+                <p className="text-xs text-muted leading-relaxed">
+                  Your incident report has been dispatched and logged into the municipal queue.
+                </p>
+              </div>
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/radar"
+                  className="flex-1 py-3 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:bg-emerald-400 transition-colors shadow-md text-center flex items-center justify-center"
+                >
+                  View in Radar →
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setSubmitSuccess(false)}
+                  className="flex-1 py-3 rounded-xl border border-white/20 bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-colors"
+                >
+                  Dismiss
+                </button>
               </div>
             </div>
-            <Link
-              href="/radar"
-              className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-bold text-xs shrink-0 hover:bg-emerald-400 transition-colors shadow-md"
-            >
-              View in Radar →
-            </Link>
           </div>
         )}
 
@@ -912,39 +920,32 @@ export default function CivicAIPage() {
             </div>
           </div>
 
-          {/* Location Source Tile */}
-          <div className="glass-panel p-4 sm:p-6 space-y-2.5 w-full">
+          {/* Location Source Tile (Auto GPS + Street Number) */}
+          <div className="glass-panel p-4 sm:p-6 space-y-3 w-full">
             <div className="panel-reflection pointer-events-none" />
             
             <div className="flex items-center justify-between">
-              <label className="text-[11px] sm:text-xs font-medium text-muted block">Location *</label>
-              <button
-                type="button"
-                onClick={handleToggleAddressSource}
-                onTouchEnd={handleToggleAddressSource}
-                className="text-[9px] sm:text-[10px] hover:opacity-80 flex items-center gap-1 font-medium transition-colors cursor-pointer touch-manipulation pointer-events-auto"
-                style={{ color: "var(--accent)" }}
-              >
-                {useCustomAddress ? <MapPin className="h-3 w-3 shrink-0 pointer-events-none" /> : <Edit3 className="h-3 w-3 shrink-0 pointer-events-none" />}
-                <span className="pointer-events-none">{useCustomAddress ? "Use Auto GPS" : "Enter exact address"}</span>
-              </button>
+              <label className="text-[11px] sm:text-xs font-medium text-muted block">Location (Auto GPS) *</label>
             </div>
 
-            {useCustomAddress ? (
-              <input
-                type="text"
-                required
-                value={customAddress}
-                onChange={(e) => setCustomAddress(e.target.value)}
-                placeholder="e.g. 142 Chief Albert Luthuli St, Scottsville..."
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
-              />
-            ) : (
-              <div className="flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] text-muted block mb-1">Street Number / Unit *</label>
+                <input
+                  type="text"
+                  required
+                  value={streetNumberInput}
+                  onChange={(e) => handleStreetNumberChange(e.target.value)}
+                  placeholder="e.g. 142 or Apt 4B"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-white/35 transition-colors pointer-events-auto"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex items-center justify-between p-2.5 bg-black/30 border border-white/5 rounded-xl self-end">
                 <div className="flex items-center gap-2.5 overflow-hidden">
                   <MapPin className="h-4 w-4 shrink-0" style={{ color: "var(--accent)" }} />
                   <div className="text-xs overflow-hidden text-ellipsis whitespace-nowrap">
-                    <span className="block text-[9px] uppercase font-mono" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>Auto GPS Address:</span>
+                    <span className="block text-[9px] uppercase font-mono" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>Full Auto Address:</span>
                     <span className="text-white font-medium">{streetAddress}</span>
                   </div>
                 </div>
@@ -959,7 +960,7 @@ export default function CivicAIPage() {
                   <RefreshCw className={`h-4 w-4 ${isRefreshingGeo ? "animate-spin" : ""}`} />
                 </button>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Action Submit Button */}

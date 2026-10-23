@@ -48,14 +48,14 @@ interface HomeReport {
 const modules = [
   {
     title: "Water & Supply",
-    description: "Check water flow & shared supply",
+    description: "Check water flow, calculate water bill, outage alerts & water sharing",
     href: "/hydromesh",
     icon: Droplets,
     color: "water",
   },
   {
     title: "Power & Energy",
-    description: "Monitor grid status, outage alerts, and backup power",
+    description: "Monitor grid status, calculate bill, outage alerts & power sharing",
     href: "/voltshield",
     icon: Zap,
     color: "energy",
@@ -267,7 +267,7 @@ export default function HomePage() {
       timeOfDayGreeting = "Good evening";
     }
 
-    let savedName = "Raihaan";
+    let savedName = "User";
     try {
       const loadProfileName = (rawProfile: string | null) => {
         if (!rawProfile) return null;
@@ -283,9 +283,9 @@ export default function HomePage() {
         loadProfileName(localStorage.getItem("resigrid_civic_profile")) ||
         loadProfileName(localStorage.getItem("resigrid_user_profile")) ||
         localStorage.getItem("resigrid-user-name")?.trim().split(/\s+/)[0] ||
-        "Raihaan";
+        "User";
     } catch {
-      savedName = "Raihaan";
+      savedName = "User";
     }
 
     setGreetingPrefix(timeOfDayGreeting);

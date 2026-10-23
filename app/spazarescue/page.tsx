@@ -390,8 +390,10 @@ export default function SpazaRescuePage() {
     }
   };
 
-  const handleContactWhatsApp = (targetPhone: string, storeName: string) => {
-    const message = `Hello, I am contacting via SpazaRescue regarding food stock & clearance at "${storeName}". Is this available?`;
+  const handleContactWhatsApp = (targetPhone: string, titleName: string, isStore: boolean, clearanceAlert?: string) => {
+    const message = isStore
+      ? `Hello, I found your spaza store "${titleName}" on FoodRescue. Are your food essentials and spoilage clearance deals (${clearanceAlert || "daily stock"}) currently available?`
+      : `Hello, I found your food aid or pantry listing "${titleName}" on FoodRescue. Could you please share more information on how residents can access assistance?`;
     openWhatsApp(targetPhone, message);
   };
 
@@ -633,7 +635,7 @@ export default function SpazaRescuePage() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleContactWhatsApp(store.contactPhone, store.shopName)}
+                        onClick={() => handleContactWhatsApp(store.contactPhone, store.shopName, true, store.spoilageClearanceAlert)}
                         className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                       >
                         <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>WhatsApp Store</span>
@@ -718,7 +720,7 @@ export default function SpazaRescuePage() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleContactWhatsApp(aid.contactPhone, aid.title)}
+                        onClick={() => handleContactWhatsApp(aid.contactPhone, aid.title, aid.aidType === "Spaza Store", aid.spoilageClearanceAlert)}
                         className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
                       >
                         <MessageCircle className="w-3.5 h-3.5 shrink-0" style={{ color: accentColor }} /> <span>WhatsApp</span>

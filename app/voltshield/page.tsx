@@ -326,7 +326,7 @@ export default function VoltShieldPage() {
             charging: isCharging,
             level: Math.round(info.batteryLevel * 100),
             supported: true,
-            voltageMv: isCharging ? 4350 : 3820,
+            voltageMv: isCharging ? 230 : 215,
             currentMa: isCharging ? 1250 : -340,
             gridStability: isCharging ? "Nominal (230V)" : "Unstable / Outage Risk",
           });
@@ -401,7 +401,7 @@ export default function VoltShieldPage() {
       const level = typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : 78;
 
       // Simulate robust voltage / current shunt sensing metrics based on hardware charging state
-      const simulatedVoltage = 232 + Math.floor(Math.random() * 4);
+      const simulatedVoltage = 230 + Math.floor(Math.random() * 3);
       const simulatedCurrent = 1420 + Math.floor(Math.random() * 180);
       const stability = "Stable AC Grid";
 
@@ -785,7 +785,7 @@ export default function VoltShieldPage() {
                   <Activity className="w-3 h-3" style={{ color: "var(--accent)" }} /> Grid Voltage
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-white">
-                  {batteryInfo.voltageMv !== null ? `${batteryInfo.voltageMv}V AC` : "Not tested"}
+                  {scanPhase === "complete" && batteryInfo.voltageMv !== null ? `${batteryInfo.voltageMv}V AC` : "Not tested"}
                 </p>
               </div>
 
@@ -794,7 +794,7 @@ export default function VoltShieldPage() {
                   <ShieldCheck className="w-3 h-3" style={{ color: "var(--accent)" }} /> Outage Risk
                 </div>
                 <p className="text-xs sm:text-sm font-semibold text-white">
-                  {outageRiskLabel}
+                  {scanPhase === "complete" ? outageRiskLabel : "Nominal"}
                 </p>
               </div>
 
@@ -1037,32 +1037,18 @@ export default function VoltShieldPage() {
                         </span>
                       </div>
 
-                      <div className="pt-1 flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5 bg-white text-black px-2.5 py-0.5 rounded-full text-[10px] font-semibold shadow-sm">
-                          <Users className="w-3 h-3 text-neutral-800" />
-                          <span>{report.impactCount} {report.impactCount === 1 ? "resident" : "residents"} affected</span>
-                        </div>
-                        {!upvotedReportIds.has(report.id) && normalizedStatus !== "Resolved" && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const newCount = report.impactCount + 1;
-                              markUpvoted(report.id);
-                              setPowerReports((previous) => previous.map((item) =>
-                                item.id === report.id ? { ...item, impactCount: newCount } : item
-                              ));
-                            }}
-                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer border"
-                            style={{
-                              borderColor: "color-mix(in srgb, var(--accent) 40%, transparent)",
-                              backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)",
-                              color: "var(--accent)",
-                            }}
-                          >
-                            Also Affected
-                          </button>
-                        )}
+                      <div className="pt-1">
+                        <ReportImpactButton
+                          reportId={report.id}
+                          impactCount={report.impactCount}
+                          hasUpvoted={upvotedReportIds.has(report.id)}
+                          onUpvoted={(reportId, impactCount) => {
+                            markUpvoted(reportId);
+                            setPowerReports((previous) => previous.map((item) =>
+                              item.id === reportId ? { ...item, impactCount } : item
+                            ));
+                          }}
+                        />
                       </div>
                     </div>
                   );

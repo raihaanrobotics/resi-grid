@@ -17,7 +17,6 @@ import {
   Clock,
   Truck,
   PhoneCall,
-  Users,
 } from "lucide-react";
 import { useGeo } from "@/context/GeoContext";
 import { animateRefreshIcon } from "@/lib/location/animateRefreshIcon";
@@ -25,6 +24,7 @@ import { supabase } from "@/lib/supabase";
 import { formatReportTimestamp, getReportDisplayId, hasEstimatedFixTime, mergeNearbyActiveReports, normalizeReportStatus } from "@/lib/reportUtils";
 import { readOfflineData, writeOfflineData } from "@/lib/offline/dataCache";
 import { useReportUpvotes } from "@/lib/useReportUpvotes";
+import ReportImpactButton from "@/components/shared/ReportImpactButton";
 
 interface IncidentMarker {
   id: string;
@@ -681,28 +681,13 @@ export default function RadarPage() {
                           </p>
                         </div>
 
-                        <div className="pt-1 flex items-center justify-between gap-2 text-xs">
-                          <div className="flex items-center gap-1.5 bg-white text-black px-2.5 py-0.5 rounded-full text-[10px] font-semibold shadow-sm">
-                            <Users className="w-3 h-3 text-neutral-800" />
-                            <span>{incident.impactCount} {incident.impactCount === 1 ? "resident" : "residents"} affected</span>
-                          </div>
-                          {!upvotedReportIds.has(incident.id) && normalizedStatus !== "Resolved" && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleIncidentUpvoted(incident.id, incident.impactCount + 1);
-                              }}
-                              className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer border"
-                              style={{
-                                borderColor: `color-mix(in srgb, ${accentColor} 40%, transparent)`,
-                                backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)`,
-                                color: accentColor,
-                              }}
-                            >
-                              Also Affected
-                            </button>
-                          )}
+                        <div className="pt-1">
+                          <ReportImpactButton
+                            reportId={incident.id}
+                            impactCount={incident.impactCount}
+                            hasUpvoted={upvotedReportIds.has(incident.id)}
+                            onUpvoted={handleIncidentUpvoted}
+                          />
                         </div>
 
                         {matchingTanker && (
@@ -713,10 +698,10 @@ export default function RadarPage() {
                                 e.stopPropagation();
                                 setSelectedTankerModal(matchingTanker);
                               }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+                              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
                             >
                               <Truck className="h-3.5 w-3.5" />
-                              <span>Water Tanker View Details</span>
+                              <span>Water Tanker | View Details</span>
                             </button>
                           </div>
                         )}
@@ -762,7 +747,6 @@ export default function RadarPage() {
                 </div>
               </div>
 
-data-id="exact-location"
               <div>
                 <span className="text-muted block text-[9px] uppercase tracking-wider">Exact Location / Landmark</span>
                 <p className="text-white font-medium mt-0.5 flex items-center gap-1 bg-black/30 p-2 rounded-xl border border-white/5">

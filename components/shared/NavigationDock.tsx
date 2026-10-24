@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   Home, 
   Radio, 
@@ -56,7 +56,27 @@ const subFeaturesGroup3 = [
 
 export default function NavigationDock() {
   const pathname = usePathname();
+  const router = useRouter();
   const isFeatureActive = featureRoutes.some((route) => pathname.startsWith(route));
+
+  const [isJudgeMode, setIsJudgeMode] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkJudge = () => {
+      const active = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
+      setIsJudgeMode(active);
+    };
+    checkJudge();
+    window.addEventListener("storage", checkJudge);
+    const interval = setInterval(checkJudge, 1000);
+    return () => {
+      window.removeEventListener("storage", checkJudge);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const isJudgeHub = pathname.startsWith("/judge");
+
   const isMunicipalContext = pathname.startsWith("/dashboard") || pathname.startsWith("/profile2");
   const isCrewContext = pathname.startsWith("/crew") || pathname.startsWith("/profile3");
 
@@ -79,6 +99,11 @@ export default function NavigationDock() {
     }
   }, [pathname, isFeatureActive]);
 
+  // Hide dock completely when on the judge hub page
+  if (isJudgeHub) {
+    return null;
+  }
+
   const dockView = isMunicipalContext || isCrewContext
     ? "staff"
     : showSubDock
@@ -87,6 +112,13 @@ export default function NavigationDock() {
 
   const handleReturnToMain = () => {
     setShowSubDock(false);
+  };
+
+  const handleProfileNavigation = (e: React.MouseEvent, fallbackHref: string) => {
+    if (isJudgeMode) {
+      e.preventDefault();
+      router.push(fallbackHref);
+    }
   };
 
   return (
@@ -103,6 +135,7 @@ export default function NavigationDock() {
             </Link>
             <Link
               href={isMunicipalContext ? "/profile2" : "/profile3"}
+              onClick={(e) => handleProfileNavigation(e, isMunicipalContext ? "/profile2" : "/profile3")}
               className={`dock-item shrink-0 px-3.5 py-1 text-[11px] sm:text-xs flex items-center gap-1.5 ${(isMunicipalContext && pathname === "/profile2") || (isCrewContext && pathname === "/profile3") ? "dock-active" : ""}`}
             >
               <UserRound className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" strokeWidth={1.8} />
@@ -228,6 +261,7 @@ export default function NavigationDock() {
             } else {
               active = pathname.startsWith(item.href);
             }
+
             return (
               <Link
                 key={item.label}
@@ -237,6 +271,8 @@ export default function NavigationDock() {
                     e.preventDefault();
                     setActiveSubView("sub1");
                     setShowSubDock(true);
+                  } else if (item.label === "Profile") {
+                    handleProfileNavigation(e, item.href);
                   }
                 }}
                 className={`dock-item shrink-0 px-2.5 sm:px-3.5 py-1 text-[10px] sm:text-xs flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1.5 ${active ? "dock-active" : ""}`}

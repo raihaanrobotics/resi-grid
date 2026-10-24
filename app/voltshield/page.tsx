@@ -203,7 +203,7 @@ export default function VoltShieldPage() {
 
   const [lastCheckTimestamp, setLastCheckTimestamp] = useState<string>("Not tested yet");
 
-  // Live device battery and charging state from Capacitor Device & simulated hardware telemetry
+  // Live device battery and charging state from Capacitor Device & simulated hardware telemetry / ESP32 fallback
   const [batteryInfo, setBatteryInfo] = useState<{
     charging: boolean | null;
     level: number | null;
@@ -221,9 +221,63 @@ export default function VoltShieldPage() {
 
   const deduplicatedPowerReports = mergeNearbyActiveReports(nearbyReports);
 
-  // Fetch reports and power nodes directly from Supabase with localStorage fallback and BroadcastChannel sync
+  // Helper function to dispatch active home page alerts to localStorage so the home dashboard banner updates instantly
+  const triggerHomeNotification = (title: string, message: string, type: "warning" | "success" | "critical") => {
+    try {
+      const existingAlerts = JSON.parse(localStorage.getItem("resigrid_home_alerts") || "[]");
+      const newAlert = {
+        id: `ALT-${Date.now()}`,
+        title,
+        message,
+        type,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      const updated = [newAlert, ...existingAlerts].slice(0, 5); // Keep last 5 alerts
+      localStorage.setItem("resigrid_home_alerts", JSON.stringify(updated));
+
+      // Dispatch custom event for real-time listener synchronization across tabs/components
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("resigrid_new_alert", { detail: newAlert }));
+      }
+    } catch (err) {
+      console.error("Failed to push home notification alert:", err);
+    }
+  };
+
+  // Fetch reports, power nodes, and ESP32 hardware telemetry from Supabase with localStorage fallback and BroadcastChannel sync
   const loadSupabaseData = useCallback(async () => {
     try {
+      // Fetch latest hardware telemetry from Supabase ESP32 telemetry table if available
+      const { data: espData, error: espError } = await supabase
+        .from("esp_telemetry")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (!espError && espData && espData.length > 0) {
+        const latest = espData[0];
+        const isSag = latest.voltage < 200;
+        
+        setBatteryInfo({
+          charging: latest.status === "GRID_ONLINE" || latest.voltage >= 220,
+          level: latest.battery_level ?? 85,
+          supported: true,
+          voltageMv: latest.voltage ?? 230,
+          currentMa: latest.current ?? 1450,
+          gridStability: isSag ? "Unstable / Outage Risk" : "Stable AC Grid (ESP32 Live)",
+        });
+        setLastCheckTimestamp(new Date(latest.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+
+        // Trigger home page notification if a voltage sag or outage is detected from the ESP32 node
+        if (isSag) {
+          triggerHomeNotification(
+            "Voltage Sag Detected!",
+            `ESP32 sensor reports low voltage (${latest.voltage}V). Outage risk is critical in your sector.`,
+            "critical"
+          );
+        }
+      }
+
       // Fetch power reports from Supabase
       const { data: reportsData, error: reportsError } = await supabase
         .from("reports")
@@ -315,6 +369,9 @@ export default function VoltShieldPage() {
 
     const fetchDeviceBattery = async () => {
       try {
+        // If ESP32 telemetry is active, skip local device fallback to prioritize IoT sensor feed
+        if (batteryInfo.gridStability.includes("ESP32")) return;
+
         const info = await Device.getBatteryInfo();
         if (
           typeof info.batteryLevel === "number" &&
@@ -369,21 +426,12 @@ export default function VoltShieldPage() {
       if (broadcastChannel) broadcastChannel.close();
       window.removeEventListener("storage", handleStorageChange);
     };
-  }, [loadSupabaseData]);
+  }, [loadSupabaseData, batteryInfo.gridStability]);
 
   // Real Hardware & Shunt Scan with Smooth Animated Telemetry Progression
   const startShuntScan = async () => {
     setErrorMessage(null);
     try {
-      const info = await Device.getBatteryInfo();
-      const isCharging = typeof info.isCharging === "boolean" ? info.isCharging : true;
-      
-      if (!isCharging) {
-        setScanPhase("error");
-        setErrorMessage("Please plug in your device to run the power charging and voltage test.");
-        return;
-      }
-
       setIsScanning(true);
       setScanPhase("analyzing");
       setScanProgress(0);
@@ -398,12 +446,37 @@ export default function VoltShieldPage() {
         }
       }, intervalTime);
 
-      const level = typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : 78;
+      // Attempt to pull latest ESP32 telemetry or fallback to device battery info
+      const { data: espData } = await supabase
+        .from("esp_telemetry")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      // Simulate robust voltage / current shunt sensing metrics based on hardware charging state
-      const simulatedVoltage = 230 + Math.floor(Math.random() * 3);
-      const simulatedCurrent = 1420 + Math.floor(Math.random() * 180);
-      const stability = "Stable AC Grid";
+      let simulatedVoltage = 230 + Math.floor(Math.random() * 3);
+      let simulatedCurrent = 1420 + Math.floor(Math.random() * 180);
+      let stability = "Stable AC Grid";
+      let level = 82;
+      let isCharging = true;
+
+      if (espData && espData.length > 0) {
+        simulatedVoltage = espData[0].voltage;
+        simulatedCurrent = espData[0].current;
+        level = espData[0].battery_level ?? 85;
+        isCharging = espData[0].status === "GRID_ONLINE";
+        stability = "ESP32 Hardware Telemetry Online";
+      } else {
+        const info = await Device.getBatteryInfo();
+        isCharging = typeof info.isCharging === "boolean" ? info.isCharging : true;
+        level = typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : 78;
+        
+        // Simulate a voltage sag condition if device is not charging for demo testing
+        if (!isCharging) {
+          simulatedVoltage = 185;
+          simulatedCurrent = -450;
+          stability = "Unstable / Voltage Sag";
+        }
+      }
 
       await new Promise((resolve) => setTimeout(resolve, 2200));
       clearInterval(progressTimer);
@@ -420,10 +493,25 @@ export default function VoltShieldPage() {
       setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
       setScanPhase("complete");
       setIsScanning(false);
+
+      // Push home notification alert if voltage sag is detected during manual scan
+      if (simulatedVoltage < 200 || !isCharging) {
+        triggerHomeNotification(
+          "Critical Grid Voltage Sag",
+          `Manual shunt test detected ${simulatedVoltage}V AC. Potential blackout risk in your area.`,
+          "warning"
+        );
+      } else {
+        triggerHomeNotification(
+          "Grid Voltage Normal",
+          `Manual shunt test confirmed stable ${simulatedVoltage}V AC grid power.`,
+          "success"
+        );
+      }
     } catch (error) {
       console.error("Hardware shunt telemetry error:", error);
       setScanPhase("error");
-      setErrorMessage("Please plug in your device to run the power charging and voltage test.");
+      setErrorMessage("Could not read shunt sensor. Ensure ESP32 node or device connection is active.");
       setIsScanning(false);
     }
   };
@@ -665,12 +753,12 @@ export default function VoltShieldPage() {
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>POWER SAG DETECTOR</p>
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>ESP32 HARDWARE TELEMETRY</p>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
                       Test Grid Voltage &amp; Outage Risk
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Tap the power button below to test for real-time voltage sags and surge indicators.
+                      Tap the power button below to sync with real-time ESP32 node voltage sags and surge telemetry.
                     </p>
                   </div>
                 </div>
@@ -696,7 +784,7 @@ export default function VoltShieldPage() {
                       >
                         <Power className="h-7 w-7" />
                       </button>
-                      <p className="text-xs sm:text-sm font-semibold text-white">Tap Button to Test</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Tap Button to Test ESP32 Node</p>
                       <p className="mt-1 text-[11px]" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>
                         Hardware power telemetry
                       </p>
@@ -726,7 +814,7 @@ export default function VoltShieldPage() {
                       <div className="flex items-center justify-center gap-2">
                         <Activity className="h-4 w-4 animate-pulse shrink-0" style={{ color: "var(--accent)" }} />
                         <p className="text-xs font-semibold truncate" style={{ color: "var(--accent)" }}>
-                          Sampling grid voltage &amp; surges ({scanProgress}%)
+                          Sampling ESP32 node voltage &amp; surges ({scanProgress}%)
                         </p>
                       </div>
                     </div>
@@ -755,7 +843,7 @@ export default function VoltShieldPage() {
                         {batteryInfo.voltageMv}V AC Shunt — {batteryInfo.gridStability}
                       </h3>
                       <p className="mt-1 text-[11px] text-muted max-w-sm mx-auto">
-                        Telemetry recorded successfully. Tap button above to test again.
+                        Telemetry recorded successfully. Notification sent to home page. Tap button above to test again.
                       </p>
                     </div>
                   )}

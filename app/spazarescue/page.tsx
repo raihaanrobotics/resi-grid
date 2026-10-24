@@ -392,8 +392,8 @@ export default function SpazaRescuePage() {
 
   const handleContactWhatsApp = (targetPhone: string, titleName: string, isStore: boolean, clearanceAlert?: string) => {
     const message = isStore
-      ? `Hello, I found your spaza store "${titleName}" on FoodRescue. Are your food essentials and spoilage clearance deals (${clearanceAlert || "daily stock"}) currently available?`
-      : `Hello, I found your food aid or pantry listing "${titleName}" on FoodRescue. Could you please share more information on how residents can access assistance?`;
+      ? `Hello, I found your store "${titleName}" on FoodRescue. Are your food essentials and spoilage clearance deals (${clearanceAlert || "daily stock"}) currently available?`
+      : `Hello, I found your food aid listing "${titleName}" on FoodRescue. Could you please share more information on how residents can access assistance?`;
     openWhatsApp(targetPhone, message);
   };
 

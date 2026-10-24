@@ -223,6 +223,30 @@ export default function MunicipalProfilePage() {
   useEffect(() => {
     async function checkSession() {
       try {
+        // JUDGE MODE BYPASS
+        const isJudge = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
+        if (isJudge) {
+          setIsAuthenticated(true);
+          setAuthLoading(false);
+
+          const localProfile = localStorage.getItem("resigrid_civic_profile");
+          if (localProfile) {
+            try {
+              const parsed = JSON.parse(localProfile);
+              setFullName(parsed.fullName || "Admin Dispatcher (Msunduzi)");
+              setEmail(parsed.email || "dispatch.control@msunduzi.gov.za");
+              setPhone(parsed.phone || "+27 33 392 2000");
+              setSelectedProvince(parsed.selectedProvince || "KwaZulu-Natal");
+              setSelectedCity(parsed.selectedCity || "Pietermaritzburg (Msunduzi)");
+              setSelectedWard(parsed.selectedWard || "Ward 22: Pietermaritzburg Central Business District (CBD Central)");
+              setStreetAddress(parsed.streetAddress || "Msunduzi Civic Centre, City Hall");
+            } catch (e) {
+              console.error("Error parsing judge profile:", e);
+            }
+          }
+          return;
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user) {
           const role = session.user.user_metadata?.role || "resident";
@@ -414,20 +438,26 @@ export default function MunicipalProfilePage() {
     };
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
-        await supabase.auth.updateUser({
-          data: {
-            full_name: fullName,
-            phone,
-            province: selectedProvince,
-            city: selectedCity,
-            ward: selectedWard,
-            street_address: streetAddress,
-            role: "municipal",
-          }
-        });
+      const isJudge = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
+      if (isJudge) {
+        localStorage.setItem("resigrid_civic_profile", JSON.stringify(profileData));
+        localStorage.setItem("resigrid_profile_JUDGE_MASTER", JSON.stringify(profileData));
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
+          await supabase.auth.updateUser({
+            data: {
+              full_name: fullName,
+              phone,
+              province: selectedProvince,
+              city: selectedCity,
+              ward: selectedWard,
+              street_address: streetAddress,
+              role: "municipal",
+            }
+          });
+        }
       }
     } catch (err) {
       console.error("Error saving user profile metadata to Supabase:", err);

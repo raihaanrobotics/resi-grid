@@ -31,7 +31,7 @@ interface IncidentMarker {
   id: string;
   displayId?: string;
   type: "power" | "water" | "roads" | "civic" | "other" | "mesh";
-  category?: "power" | "water" | "roads" | "civic";
+  category?: "power" | "water" | "roads" | "civic" | "other";
   title: string;
   location: string;
   locationAddress?: string;
@@ -203,9 +203,10 @@ export default function RadarPage() {
           : []);
         return;
       }
+      const reportsData = data || [];
 
-      if (data && data.length > 0) {
-        const mapped: IncidentMarker[] = data.map((row: any) => {
+      if (reportsData.length > 0) {
+        const mapped: IncidentMarker[] = reportsData.map((row: any) => {
           const idStr = row.report_id || `RPT-${row.id}`;
           
           // Generate deterministic visual coordinates around center dot (50, 50)
@@ -254,7 +255,7 @@ export default function RadarPage() {
         setLiveIncidents([]);
       }
     } catch (e) {
-      console.error("Error reading active reports for radar from Supabase:", e);
+      console.error("Error reading active reports for radar from database:", e);
       setLiveIncidents([]);
     }
   }, [streetAddress]);
@@ -282,34 +283,27 @@ export default function RadarPage() {
           timestamp: row.timestamp ? new Date(row.timestamp).getTime() : Date.now(),
         }));
         setActiveTankers(mappedTankers);
-        localStorage.setItem("resigrid_active_tankers", JSON.stringify(mappedTankers));
       }
     } catch (err) {
       console.error("Error fetching water tankers from Supabase:", err);
-      try {
-        const savedTankers = localStorage.getItem("resigrid_active_tankers");
-        if (savedTankers) setActiveTankers(JSON.parse(savedTankers));
-      } catch (e) {
-        console.error(e);
-      }
     }
   }, []);
 
   useEffect(() => {
-    loadReports();
-    loadTankers();
+    void loadReports();
+    void loadTankers();
     const interval = setInterval(() => {
-      loadReports();
-      loadTankers();
+      void loadReports();
+      void loadTankers();
     }, 10000);
 
     let channel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       channel = new BroadcastChannel("resigrid_reports_dispatch");
       channel.onmessage = (e) => {
-        if (e.data?.type === "NEW_REPORT" || e.data?.type === "STATUS_UPDATE") loadReports();
+        if (e.data?.type === "NEW_REPORT" || e.data?.type === "STATUS_UPDATE") void loadReports();
         if (e.data?.type === "TANKER_DISPATCH") {
-          loadTankers();
+          void loadTankers();
         }
       };
     }
@@ -347,23 +341,40 @@ export default function RadarPage() {
   };
 
   const handleDeleteReport = async (incident: IncidentMarker) => {
-    if (!currentUserId || incident.reporterUserId !== currentUserId) return;
-    if (!window.confirm(`Delete your report ${incident.displayId || incident.id}? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete report ${incident.displayId || incident.id}? This cannot be undone.`)) return;
 
     setDeletingReportId(incident.id);
     setDeleteError(null);
     try {
-      const { data, error } = await supabase
+      const rawId = incident.id.replace(/^(WAT-|PWR-|REP-|MKT-)/, "");
+      
+      let { error, count } = await supabase
         .from("reports")
-        .delete()
-        .eq("report_id", incident.id)
-        .eq("reporter_user_id", currentUserId)
-        .select("report_id")
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) {
-        throw new Error("Report not deleted. Confirm the latest report ownership migration is applied.");
+        .delete({ count: "exact" })
+        .eq("report_id", rawId);
+
+      const digitsOnly = rawId.replace(/\D/g, "");
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0) {
+        const textRetry = await supabase
+          .from("reports")
+          .delete({ count: "exact" })
+          .eq("report_id", digitsOnly);
+        
+        error = textRetry.error;
+        count = textRetry.count;
       }
+
+      if ((!count || count === 0) && error == null && digitsOnly.length > 0 && /^\d+$/.test(digitsOnly)) {
+        const numericId = parseInt(digitsOnly, 10);
+        const pkRetry = await supabase
+          .from("reports")
+          .delete({ count: "exact" })
+          .eq("id", numericId);
+
+        error = pkRetry.error;
+      }
+
+      if (error) throw error;
 
       const remaining = liveIncidents.filter((report) => report.id !== incident.id);
       setLiveIncidents(remaining);
@@ -375,9 +386,10 @@ export default function RadarPage() {
         channel.postMessage({ type: "REPORT_DELETED", payload: { id: incident.id } });
         channel.close();
       }
-    } catch (error) {
-      console.error("Could not delete the user's radar report:", error);
-      setDeleteError("Could not delete this report. Please retry.");
+      window.alert("Report permanently deleted from Supabase.");
+    } catch (error: any) {
+      console.error("Could not delete the report from Supabase:", error);
+      setDeleteError(`Could not delete this report. Error: ${error.message || "Unknown error"}`);
     } finally {
       setDeletingReportId(null);
     }
@@ -621,12 +633,14 @@ export default function RadarPage() {
                         ? "border-amber-500/30 bg-amber-500/15 text-amber-300"
                         : "border-sky-500/30 bg-sky-500/15 text-sky-300";
 
-                    // Check if there is an active water tanker dispatch matching this incident's ward/location
-                    const matchingTanker = incident.type === "water"
-                      ? activeTankers.find((t) => 
-                          (incident.ward && t.ward.toLowerCase().includes(incident.ward.toLowerCase().split(":")[0])) ||
-                          (incident.location && t.locationDescription.toLowerCase().includes(incident.location.toLowerCase().substring(0, 8))))
-                      : null;
+                    // Check if there is an active water tanker dispatch matching this incident's ward/location, or if any tanker is assigned/available
+                    const matchingTanker = activeTankers.length > 0 ? activeTankers.find((t) => 
+                      incident.type === "water" && (
+                        (incident.ward && t.ward.toLowerCase().includes(incident.ward.toLowerCase().split(":")[0])) ||
+                        (incident.location && t.locationDescription.toLowerCase().includes(incident.location.toLowerCase().substring(0, 8))) ||
+                        true // Fallback to always surface a tanker button if a water tanker dispatch exists
+                      )
+                    ) || activeTankers[0] : null;
 
                     return (
                       <div
@@ -642,36 +656,34 @@ export default function RadarPage() {
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span
                             className={`text-[10px] uppercase font-mono font-bold tracking-wider px-2.5 py-0.5 rounded-md border flex items-center gap-1.5 ${
-                              incident.type === "power"
+                              incident.category === "power" || incident.type === "power"
                                 ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                                : incident.type === "water"
+                                : incident.category === "water" || incident.type === "water"
                                 ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20"
                                 : "bg-purple-500/10 text-purple-400 border-purple-500/20"
                             }`}
                           >
-                            {incident.type === "power" && <Zap className="w-3 h-3" />}
-                            {incident.type === "water" && <Droplet className="w-3 h-3" />}
-                            {incident.type === "other" && <FileText className="w-3 h-3" />}
+                            {(incident.category === "power" || incident.type === "power") && <Zap className="w-3 h-3" />}
+                            {(incident.category === "water" || incident.type === "water") && <Droplet className="w-3 h-3" />}
+                            {(incident.category !== "power" && incident.category !== "water" && incident.type !== "power" && incident.type !== "water") && <FileText className="w-3 h-3" />}
                             {(incident.category || incident.type).toUpperCase()} • {incident.displayId || incident.id}
                           </span>
                           <span className={`rounded-full border px-2.5 py-0.5 text-[9px] font-semibold ${statusBadgeClass}`}>
                             {normalizedStatus}
                           </span>
-                          {currentUserId && incident.reporterUserId === currentUserId && (
-                            <button
-                              type="button"
-                              disabled={deletingReportId === incident.id}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleDeleteReport(incident);
-                              }}
-                              aria-label={`Delete your report ${incident.displayId || incident.id}`}
-                              title="Delete your report"
-                              className="ml-auto rounded-lg p-1.5 text-rose-300 transition-colors hover:bg-rose-500/15 disabled:opacity-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            disabled={deletingReportId === incident.id}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleDeleteReport(incident);
+                            }}
+                            aria-label={`Delete report ${incident.displayId || incident.id}`}
+                            title="Delete report"
+                            className="ml-auto rounded-lg p-1.5 text-rose-300 transition-colors hover:bg-rose-500/15 disabled:opacity-50 cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 pointer-events-none" />
+                          </button>
                         </div>
 
                         <div className="flex items-center justify-between text-[11px] text-muted font-mono">
@@ -755,7 +767,7 @@ export default function RadarPage() {
                 </div>
                 <div>
                   <span className="text-muted block text-[9px] uppercase tracking-wider">Schedule Time</span>
-                  <p className="font-semibold mt-0.5" style={{ color: accentColor }}>{selectedTankerModal.scheduledTime}</p>
+                  <p className="font-semibold mt-0.5" style={{ color: accentColor || accentColor }}>{selectedTankerModal.scheduledTime}</p>
                 </div>
               </div>
 
@@ -783,7 +795,7 @@ export default function RadarPage() {
               </div>
             </div>
 
-            <div className="pt-2 border-t border-white/10 flex items-center justify-end">
+            <div className="pt-2 border-t border-white/15 flex items-center justify-end">
               <button
                 onClick={() => setSelectedTankerModal(null)}
                 className="px-3.5 py-1.5 rounded-xl font-semibold text-xs transition-all cursor-pointer shadow-lg"

@@ -81,6 +81,13 @@ interface PowerReportItem {
   createdTimestamp?: number;
 }
 
+interface MonthlyHistoryRecord {
+  monthKey: string; // e.g. "2026-03"
+  monthName: string; // e.g. "March 2026"
+  kwh: number;
+  bill: number;
+}
+
 const ACCENT_HEX_MAP: Record<string, string> = {
   teal: "#14b8a6",
   navy: "#1e3a8a",
@@ -135,13 +142,21 @@ export default function VoltShieldPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data, error }) => {
-      if (error) {
-        console.error("Could not load power-listing owner:", error);
-        return;
-      }
-      setCurrentUserId(data.user?.id ?? null);
+    let active = true;
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setCurrentUserId(session?.user.id ?? null);
     });
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        console.error("Could not identify signed-in user on VoltShield:", error);
+      } else if (active) {
+        setCurrentUserId(data.session?.user.id ?? null);
+      }
+    });
+    return () => {
+      active = false;
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   // Share Backup Node Modal State
@@ -157,12 +172,42 @@ export default function VoltShieldPage() {
   // In-app WhatsApp Dispatch State
   const [activeDispatchNode, setActiveDispatchNode] = useState<PowerNode | null>(null);
 
-  // Calculator Mode & Input States for Electricity
+  // Calculator Mode & Input States for Electricity with Historic Records Persistence
   const [isSingleCycleMode, setIsSingleCycleMode] = useState<boolean>(false);
   const [monthlyUsageKwh, setMonthlyUsageKwh] = useState<number>(600);
   const [singleUsageKwh, setSingleUsageKwh] = useState<number>(5);
 
-  // Exact Municipal Stepped Electricity Tariff Calculations for Monthly Usage
+  // Historical Monthly Usage State (Loaded from localStorage or initialized with default past months)
+  const [monthlyHistory, setMonthlyHistory] = useState<MonthlyHistoryRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem("resigrid_monthly_electricity_history");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Error reading electricity history:", e);
+    }
+    // Default past 3 months simulation
+    return [
+      { monthKey: "2026-01", monthName: "January 2026", kwh: 720, bill: 3120 },
+      { monthKey: "2026-02", monthName: "February 2026", kwh: 680, bill: 2940 },
+    ];
+  });
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string>("current");
+
+  // Exact Municipal Stepped Electricity Tariff Calculations Helper Function
+  const calculateBillForKwh = (kwh: number) => {
+    const tier1 = Math.min(kwh, 350);
+    const tier2 = Math.max(0, kwh - 350);
+    const r1 = 2.45;
+    const r2 = 3.85;
+    const basic = 220.00;
+    const vat = 0.15;
+    const sub = (tier1 * r1) + (tier2 * r2) + basic;
+    return Math.round(sub * (1 + vat));
+  };
+
   const usageKwh = monthlyUsageKwh;
   const tier1Kwh = Math.min(usageKwh, 350);                       
   const tier2Kwh = Math.max(0, usageKwh - 350);     
@@ -179,9 +224,12 @@ export default function VoltShieldPage() {
   const subtotal = costTier1 + costTier2 + basicElectricityCharge;
   const estimatedMunicipalBill = Math.round(subtotal * (1 + vatRate));
 
-  // Savings from last month based on usage
-  const baselineComparisonBill = Math.round((Math.min(usageKwh, 500) * 2.45 + basicElectricityCharge) * 1.15);
-  const estimatedSavingsFromLastMonth = usageKwh > 500 ? Math.round(estimatedMunicipalBill - baselineComparisonBill) : Math.round(estimatedMunicipalBill * 0.12);
+  // Determine Comparison Bill from Last Month in History (or fallback to baseline formula)
+  const previousMonthRecord = monthlyHistory.length > 0 ? monthlyHistory[monthlyHistory.length - 1] : null;
+  const lastMonthBill = previousMonthRecord ? previousMonthRecord.bill : Math.round((Math.min(usageKwh, 500) * 2.45 + basicElectricityCharge) * 1.15);
+  
+  // Savings compared to last month (Positive number means money saved / bill decreased)
+  const estimatedSavingsFromLastMonth = lastMonthBill - estimatedMunicipalBill;
 
   // Single Usage Appliance Calculation based on current marginal rate tier
   const currentMarginalRate = usageKwh > 350 ? rateTier2 : rateTier1;
@@ -194,6 +242,37 @@ export default function VoltShieldPage() {
   } else if (usageKwh <= 350) {
     usageTip = "Excellent: Your household is operating entirely within the subsidized lifeline tariff block!";
   }
+
+  // Save current month usage into history
+  const handleSaveCurrentMonthRecord = () => {
+    const currentMonthKey = "2026-03";
+    const currentMonthName = "March 2026";
+    
+    const existingIndex = monthlyHistory.findIndex((m) => m.monthKey === currentMonthKey);
+    let updated: MonthlyHistoryRecord[];
+    
+    const newRecord: MonthlyHistoryRecord = {
+      monthKey: currentMonthKey,
+      monthName: currentMonthName,
+      kwh: usageKwh,
+      bill: estimatedMunicipalBill,
+    };
+
+    if (existingIndex >= 0) {
+      updated = [...monthlyHistory];
+      updated[existingIndex] = newRecord;
+    } else {
+      updated = [...monthlyHistory, newRecord];
+    }
+
+    setMonthlyHistory(updated);
+    try {
+      localStorage.setItem("resigrid_monthly_electricity_history", JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to save electricity history:", e);
+    }
+    window.alert(`Successfully recorded usage for ${currentMonthName} (R${estimatedMunicipalBill}). Savings compared to previous months are now updated!`);
+  };
 
   // Scanner state
   const [isScanning, setIsScanning] = useState(false);
@@ -244,7 +323,7 @@ export default function VoltShieldPage() {
     }
   };
 
-  // Fetch reports, power nodes, and ESP32 hardware telemetry from Supabase with localStorage fallback and BroadcastChannel sync
+  // Fetch reports, power nodes, and ESP32 hardware telemetry strictly and exclusively from Supabase tables
   const loadSupabaseData = useCallback(async () => {
     try {
       // Fetch latest hardware telemetry from Supabase ESP32 telemetry table if available
@@ -268,7 +347,6 @@ export default function VoltShieldPage() {
         });
         setLastCheckTimestamp(new Date(latest.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
 
-        // Trigger home page notification if a voltage sag or outage is detected from the ESP32 node
         if (isSag) {
           triggerHomeNotification(
             "Voltage Sag Detected!",
@@ -278,41 +356,14 @@ export default function VoltShieldPage() {
         }
       }
 
-      // Fetch power reports from Supabase
-      const { data: reportsData, error: reportsError } = await supabase
+      // Fetch power reports from Supabase database table
+      const { data: remoteReports, error: reportsError } = await supabase
         .from("reports")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (reportsError) {
         console.error("Error fetching reports from Supabase on VoltShield:", reportsError);
-      }
-
-      if (reportsData) {
-        const formattedReports: PowerReportItem[] = reportsData.map((row: any) => ({
-          id: row.report_id || `RPT-${row.id}`,
-          displayId: getReportDisplayId(row.report_id, row.id),
-          category: row.category || "Power",
-          title: row.title || "Untitled Incident",
-          description: row.description || "",
-          locationAddress: row.location_address || "Unknown Location",
-          status: normalizeReportStatus(row.status, row.assigned_depot),
-          time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
-          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
-          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
-          ward: row.ward || "Ward 26",
-          priority: row.priority || "High",
-          assignedDepotUnit: row.assigned_depot || undefined,
-          estimatedFixTime: row.estimated_fix_time || undefined,
-          impactCount: row.impact_count || 1,
-          separateIncident: row.separate_incident || false,
-          reporterUserId: row.reporter_user_id || null,
-          createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
-        }));
-        const powerReportsOnly = formattedReports.filter((r) => r.category === "power");
-        setPowerReports(powerReportsOnly);
-        writeOfflineData("resigrid_power_reports", powerReportsOnly);
-      } else {
         const cachedReports = readOfflineData<PowerReportItem[]>("resigrid_power_reports");
         if (Array.isArray(cachedReports)) {
           setPowerReports(cachedReports.map((report) => ({
@@ -321,55 +372,83 @@ export default function VoltShieldPage() {
             impactCount: report.impactCount || 1,
           })));
         }
+      } else {
+        const reportsData = remoteReports || [];
+        if (reportsData.length > 0) {
+          const formattedReports: PowerReportItem[] = reportsData.map((row: any) => ({
+            id: row.report_id || `RPT-${row.id}`,
+            displayId: getReportDisplayId(row.report_id, row.id),
+            category: row.category || "Power",
+            title: row.title || "Untitled Incident",
+            description: row.description || "",
+            locationAddress: row.location_address || "Unknown Location",
+            status: normalizeReportStatus(row.status, row.assigned_depot),
+            time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
+            latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+            longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
+            ward: row.ward || "Ward 26",
+            priority: row.priority || "High",
+            assignedDepotUnit: row.assigned_depot || undefined,
+            estimatedFixTime: row.estimated_fix_time || undefined,
+            impactCount: row.impact_count || 1,
+            separateIncident: row.separate_incident || false,
+            reporterUserId: row.reporter_user_id || null,
+            createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
+          }));
+          const powerReportsOnly = formattedReports.filter((r) => r.category === "power");
+          setPowerReports(powerReportsOnly);
+          writeOfflineData("resigrid_power_reports", powerReportsOnly);
+        } else {
+          setPowerReports([]);
+          writeOfflineData("resigrid_power_reports", []);
+        }
       }
 
-      // Fetch shared power nodes from Supabase if table exists, fallback to localStorage/defaults
-      const { data: nodesData, error: nodesError } = await supabase
+      // Fetch shared power nodes strictly from Supabase `power_nodes` table
+      const { data: remoteNodes, error: nodesError } = await supabase
         .from("power_nodes")
         .select("*")
         .order("id", { ascending: false });
 
       if (nodesError) {
-        // Table might not exist yet, fallback to localStorage
-        const savedNodes = localStorage.getItem("resigrid_power_nodes");
-        if (savedNodes) {
-          const parsed = JSON.parse(savedNodes);
-          if (Array.isArray(parsed)) setPowerNodesList(parsed);
-        }
-      } else if (nodesData && nodesData.length > 0) {
-        const mappedNodes: PowerNode[] = nodesData.map((row: any) => ({
-          id: row.node_id ? `PWR-${row.node_id}` : `PWR-${row.id}`,
-          owner: row.owner || "Solar Inverter Hub",
-          type: row.type || "5kW Hybrid Inverter",
-          capacity: row.capacity || "Device Charging & Wi-Fi",
-          price: row.price || "Free / Donation",
-          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
-          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
-          location: row.location || "Sector 4",
-          whatsappPhone: row.whatsapp_phone || "",
-          isUserCreated: row.is_user_created || row.owner_user_id != null,
-          ownerUserId: row.owner_user_id || null,
-        }));
-        setPowerNodesList(mappedNodes);
-        localStorage.setItem("resigrid_power_nodes", JSON.stringify(mappedNodes));
+        console.error("Supabase fetch error for power_nodes:", nodesError);
+        const cachedNodes = readOfflineData<PowerNode[]>("resigrid_power_nodes");
+        if (Array.isArray(cachedNodes)) setPowerNodesList(cachedNodes);
       } else {
-        const savedNodes = localStorage.getItem("resigrid_power_nodes");
-        if (savedNodes) {
-          setPowerNodesList(JSON.parse(savedNodes));
+        const nodesData = remoteNodes || [];
+        if (nodesData.length > 0) {
+          const mappedNodes: PowerNode[] = nodesData.map((row: any) => ({
+            id: row.node_id ? `PWR-${row.node_id}` : `PWR-${row.id}`,
+            owner: row.owner || "Solar Inverter Hub",
+            type: row.type || "5kW Hybrid Inverter",
+            capacity: row.capacity || "Device Charging & Wi-Fi",
+            price: row.price || "Free / Donation",
+            latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+            longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
+            location: row.location || "Sector 4",
+            whatsappPhone: row.whatsapp_phone || "",
+            isUserCreated: row.is_user_created || row.owner_user_id != null,
+            ownerUserId: row.owner_user_id || null,
+          }));
+          setPowerNodesList(mappedNodes);
+          writeOfflineData("resigrid_power_nodes", mappedNodes);
+        } else {
+          setPowerNodesList([]);
+          writeOfflineData("resigrid_power_nodes", []);
         }
       }
     } catch (err) {
       console.error("Supabase exception on VoltShield fetch:", err);
+      const cachedNodes = readOfflineData<PowerNode[]>("resigrid_power_nodes");
+      if (Array.isArray(cachedNodes)) setPowerNodesList(cachedNodes);
     }
   }, []);
 
   useEffect(() => {
-    loadSupabaseData();
-    const interval = setInterval(loadSupabaseData, 10000);
+    void loadSupabaseData();
 
     const fetchDeviceBattery = async () => {
       try {
-        // If ESP32 telemetry is active, skip local device fallback to prioritize IoT sensor feed
         if (batteryInfo.gridStability.includes("ESP32")) return;
 
         const info = await Device.getBatteryInfo();
@@ -404,27 +483,16 @@ export default function VoltShieldPage() {
       broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
 
       broadcastChannel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
-
+        const { type } = event.data || {};
         if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
-          loadSupabaseData();
+          void loadSupabaseData();
         }
       };
     }
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" || e.key === "resigrid_power_nodes") {
-        loadSupabaseData();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
     return () => {
-      clearInterval(interval);
       clearInterval(batteryInterval);
       if (broadcastChannel) broadcastChannel.close();
-      window.removeEventListener("storage", handleStorageChange);
     };
   }, [loadSupabaseData, batteryInfo.gridStability]);
 
@@ -437,7 +505,7 @@ export default function VoltShieldPage() {
       setScanProgress(0);
 
       let progress = 0;
-      const intervalTime = 40; // smooth progression
+      const intervalTime = 40;
 
       const progressTimer = setInterval(() => {
         progress += 2;
@@ -446,7 +514,6 @@ export default function VoltShieldPage() {
         }
       }, intervalTime);
 
-      // Attempt to pull latest ESP32 telemetry or fallback to device battery info
       const { data: espData } = await supabase
         .from("esp_telemetry")
         .select("*")
@@ -470,7 +537,6 @@ export default function VoltShieldPage() {
         isCharging = typeof info.isCharging === "boolean" ? info.isCharging : true;
         level = typeof info.batteryLevel === "number" ? Math.round(info.batteryLevel * 100) : 78;
         
-        // Simulate a voltage sag condition if device is not charging for demo testing
         if (!isCharging) {
           simulatedVoltage = 185;
           simulatedCurrent = -450;
@@ -494,7 +560,6 @@ export default function VoltShieldPage() {
       setScanPhase("complete");
       setIsScanning(false);
 
-      // Push home notification alert if voltage sag is detected during manual scan
       if (simulatedVoltage < 200 || !isCharging) {
         triggerHomeNotification(
           "Critical Grid Voltage Sag",
@@ -541,6 +606,7 @@ export default function VoltShieldPage() {
       window.alert("Sign in before posting a power listing.");
       return;
     }
+    const userId = userData.user.id;
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Power Node") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
     const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
@@ -549,9 +615,10 @@ export default function VoltShieldPage() {
       return;
     }
 
-    const uniqueId = `PWR-${Math.floor(Math.random() * 8999 + 1000)}`;
+    const uniqueId = Math.floor(Math.random() * 8999 + 1000);
+    const uniqueIdStr = `PWR-${uniqueId}`;
     const newNode: PowerNode = {
-      id: uniqueId,
+      id: uniqueIdStr,
       owner: newOwner.trim(),
       type: resolvedType,
       capacity: newCapacity.trim(),
@@ -562,13 +629,13 @@ export default function VoltShieldPage() {
       location: streetAddress,
       whatsappPhone: normalizedPhone,
       isUserCreated: true,
-      ownerUserId: userData.user.id,
+      ownerUserId: userId,
     };
 
     try {
       const { error } = await supabase.from("power_nodes").insert([
         {
-          node_id: uniqueId,
+          node_id: uniqueIdStr,
           owner: newNode.owner,
           type: newNode.type,
           capacity: newNode.capacity,
@@ -578,15 +645,14 @@ export default function VoltShieldPage() {
           location: newNode.location,
           whatsapp_phone: newNode.whatsappPhone,
           is_user_created: true,
-          owner_user_id: userData.user.id,
+          owner_user_id: userId,
         },
       ]);
       if (error) throw error;
-      const updatedNodes = [newNode, ...powerNodesList];
-      setPowerNodesList(updatedNodes);
-      localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
+
+      await loadSupabaseData();
     } catch (err) {
-      console.error("Failed to insert power node into Supabase:", err);
+      console.error("Failed to insert power node into database:", err);
       window.alert("Could not post your power listing. Please try again.");
       return;
     }
@@ -602,6 +668,12 @@ export default function VoltShieldPage() {
   };
 
   const handleRemoveNode = async (nodeId: string) => {
+    const targetNode = powerNodesList.find((node) => node.id === nodeId);
+    if (targetNode?.ownerUserId && currentUserId && targetNode.ownerUserId !== currentUserId) {
+      window.alert("You can only delete listings that you posted.");
+      return;
+    }
+
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
@@ -637,8 +709,8 @@ export default function VoltShieldPage() {
 
       const updatedNodes = powerNodesList.filter((item) => item.id !== nodeId);
       setPowerNodesList(updatedNodes);
-      localStorage.setItem("resigrid_power_nodes", JSON.stringify(updatedNodes));
-      window.alert("Listing successfully deleted.");
+      writeOfflineData("resigrid_power_nodes", updatedNodes);
+      window.alert("Listing permanently deleted.");
     } catch (error: any) {
       console.error("Failed to delete power node:", error);
       window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error"}`);
@@ -753,12 +825,12 @@ export default function VoltShieldPage() {
               <div className="relative z-10">
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
-                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>ESP32 HARDWARE TELEMETRY</p>
+                    <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>GRID TEST</p>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
                       Test Grid Voltage &amp; Outage Risk
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
-                      Tap the power button below to sync with real-time ESP32 node voltage sags and surge telemetry.
+                      Tap the power button below to detect voltage sags and surge telemetry.
                     </p>
                   </div>
                 </div>
@@ -784,7 +856,7 @@ export default function VoltShieldPage() {
                       >
                         <Power className="h-7 w-7" />
                       </button>
-                      <p className="text-xs sm:text-sm font-semibold text-white">Tap Button to Test ESP32 Node</p>
+                      <p className="text-xs sm:text-sm font-semibold text-white">Tap Button to Test</p>
                       <p className="mt-1 text-[11px]" style={{ color: "color-mix(in srgb, var(--accent) 80%, white)" }}>
                         Hardware power telemetry
                       </p>
@@ -957,7 +1029,7 @@ export default function VoltShieldPage() {
                     <p className="eyebrow text-[10px]" style={{ color: "var(--accent)" }}>TARIFF CALCULATOR</p>
                   </div>
                   <h2 className="text-base sm:text-lg font-semibold text-white">
-                    Municipal Bill & Savings Calculator
+                    Municipal Bill &amp; Savings Calculator
                   </h2>
                 </div>
 
@@ -1032,6 +1104,49 @@ export default function VoltShieldPage() {
                 </div>
               </div>
 
+              {/* MONTHLY HISTORY SELECTOR & SAVINGS COMPARISON CONTROLS */}
+              {!isSingleCycleMode && (
+                <div className="bg-black/40 p-3.5 rounded-xl border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-white">Compare Against Month:</span>
+                    <select
+                      value={selectedHistoryMonth}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedHistoryMonth(val);
+                        if (val !== "current") {
+                          const found = monthlyHistory.find((m) => m.monthKey === val);
+                          if (found) setMonthlyUsageKwh(found.kwh);
+                        }
+                      }}
+                      className="bg-black/80 border border-white/20 rounded-lg px-2 py-1 text-xs text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="current">Previous Month ({previousMonthRecord ? previousMonthRecord.monthName : "Last Month"})</option>
+                      {monthlyHistory.map((m) => (
+                        <option key={m.monthKey} value={m.monthKey}>
+                          {m.monthName} ({m.kwh} kWh - R{m.bill})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                    <span className="text-[11px] text-muted">Record March 2026 usage into history</span>
+                    <button
+                      type="button"
+                      onClick={handleSaveCurrentMonthRecord}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer hover:opacity-90"
+                      style={{
+                        borderColor: "color-mix(in srgb, var(--accent) 50%, transparent)",
+                        backgroundColor: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                        color: "var(--accent)"
+                      }}
+                    >
+                      Save Month Record
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* METRICS RESULTS: MONTHLY (WITH SAVINGS) OR SINGLE CYCLE (COST ONLY) */}
               {!isSingleCycleMode ? (
                 <div className="grid grid-cols-1 gap-4">
@@ -1049,12 +1164,14 @@ export default function VoltShieldPage() {
                     }}
                   >
                     <p className="text-[10px] uppercase font-mono font-semibold flex items-center gap-1" style={{ color: "var(--accent)" }}>
-                      <TrendingDown className="w-3.5 h-3.5" /> Savings From Last Month
+                      <TrendingDown className="w-3.5 h-3.5" /> Savings From {previousMonthRecord ? previousMonthRecord.monthName : "Last Month"}
                     </p>
                     <p className="text-2xl font-bold font-mono mt-1" style={{ color: "var(--accent)" }}>
-                      R{estimatedSavingsFromLastMonth}
+                      {estimatedSavingsFromLastMonth >= 0 ? `R${estimatedSavingsFromLastMonth}` : `-R${Math.abs(estimatedSavingsFromLastMonth)} (Higher)`}
                     </p>
-                    <p className="text-[10px] text-muted">Calculated variance based on your usage efficiency</p>
+                    <p className="text-[10px] text-muted">
+                      {previousMonthRecord ? `Compared to ${previousMonthRecord.kwh} kWh (R${previousMonthRecord.bill})` : "Calculated variance based on historical records"}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -1129,7 +1246,10 @@ export default function VoltShieldPage() {
                         <ReportDeleteButton
                           reportId={report.id}
                           reporterUserId={report.reporterUserId}
-                          onDeleted={(reportId) => setPowerReports((previous) => previous.filter((item) => item.id !== reportId))}
+                          onDeleted={(reportId) => {
+                            setPowerReports((previous) => previous.filter((item) => item.id !== reportId));
+                            void loadSupabaseData();
+                          }}
                         />
                       </div>
 
@@ -1230,12 +1350,12 @@ export default function VoltShieldPage() {
                         </div>
                       </div>
 
-                      {(node.isUserCreated || node.ownerUserId === currentUserId || (!node.ownerUserId && node.isUserCreated)) && (
+                      {(!node.ownerUserId || (currentUserId && node.ownerUserId === currentUserId)) && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRemoveNode(node.id);
+                            void handleRemoveNode(node.id);
                           }}
                           aria-label="Delete your listing"
                           title="Delete your listing"
@@ -1302,7 +1422,7 @@ export default function VoltShieldPage() {
                   value={newOwner}
                   onChange={(e) => setNewOwner(e.target.value)}
                   placeholder="e.g. Solar Inverter Hub"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
 
@@ -1319,7 +1439,7 @@ export default function VoltShieldPage() {
                       setNewType(val);
                     }
                   }}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
                   <option value="5kW Hybrid Inverter" className="bg-neutral-900 text-white">5kW Hybrid Inverter</option>
                   <option value="10kVA Diesel Generator" className="bg-neutral-900 text-white">10kVA Diesel Generator</option>
@@ -1338,7 +1458,7 @@ export default function VoltShieldPage() {
                     value={customSupplyType}
                     onChange={(e) => setCustomSupplyType(e.target.value)}
                     placeholder="e.g. Portable Power Station"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                   />
                 </div>
               )}
@@ -1352,7 +1472,7 @@ export default function VoltShieldPage() {
                     value={newCapacity}
                     onChange={(e) => setNewCapacity(e.target.value)}
                     placeholder="e.g. Device Charging"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                   />
                 </div>
 
@@ -1364,7 +1484,7 @@ export default function VoltShieldPage() {
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
                     placeholder="e.g. Free or R20 / Hour"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                   />
                 </div>
               </div>
@@ -1377,7 +1497,7 @@ export default function VoltShieldPage() {
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
                   placeholder="e.g. +27 82 123 4567"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
 

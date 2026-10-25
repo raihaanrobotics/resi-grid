@@ -67,7 +67,7 @@ interface WaterNode {
 interface WaterReportItem {
   id: string;
   displayId: string;
-  category: "water" | "power" | "roads" | "civic";
+  category: "Water" | "Power" | "Roads" | "Civic";
   title: string;
   description: string;
   locationAddress: string;
@@ -84,6 +84,13 @@ interface WaterReportItem {
   separateIncident?: boolean;
   reporterUserId?: string | null;
   createdTimestamp?: number;
+}
+
+interface MonthlyHistoryRecord {
+  monthKey: string; // e.g. "2026-03"
+  monthName: string; // e.g. "March 2026"
+  liters: number;
+  bill: number;
 }
 
 const ACCENT_HEX_MAP: Record<string, string> = {
@@ -165,12 +172,51 @@ export default function HydroMeshPage() {
   // In-app WhatsApp Dispatch State
   const [activeDispatchNode, setActiveDispatchNode] = useState<WaterNode | null>(null);
 
-  // Calculator Mode & Input States
+  // Calculator Mode & Input States with Historic Records Persistence
   const [isSingleCycleMode, setIsSingleCycleMode] = useState<boolean>(false);
   const [monthlyUsageLiters, setMonthlyUsageLiters] = useState<number>(15000);
   const [singleUsageLiters, setSingleUsageLiters] = useState<number>(50);
 
-  // Exact Municipal Stepped Tariff Calculations
+  // Historical Monthly Usage State (Loaded from localStorage or initialized with default past months)
+  const [monthlyHistory, setMonthlyHistory] = useState<MonthlyHistoryRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem("resigrid_monthly_water_history");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Error reading water history:", e);
+    }
+    // Default past 2 months simulation
+    return [
+      { monthKey: "2026-01", monthName: "January 2026", liters: 18000, bill: 840 },
+      { monthKey: "2026-02", monthName: "February 2026", liters: 16500, bill: 720 },
+    ];
+  });
+  const [selectedHistoryMonth, setSelectedHistoryMonth] = useState<string>("current");
+
+  // Exact Municipal Stepped Tariff Calculations Helper Function
+  const calculateBillForLiters = (liters: number) => {
+    const kl = liters / 1000;
+    const t1 = Math.min(kl, 6);
+    const t2 = Math.max(0, Math.min(kl - 6, 14));
+    const t3 = Math.max(0, Math.min(kl - 20, 10));
+    const t4 = Math.max(0, kl - 30);
+
+    const r1 = 0.00;
+    const r2 = 24.80;
+    const r3 = 42.50;
+    const r4 = 61.20;
+
+    const basic = 145.00;
+    const sanit = 195.00;
+    const vat = 0.15;
+
+    const sub = (t1 * r1) + (t2 * r2) + (t3 * r3) + (t4 * r4) + basic + sanit;
+    return Math.round(sub * (1 + vat));
+  };
+
   const usageKl = monthlyUsageLiters / 1000;
   const tier1Kl = Math.min(usageKl, 6);
   const tier2Kl = Math.max(0, Math.min(usageKl - 6, 14));
@@ -194,8 +240,12 @@ export default function HydroMeshPage() {
   const subtotal = costTier1 + costTier2 + costTier3 + costTier4 + basicWaterCharge + sanitationSewerage;
   const estimatedMunicipalBill = Math.round(subtotal * (1 + vatRate));
 
-  const baselineComparisonBill = Math.round((Math.min(usageKl, 20) * 24.80 + basicWaterCharge + sanitationSewerage) * 1.15);
-  const estimatedSavingsFromLastMonth = usageKl > 20 ? Math.round(estimatedMunicipalBill - baselineComparisonBill) : Math.round(estimatedMunicipalBill * 0.12);
+  // Determine Comparison Bill from Last Month in History (or fallback to baseline formula)
+  const previousMonthRecord = monthlyHistory.length > 0 ? monthlyHistory[monthlyHistory.length - 1] : null;
+  const lastMonthBill = previousMonthRecord ? previousMonthRecord.bill : Math.round((Math.min(usageKl, 20) * 24.80 + basicWaterCharge + sanitationSewerage) * 1.15);
+
+  // Savings compared to last month (Positive number means money saved / bill decreased)
+  const estimatedSavingsFromLastMonth = lastMonthBill - estimatedMunicipalBill;
 
   const currentMarginalRate = usageKl > 30 ? rateTier4 : usageKl > 20 ? rateTier3 : usageKl > 6 ? rateTier2 : rateTier1;
   const singleApplianceCost = Math.round((singleUsageLiters / 1000) * currentMarginalRate * (1 + vatRate) * 100) / 100;
@@ -208,6 +258,37 @@ export default function HydroMeshPage() {
   } else if (usageKl <= 6) {
     usageTip = "Excellent: Your household is operating entirely within the subsidized free basic lifeline tier!";
   }
+
+  // Save current month usage into history
+  const handleSaveCurrentMonthRecord = () => {
+    const currentMonthKey = "2026-03";
+    const currentMonthName = "March 2026";
+    
+    const existingIndex = monthlyHistory.findIndex((m) => m.monthKey === currentMonthKey);
+    let updated: MonthlyHistoryRecord[];
+    
+    const newRecord: MonthlyHistoryRecord = {
+      monthKey: currentMonthKey,
+      monthName: currentMonthName,
+      liters: monthlyUsageLiters,
+      bill: estimatedMunicipalBill,
+    };
+
+    if (existingIndex >= 0) {
+      updated = [...monthlyHistory];
+      updated[existingIndex] = newRecord;
+    } else {
+      updated = [...monthlyHistory, newRecord];
+    }
+
+    setMonthlyHistory(updated);
+    try {
+      localStorage.setItem("resigrid_monthly_water_history", JSON.stringify(updated));
+    } catch (e) {
+      console.error("Failed to save water history:", e);
+    }
+    window.alert(`Successfully recorded usage for ${currentMonthName} (R${estimatedMunicipalBill}). Savings compared to previous months are now updated!`);
+  };
 
   // Web Audio & Experimental DSP Scanner State
   const [isScanning, setIsScanning] = useState(false);
@@ -230,7 +311,7 @@ export default function HydroMeshPage() {
 
   const deduplicatedWaterReports = mergeNearbyActiveReports(nearbyReports);
   const hasNearbyWaterReport = deduplicatedWaterReports.some(
-    (report) => report.category === "water" &&
+    (report) => report.category.toLowerCase() === "water" &&
       report.status !== "Resolved"
   );
 
@@ -276,11 +357,10 @@ export default function HydroMeshPage() {
     };
   }, [broadcastTelemetryToGlobal]);
 
-  // Fetch reports and water nodes directly from Supabase with localStorage fallback and BroadcastChannel sync
+  // Fetch reports and water nodes directly from Supabase with proper cache cleanup on empty state
   const loadSupabaseData = useCallback(async () => {
     try {
-      // Fetch water reports from Supabase
-      const { data: reportsData, error: reportsError } = await supabase
+      const { data: remoteReports, error: reportsError } = await supabase
         .from("reports")
         .select("*")
         .order("created_at", { ascending: false });
@@ -288,56 +368,54 @@ export default function HydroMeshPage() {
       if (reportsError) {
         console.error("Error fetching reports from Supabase on HydroMesh:", reportsError);
       }
+      const reportsData = remoteReports || [];
 
-      if (reportsData) {
-        const formattedReports: WaterReportItem[] = reportsData.map((row: any) => ({
-          id: row.report_id || `RPT-${row.id}`,
-          displayId: getReportDisplayId(row.report_id, row.id),
-          category: row.category || "Water",
-          title: row.title || "Untitled Incident",
-          description: row.description || "",
-          locationAddress: row.location_address || "Unknown Location",
-          status: normalizeReportStatus(row.status, row.assigned_depot),
-          time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
-          assignedDepotUnit: row.assigned_depot || undefined,
-          estimatedFixTime: row.estimated_fix_time || undefined,
-          impactCount: row.impact_count || 1,
-          separateIncident: row.separate_incident || false,
-          reporterUserId: row.reporter_user_id || null,
-          createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
-          latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
-          longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
-          ward: row.ward || "Ward 26",
-          priority: row.priority || "High",
-        }));
-        const waterReportsOnly = formattedReports.filter((r) => r.category === "water");
+      if (reportsData.length > 0) {
+        const formattedReports: WaterReportItem[] = reportsData.map((row: any) => {
+          const rawCat = (row.category || "Water").toLowerCase();
+          const capitalizedCat = (rawCat.charAt(0).toUpperCase() + rawCat.slice(1)) as "Water" | "Power" | "Roads" | "Civic";
+          return {
+            id: row.report_id || `RPT-${row.id}`,
+            displayId: getReportDisplayId(row.report_id, row.id),
+            category: capitalizedCat,
+            title: row.title || "Untitled Incident",
+            description: row.description || "",
+            locationAddress: row.location_address || "Unknown Location",
+            status: normalizeReportStatus(row.status, row.assigned_depot),
+            time: formatReportTimestamp(row.created_at) || row.time_str || "Today",
+            assignedDepotUnit: row.assigned_depot || undefined,
+            estimatedFixTime: row.estimated_fix_time || undefined,
+            impactCount: row.impact_count || 1,
+            separateIncident: row.separate_incident || false,
+            reporterUserId: row.reporter_user_id || null,
+            createdTimestamp: row.created_at ? new Date(row.created_at).getTime() : undefined,
+            latitude: typeof row.latitude === "number" ? row.latitude : Number.NaN,
+            longitude: typeof row.longitude === "number" ? row.longitude : Number.NaN,
+            ward: row.ward || "Ward 26",
+            priority: row.priority || "High",
+          };
+        });
+        const waterReportsOnly = formattedReports.filter((r) => r.category.toLowerCase() === "water");
         setWaterReports(waterReportsOnly);
         writeOfflineData("resigrid_water_reports", waterReportsOnly);
       } else {
-        const cachedReports = readOfflineData<WaterReportItem[]>("resigrid_water_reports");
-        if (Array.isArray(cachedReports)) {
-          setWaterReports(cachedReports.map((report) => ({
-            ...report,
-            displayId: report.displayId || getReportDisplayId(report.id),
-            impactCount: report.impactCount || 1,
-          })));
-        }
+        setWaterReports([]);
+        writeOfflineData("resigrid_water_reports", []);
       }
 
-      // Fetch shared water nodes from Supabase if table exists, fallback to localStorage/defaults
-      const { data: nodesData, error: nodesError } = await supabase
+      const { data: remoteNodes, error: nodesError } = await supabase
         .from("water_nodes")
         .select("*")
         .order("id", { ascending: false });
 
+      let nodesData: any[] = [];
       if (nodesError) {
-        // Table might not exist yet, fallback to localStorage
-        const savedNodes = localStorage.getItem("resigrid_water_nodes");
-        if (savedNodes) {
-          const parsed = JSON.parse(savedNodes);
-          if (Array.isArray(parsed)) setWaterNodesList(parsed);
-        }
-      } else if (nodesData && nodesData.length > 0) {
+        console.error("Error fetching water nodes from Supabase:", nodesError);
+      } else {
+        nodesData = remoteNodes || [];
+      }
+
+      if (nodesData.length > 0) {
         const mappedNodes: WaterNode[] = nodesData.map((row: any) => ({
           id: row.node_id ? `WAT-${row.node_id}` : `WAT-${row.id}`,
           owner: row.owner || "Community Hub",
@@ -352,47 +430,37 @@ export default function HydroMeshPage() {
           ownerUserId: row.owner_user_id || null,
         }));
         setWaterNodesList(mappedNodes);
-        localStorage.setItem("resigrid_water_nodes", JSON.stringify(mappedNodes));
+        writeOfflineData("resigrid_water_nodes", mappedNodes);
       } else {
-        const savedNodes = localStorage.getItem("resigrid_water_nodes");
-        if (savedNodes) {
-          setWaterNodesList(JSON.parse(savedNodes));
-        }
+        setWaterNodesList([]);
+        writeOfflineData("resigrid_water_nodes", []);
       }
     } catch (err) {
       console.error("Supabase exception on HydroMesh fetch:", err);
+      const cachedNodes = readOfflineData<WaterNode[]>("resigrid_water_nodes");
+      if (Array.isArray(cachedNodes)) {
+        setWaterNodesList(cachedNodes);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadSupabaseData();
-    const interval = setInterval(loadSupabaseData, 10000);
+    void loadSupabaseData();
 
     let broadcastChannel: BroadcastChannel | null = null;
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       broadcastChannel = new BroadcastChannel("resigrid_reports_dispatch");
 
       broadcastChannel.onmessage = (event) => {
-        const { type, payload } = event.data || {};
-
+        const { type } = event.data || {};
         if (type === "NEW_REPORT" || type === "STATUS_UPDATE") {
-          loadSupabaseData();
+          void loadSupabaseData();
         }
       };
     }
 
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "resigrid_active_reports" || e.key === "resigrid_water_nodes") {
-        loadSupabaseData();
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-
     return () => {
-      clearInterval(interval);
       if (broadcastChannel) broadcastChannel.close();
-      window.removeEventListener("storage", handleStorageChange);
     };
   }, [loadSupabaseData]);
 
@@ -422,7 +490,7 @@ export default function HydroMeshPage() {
     };
   }, [stopAcousticScan]);
 
-  // Real Hardware Live Microphone Capture & Tap Pressure DSP Analysis (Robust 3.5s Test with guaranteed 100% completion)
+  // Production-Ready Hardware Live Microphone Capture & Real DSP Analysis
   const startAcousticScan = async () => {
     setScanProgress(0);
     setScanPhase("listening");
@@ -430,7 +498,7 @@ export default function HydroMeshPage() {
     isScanningRef.current = true;
 
     let progress = 0;
-    const testDurationMs = 3500; // robust 3.5 seconds test window
+    const testDurationMs = 3500; 
     const intervalTime = 35; 
     const totalSteps = testDurationMs / intervalTime;
     const increment = 100 / totalSteps;
@@ -447,6 +515,7 @@ export default function HydroMeshPage() {
         throw new Error("Microphone API unavailable.");
       }
 
+      // Explicitly request real hardware microphone stream for production native/APK environment
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: false,
@@ -487,7 +556,6 @@ export default function HydroMeshPage() {
       const dataArray = new Uint8Array(bufferLength);
       const energyReadings: number[] = [];
 
-      // Real DSP frequency analysis loop capturing live audio over time
       const analyzeAudioStream = () => {
         if (!analyserRef.current || !isScanningRef.current) return;
         analyserRef.current.getByteFrequencyData(dataArray);
@@ -511,7 +579,6 @@ export default function HydroMeshPage() {
 
       analyzeAudioStream();
 
-      // Wait for the full robust test duration
       await new Promise((resolve) => setTimeout(resolve, testDurationMs));
       clearInterval(progressTimer);
 
@@ -522,7 +589,7 @@ export default function HydroMeshPage() {
       
       const determinedStatus: "normal" | "low_pressure" = typeof bridgePressure === "number" && Number.isFinite(bridgePressure)
         ? bridgePressure < 2.0 ? "low_pressure" : "normal"
-        : avgEnergy < 5 ? "normal" : "normal";
+        : avgEnergy < 8 ? "low_pressure" : "normal";
       
       setScanResultStatus(determinedStatus);
       setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -532,26 +599,11 @@ export default function HydroMeshPage() {
       stopAcousticScan();
     } catch (err) {
       clearInterval(progressTimer);
-      console.warn("Microphone active test fallback, using successful test result simulation:", err);
-      
-      // Simulate spectrum waves and guaranteed 100% completion with smooth incremental progress steps
-      for (let i = 1; i <= 20; i++) {
-        setScanProgress(Math.min(100, Math.round((i / 20) * 100)));
-        setFftSpectrum(Array.from({ length: 16 }, () => Math.floor(25 + Math.random() * 65)));
-        await new Promise((res) => setTimeout(res, 80));
-      }
-
-      const bridgePressure = window.AndroidAudioBridge?.getSensorPressureReading?.();
-      const determinedStatus: "normal" | "low_pressure" = typeof bridgePressure === "number" && Number.isFinite(bridgePressure)
-        ? bridgePressure < 2.0 ? "low_pressure" : "normal"
-        : "normal";
-
-      setScanResultStatus(determinedStatus);
-      setLastCheckTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      setScanPhase("complete");
-      setScanProgress(100);
-      broadcastTelemetryToGlobal(determinedStatus);
+      console.warn("Microphone active stream acquisition failed or denied:", err);
+      setScanPhase("error");
+      setIsScanning(false);
       stopAcousticScan();
+      window.alert("Microphone permission denied or unavailable. Please enable microphone access in your device settings.");
     }
   };
 
@@ -580,6 +632,8 @@ export default function HydroMeshPage() {
       window.alert("Sign in before posting a water listing.");
       return;
     }
+    const userId = userData.user.id;
+
     const resolvedType = isOtherType ? (customSupplyType.trim() || "Custom Tank") : newType;
     if (!newOwner || !resolvedType || !newCapacity || !newPrice || !newPhone) return;
     const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
@@ -601,7 +655,7 @@ export default function HydroMeshPage() {
       location: streetAddress,
       whatsappPhone: normalizedPhone,
       isUserCreated: true,
-      ownerUserId: userData.user.id,
+      ownerUserId: userId,
     };
 
     try {
@@ -617,18 +671,16 @@ export default function HydroMeshPage() {
           location: newNode.location,
           whatsapp_phone: newNode.whatsappPhone,
           is_user_created: true,
-          owner_user_id: userData.user.id,
+          owner_user_id: userId,
         },
       ]);
       if (error) throw error;
-      const updatedNodes = [newNode, ...waterNodesList];
-      setWaterNodesList(updatedNodes);
-      localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
-    } catch (err) {
-      console.error("Failed to insert water node into Supabase, saving locally:", err);
-      const updatedNodes = [newNode, ...waterNodesList];
-      setWaterNodesList(updatedNodes);
-      localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
+
+      await loadSupabaseData();
+    } catch (err: any) {
+      console.error("Failed to insert water node into Supabase:", err);
+      window.alert(`Could not post listing to Supabase: ${err.message || "Unknown error"}`);
+      return;
     }
 
     setIsShareModalOpen(false);
@@ -642,6 +694,12 @@ export default function HydroMeshPage() {
   };
 
   const handleRemoveTankNode = async (nodeId: string) => {
+    const targetNode = waterNodesList.find((node) => node.id === nodeId);
+    if (targetNode?.ownerUserId && currentUserId && targetNode.ownerUserId !== currentUserId) {
+      window.alert("You can only delete listings that you posted.");
+      return;
+    }
+
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
@@ -675,12 +733,12 @@ export default function HydroMeshPage() {
 
       if (error) throw error;
 
-      const updatedNodes = waterNodesList.filter((item) => item.id !== nodeId);
-      setWaterNodesList(updatedNodes);
-      localStorage.setItem("resigrid_water_nodes", JSON.stringify(updatedNodes));
-      window.alert("Listing successfully deleted.");
+      const updatedListings = waterNodesList.filter((item) => item.id !== nodeId);
+      setWaterNodesList(updatedListings);
+      writeOfflineData("resigrid_water_nodes", updatedListings);
+      window.alert("Listing permanently deleted.");
     } catch (error: any) {
-      console.error("Failed to delete water node:", error);
+      console.error("Failed to delete water node from Supabase:", error);
       window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error"}`);
     }
   };
@@ -796,7 +854,7 @@ export default function HydroMeshPage() {
                       <p className="eyebrow text-[10px]" style={{ color: accentColor }}>TAP PRESSURE</p>
                     </div>
                     <h2 className="mt-1 text-lg sm:text-2xl font-medium tracking-[-0.025em] text-white">
-                      Test Your Tap Flow
+                      Test Your Tap Flow (Beta)
                     </h2>
                     <p className="mt-1 text-xs leading-relaxed text-muted max-w-xl">
                       Tap the microphone button below to test water line pressure near your tap spout.
@@ -891,11 +949,24 @@ export default function HydroMeshPage() {
                   {/* ERROR STATE */}
                   {scanPhase === "error" && (
                     <div className="text-center py-3">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-rose-500/40 bg-rose-500/10 text-rose-400">
-                        <AlertTriangle className="h-6 w-6" />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void startAcousticScan();
+                        }}
+                        className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full border transition-transform cursor-pointer touch-manipulation hover:scale-105 active:scale-95 shadow-xl"
+                        style={{
+                          borderColor: `color-mix(in srgb, ${accentColor} 60%, transparent)`,
+                          backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
+                          color: accentColor,
+                          boxShadow: `0 0 25px color-mix(in srgb, ${accentColor} 30%, transparent)`
+                        }}
+                        title="Tap to Test Again"
+                      >
+                        <Mic className="h-7 w-7" />
+                      </button>
                       <p className="text-xs font-medium text-rose-300 max-w-xs mx-auto">
-                        Acoustic test completed with default flow parameters.
+                        Microphone access denied or unavailable. Check app permissions.
                       </p>
                     </div>
                   )}
@@ -1066,6 +1137,49 @@ export default function HydroMeshPage() {
                 </div>
               </div>
 
+              {/* MONTHLY HISTORY SELECTOR & SAVINGS COMPARISON CONTROLS */}
+              {!isSingleCycleMode && (
+                <div className="bg-black/40 p-3.5 rounded-xl border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-white">Compare Against Month:</span>
+                    <select
+                      value={selectedHistoryMonth}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedHistoryMonth(val);
+                        if (val !== "current") {
+                          const found = monthlyHistory.find((m) => m.monthKey === val);
+                          if (found) setMonthlyUsageLiters(found.liters);
+                        }
+                      }}
+                      className="bg-black/80 border border-white/20 rounded-lg px-2 py-1 text-xs text-white focus:outline-none cursor-pointer"
+                    >
+                      <option value="current">Previous Month ({previousMonthRecord ? previousMonthRecord.monthName : "Last Month"})</option>
+                      {monthlyHistory.map((m) => (
+                        <option key={m.monthKey} value={m.monthKey}>
+                          {m.monthName} ({m.liters}L - R{m.bill})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                    <span className="text-[11px] text-muted">Record March 2026 usage into history</span>
+                    <button
+                      type="button"
+                      onClick={handleSaveCurrentMonthRecord}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer hover:opacity-90"
+                      style={{
+                        borderColor: `color-mix(in srgb, ${accentColor} 50%, transparent)`,
+                        backgroundColor: `color-mix(in srgb, ${accentColor} 20%, transparent)`,
+                        color: accentColor
+                      }}
+                    >
+                      Save Month Record
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {!isSingleCycleMode ? (
                 <div className="grid grid-cols-1 gap-4">
                   <div className="p-4 bg-black/40 border border-white/10 rounded-xl space-y-1">
@@ -1082,12 +1196,14 @@ export default function HydroMeshPage() {
                     }}
                   >
                     <p className="text-[10px] uppercase font-mono font-semibold flex items-center gap-1" style={{ color: accentColor }}>
-                      <TrendingDown className="w-3.5 h-3.5" /> Savings From Last Month
+                      <TrendingDown className="w-3.5 h-3.5" /> Savings From {previousMonthRecord ? previousMonthRecord.monthName : "Last Month"}
                     </p>
                     <p className="text-2xl font-bold font-mono mt-1" style={{ color: accentColor }}>
-                      R{estimatedSavingsFromLastMonth}
+                      {estimatedSavingsFromLastMonth >= 0 ? `R${estimatedSavingsFromLastMonth}` : `-R${Math.abs(estimatedSavingsFromLastMonth)} (Higher)`}
                     </p>
-                    <p className="text-[10px] text-muted">Calculated variance based on your usage efficiency</p>
+                    <p className="text-[10px] text-muted">
+                      {previousMonthRecord ? `Compared to ${previousMonthRecord.liters}L (R${previousMonthRecord.bill})` : "Calculated variance based on historical records"}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -1152,7 +1268,7 @@ export default function HydroMeshPage() {
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-mono font-bold" style={{ color: accentColor }}>
-                            {report.category} • {report.displayId || report.id}
+                            Water • {report.displayId || report.id}
                           </span>
                           <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full border ${statusBadgeClass}`}>
                             {normalizedStatus}
@@ -1161,7 +1277,10 @@ export default function HydroMeshPage() {
                         <ReportDeleteButton
                           reportId={report.id}
                           reporterUserId={report.reporterUserId}
-                          onDeleted={(reportId) => setWaterReports((previous) => previous.filter((item) => item.id !== reportId))}
+                          onDeleted={(reportId) => {
+                            setWaterReports((previous) => previous.filter((item) => item.id !== reportId));
+                            void loadSupabaseData();
+                          }}
                         />
                       </div>
 
@@ -1261,12 +1380,12 @@ export default function HydroMeshPage() {
                         </div>
                       </div>
 
-                      {(node.isUserCreated || node.ownerUserId === currentUserId || (!node.ownerUserId && node.isUserCreated)) && (
+                      {(!node.ownerUserId || (currentUserId && node.ownerUserId === currentUserId)) && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleRemoveTankNode(node.id);
+                            void handleRemoveTankNode(node.id);
                           }}
                           aria-label="Delete your listing"
                           title="Delete your listing"
@@ -1333,7 +1452,7 @@ export default function HydroMeshPage() {
                   value={newOwner}
                   onChange={(e) => setNewOwner(e.target.value)}
                   placeholder="e.g. Community Tank Hub"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
 
@@ -1350,7 +1469,7 @@ export default function HydroMeshPage() {
                       setNewType(val);
                     }
                   }}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
                   <option value="Borehole & Filtration" className="bg-neutral-900 text-white">Borehole & Filtration</option>
                   <option value="Rainwater Tank" className="bg-neutral-900 text-white">Rainwater Tank</option>
@@ -1369,7 +1488,7 @@ export default function HydroMeshPage() {
                     value={customSupplyType}
                     onChange={(e) => setCustomSupplyType(e.target.value)}
                     placeholder="e.g. Solar Borehole Reserve"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                   />
                 </div>
               )}
@@ -1383,7 +1502,7 @@ export default function HydroMeshPage() {
                     value={newCapacity}
                     onChange={(e) => setNewCapacity(e.target.value)}
                     placeholder="e.g. 2,500 L"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                   />
                 </div>
 
@@ -1395,7 +1514,7 @@ export default function HydroMeshPage() {
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
                     placeholder="e.g. R15 / 20L or Free"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                   />
                 </div>
               </div>
@@ -1408,7 +1527,7 @@ export default function HydroMeshPage() {
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
                   placeholder="e.g. +27 82 123 4567"
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/35 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
 

@@ -276,9 +276,9 @@ export default function MunicipalDashboardPage() {
     setSelectedWard("ALL");
   };
 
-  const fetchSupabaseReports = async () => {
+  const fetchReports = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: remoteData, error } = await supabase
         .from("reports")
         .select("*")
         .order("created_at", { ascending: false });
@@ -289,8 +289,8 @@ export default function MunicipalDashboardPage() {
         return;
       }
 
-      if (data) {
-        const formattedReports: ReportItem[] = data.map((row: any) => ({
+      if (remoteData) {
+        const formattedReports: ReportItem[] = remoteData.map((row: any) => ({
           id: row.report_id || `RPT-${row.id}`,
           displayId: getReportDisplayId(row.report_id, row.id),
           category: row.category || "water",
@@ -319,20 +319,20 @@ export default function MunicipalDashboardPage() {
         setReportSyncError("");
       }
     } catch (err) {
-      console.error("Supabase connection exception:", err);
+      console.error("Report fetch exception:", err);
       setReportSyncError(err instanceof Error ? err.message : "Unknown report sync error.");
     }
   };
 
-  const fetchSupabaseTankers = async () => {
+  const fetchTankers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: remoteTankers, error } = await supabase
         .from("water_tankers")
         .select("*")
         .order("timestamp", { ascending: false });
 
-      if (!error && data) {
-        const mappedTankers: WaterTankerDispatch[] = data.map((row: any) => ({
+      if (!error && remoteTankers) {
+        const mappedTankers: WaterTankerDispatch[] = remoteTankers.map((row: any) => ({
           dispatchId: row.dispatch_id || `TNK-${row.id}`,
           tankerUnit: row.tanker_unit,
           province: row.province,
@@ -347,25 +347,18 @@ export default function MunicipalDashboardPage() {
           timestamp: row.timestamp ? new Date(row.timestamp).getTime() : Date.now(),
         }));
         setActiveTankers(mappedTankers);
-        localStorage.setItem("resigrid_active_tankers", JSON.stringify(mappedTankers));
       }
     } catch (err) {
       console.error("Error fetching water tankers from Supabase:", err);
-      try {
-        const savedTankers = localStorage.getItem("resigrid_active_tankers");
-        if (savedTankers) setActiveTankers(JSON.parse(savedTankers));
-      } catch (e) {
-        console.error(e);
-      }
     }
   };
 
   useEffect(() => {
-    fetchSupabaseReports();
-    fetchSupabaseTankers();
+    void fetchReports();
+    void fetchTankers();
     const refreshInterval = window.setInterval(() => {
-      fetchSupabaseReports();
-      fetchSupabaseTankers();
+      void fetchReports();
+      void fetchTankers();
     }, 20000);
 
     let broadcastChannel: BroadcastChannel | null = null;
@@ -375,31 +368,15 @@ export default function MunicipalDashboardPage() {
       broadcastChannel.onmessage = (event) => {
         const { type } = event.data || {};
         if (type === "NEW_REPORT" || type === "STATUS_UPDATE" || type === "CREW_ASSIGNED" || type === "TANKER_DISPATCH") {
-          fetchSupabaseReports();
-          fetchSupabaseTankers();
+          void fetchReports();
+          void fetchTankers();
         }
       };
     }
 
-    const reportChannel = supabase
-      .channel("municipal-report-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "reports" }, () => {
-        void fetchSupabaseReports();
-      })
-      .subscribe();
-
-    const tankerChannel = supabase
-      .channel("municipal-tanker-sync")
-      .on("postgres_changes", { event: "*", schema: "public", table: "water_tankers" }, () => {
-        void fetchSupabaseTankers();
-      })
-      .subscribe();
-
     return () => {
       window.clearInterval(refreshInterval);
       if (broadcastChannel) broadcastChannel.close();
-      void supabase.removeChannel(reportChannel);
-      void supabase.removeChannel(tankerChannel);
     };
   }, []);
 
@@ -419,7 +396,7 @@ export default function MunicipalDashboardPage() {
       capacity_liters: tankerUnit.includes("10,000L") ? "10,000L" : tankerUnit.includes("8,000L") ? "8,000L" : "5,000L",
       scheduled_time: tankerSchedule,
       driver_contact: tankerDriverContact || "+27 82 000 1234",
-      status: "En Route",
+      status: "En Route" as const,
       notes: tankerNotes || "Emergency water tanker provisioning deployed to ward.",
       timestamp: new Date().toISOString(),
     };
@@ -428,9 +405,13 @@ export default function MunicipalDashboardPage() {
       const { error } = await supabase.from("water_tankers").insert([newTankerPayload]);
       if (error) {
         console.error("Error inserting tanker into Supabase:", error);
+        window.alert("Could not dispatch water tanker to Supabase. Please retry.");
+        return;
       }
     } catch (err) {
-      console.error("Supabase tanker insertion exception:", err);
+      console.error("Tanker insertion exception:", err);
+      window.alert("Could not dispatch water tanker. Please retry.");
+      return;
     }
 
     const newTanker: WaterTankerDispatch = {
@@ -448,15 +429,8 @@ export default function MunicipalDashboardPage() {
       timestamp: Date.now(),
     };
 
-    const updatedTankers = [newTanker, ...activeTankers];
-    setActiveTankers(updatedTankers);
-    try {
-      localStorage.setItem("resigrid_active_tankers", JSON.stringify(updatedTankers));
-    } catch (err) {
-      console.error("Error saving tanker to localStorage:", err);
-    }
+    setActiveTankers((prev) => [newTanker, ...prev]);
 
-    // Broadcast update across radar & home notifications
     if (typeof window !== "undefined" && "BroadcastChannel" in window) {
       const bc = new BroadcastChannel("resigrid_reports_dispatch");
       bc.postMessage({
@@ -471,32 +445,26 @@ export default function MunicipalDashboardPage() {
     setTankerSchedule("");
     setTankerDriverContact("");
     setTankerNotes("");
-    window.alert(`Water Tanker successfully dispatched and synced to Supabase & Radar!`);
+    window.alert(`Water Tanker successfully dispatched and synced to Supabase!`);
   };
 
-  // Assign Specific Crew Unit and Sync to Supabase & /crew portal
+  // Assign Specific Crew Unit and Sync to Supabase
   const handleConfirmCrewAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assigningJob) return;
 
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("reports")
         .update({
           assigned_depot: selectedCrewUnit,
           status: "Crew Dispatched",
         })
-        .eq("report_id", assigningJob.id)
-        .select("report_id")
-        .maybeSingle();
+        .eq("report_id", assigningJob.id);
 
       if (error) {
         console.error("Failed to assign crew in Supabase:", error);
-        window.alert("Could not assign this report. Please retry.");
-        return;
-      }
-      if (!data) {
-        window.alert("The report could not be found or you are not allowed to assign it.");
+        window.alert("Could not assign this report in Supabase. Please retry.");
         return;
       }
 
@@ -530,8 +498,8 @@ export default function MunicipalDashboardPage() {
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    await fetchSupabaseReports();
-    await fetchSupabaseTankers();
+    await fetchReports();
+    await fetchTankers();
     setIsRefreshing(false);
   };
 

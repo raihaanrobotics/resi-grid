@@ -223,30 +223,6 @@ export default function MunicipalProfilePage() {
   useEffect(() => {
     async function checkSession() {
       try {
-        // JUDGE MODE BYPASS
-        const isJudge = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
-        if (isJudge) {
-          setIsAuthenticated(true);
-          setAuthLoading(false);
-
-          const localProfile = localStorage.getItem("resigrid_civic_profile");
-          if (localProfile) {
-            try {
-              const parsed = JSON.parse(localProfile);
-              setFullName(parsed.fullName || "Admin Dispatcher (Msunduzi)");
-              setEmail(parsed.email || "dispatch.control@msunduzi.gov.za");
-              setPhone(parsed.phone || "+27 33 392 2000");
-              setSelectedProvince(parsed.selectedProvince || "KwaZulu-Natal");
-              setSelectedCity(parsed.selectedCity || "Pietermaritzburg (Msunduzi)");
-              setSelectedWard(parsed.selectedWard || "Ward 22: Pietermaritzburg Central Business District (CBD Central)");
-              setStreetAddress(parsed.streetAddress || "Msunduzi Civic Centre, City Hall");
-            } catch (e) {
-              console.error("Error parsing judge profile:", e);
-            }
-          }
-          return;
-        }
-
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user) {
           const role = session.user.user_metadata?.role || "resident";
@@ -328,7 +304,7 @@ export default function MunicipalProfilePage() {
     setAuthMessage("");
     setIsAuthenticating(true);
 
-    const validMunicipalKey = "MUNI-SECURE-2026";
+    const validMunicipalKey = "MUNI-2026";
     if (secretCode !== validMunicipalKey) {
       setAuthError("Invalid Municipal Authorization Key. Access restricted to authorized personnel only.");
       setIsAuthenticating(false);
@@ -438,26 +414,20 @@ export default function MunicipalProfilePage() {
     };
 
     try {
-      const isJudge = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
-      if (isJudge) {
-        localStorage.setItem("resigrid_civic_profile", JSON.stringify(profileData));
-        localStorage.setItem("resigrid_profile_JUDGE_MASTER", JSON.stringify(profileData));
-      } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
-          await supabase.auth.updateUser({
-            data: {
-              full_name: fullName,
-              phone,
-              province: selectedProvince,
-              city: selectedCity,
-              ward: selectedWard,
-              street_address: streetAddress,
-              role: "municipal",
-            }
-          });
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
+        await supabase.auth.updateUser({
+          data: {
+            full_name: fullName,
+            phone,
+            province: selectedProvince,
+            city: selectedCity,
+            ward: selectedWard,
+            street_address: streetAddress,
+            role: "municipal",
+          }
+        });
       }
     } catch (err) {
       console.error("Error saving user profile metadata to Supabase:", err);
@@ -514,7 +484,7 @@ export default function MunicipalProfilePage() {
             <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center mx-auto text-accent-dynamic">
               <Building2 className="w-6 h-6" />
             </div>
-            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">MUNICIPAL STAFF GATEWAY</h1>
+            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">MUNICIPAL STAFF LOGIN</h1>
             <p className="text-xs text-muted">
               Authorized personnel login. Access restricted to Dashboard and Profile modules only.
             </p>
@@ -607,7 +577,7 @@ export default function MunicipalProfilePage() {
             </div>
             <div className="flex justify-center gap-4 text-[11px]">
               <Link href="/" className="text-accent-dynamic hover:underline">Resident login</Link>
-              <Link href="/profile3" className="text-accent-dynamic hover:underline">Crew login</Link>
+              <Link href="/profile3" className="text-accent-dynamic hover:underline">Field Crew login</Link>
             </div>
           </form>
         </div>
@@ -925,7 +895,7 @@ export default function MunicipalProfilePage() {
                   ) : (
                     <>
                       <LogOut className="w-3.5 h-3.5 pointer-events-none" />
-                      <span className="pointer-events-none">Sign Out Session</span>
+                      <span className="pointer-events-none">Sign Out</span>
                     </>
                   )}
                 </button>

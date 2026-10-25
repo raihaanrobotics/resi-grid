@@ -147,30 +147,13 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
   const [userId, setUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<AppRole>("resident");
   const [locationPermissionReadyFor, setLocationPermissionReadyFor] = useState<string | null>(null);
-  
-  const [isJudgeMode, setIsJudgeMode] = useState(false);
 
-  useEffect(() => {
-    const checkJudge = () => {
-      const active = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
-      setIsJudgeMode(active);
-    };
-    checkJudge();
-    window.addEventListener("storage", checkJudge);
-    const interval = setInterval(checkJudge, 1000);
-    return () => {
-      window.removeEventListener("storage", checkJudge);
-      clearInterval(interval);
-    };
-  }, []);
-
-  const authenticated = Boolean(userId) || isJudgeMode;
+  const authenticated = Boolean(userId);
   const isPublicAuthRoute = pathname === "/profile" ||
     pathname === "/profile2" ||
     pathname === "/profile3" ||
-    pathname === "/auth/callback" ||
-    pathname === "/judge";
-  const roleRouteAllowed = isJudgeMode || isRouteAllowedForRole(userRole, pathname);
+    pathname === "/auth/callback";
+  const roleRouteAllowed = isRouteAllowedForRole(userRole, pathname);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
@@ -215,7 +198,6 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     if (!sessionChecked) return;
-    if (isJudgeMode) return; // Bypass auth redirect locks when Judge Mode is enabled
 
     if (!authenticated && !isPublicAuthRoute) {
       router.replace(getLoginRoute(pathname));
@@ -224,7 +206,7 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
     if (authenticated && !roleRouteAllowed) {
       router.replace(getRoleHome(userRole));
     }
-  }, [authenticated, isJudgeMode, isPublicAuthRoute, pathname, roleRouteAllowed, router, sessionChecked, userRole]);
+  }, [authenticated, isPublicAuthRoute, pathname, roleRouteAllowed, router, sessionChecked, userRole]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -258,7 +240,7 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
   }, [router]);
 
   useEffect(() => {
-    if (!sessionChecked || (!userId && !isJudgeMode) || !Capacitor.isNativePlatform()) return;
+    if (!sessionChecked || !userId || !Capacitor.isNativePlatform()) return;
 
     let active = true;
     void (async () => {
@@ -270,14 +252,14 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
       } catch (error) {
         console.error("Could not request location access:", error);
       } finally {
-        if (active) setLocationPermissionReadyFor(userId || "JUDGE_MASTER");
+        if (active) setLocationPermissionReadyFor(userId);
       }
     })();
 
     return () => {
       active = false;
     };
-  }, [isJudgeMode, sessionChecked, userId]);
+  }, [sessionChecked, userId]);
 
   useEffect(() => {
     if (!sessionChecked || !Capacitor.isNativePlatform() || userId || !oneSignalInitialization) return;
@@ -288,22 +270,13 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
 
   if (
     !sessionChecked ||
-    (!authenticated && !isPublicAuthRoute && !isJudgeMode) ||
-    (authenticated && !roleRouteAllowed && !isJudgeMode)
+    (!authenticated && !isPublicAuthRoute) ||
+    (authenticated && !roleRouteAllowed)
   ) {
     return (
       <main className="resigrid-shell flex min-h-screen items-center justify-center text-white">
         <p className="animate-pulse text-xs tracking-[0.2em] text-muted">CHECKING SIGN-IN...</p>
       </main>
-    );
-  }
-
-  if (isJudgeMode) {
-    return (
-      <GeoProvider>
-        {userId && <NativePushRegistration userId={userId} />}
-        {children}
-      </GeoProvider>
     );
   }
 
@@ -315,6 +288,7 @@ export default function AppRuntime({ children }: { children: React.ReactNode }) 
       </main>
     );
   }
+
   return (
     <GeoProvider>
       <NativePushRegistration userId={userId} />

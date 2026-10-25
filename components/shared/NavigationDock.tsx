@@ -60,6 +60,31 @@ export default function NavigationDock() {
   const isFeatureActive = featureRoutes.some((route) => pathname.startsWith(route));
 
   const [isJudgeMode, setIsJudgeMode] = useState<boolean>(false);
+  const [isInputFocused, setIsInputFocused] = useState<boolean>(false);
+
+  // Keyboard avoidance: Hide dock when typing on mobile screens
+  useEffect(() => {
+    const handleFocus = () => {
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT")
+      ) {
+        setIsInputFocused(true);
+      } else {
+        setIsInputFocused(false);
+      }
+    };
+
+    window.addEventListener("focusin", handleFocus);
+    window.addEventListener("focusout", handleFocus);
+    return () => {
+      window.removeEventListener("focusin", handleFocus);
+      window.removeEventListener("focusout", handleFocus);
+    };
+  }, []);
 
   useEffect(() => {
     const checkJudge = () => {
@@ -99,8 +124,8 @@ export default function NavigationDock() {
     }
   }, [pathname, isFeatureActive]);
 
-  // Hide dock completely when on the judge hub page
-  if (isJudgeHub) {
+  // Hide dock completely when on the judge hub page or when typing in inputs
+  if (isJudgeHub || isInputFocused) {
     return null;
   }
 

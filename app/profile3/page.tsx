@@ -188,32 +188,23 @@ const SOUTH_AFRICAN_PROVINCES_CITIES_WARDS: Record<string, Record<string, string
   },
 };
 
-const DEPOT_UNITS = [
-  "Msunduzi Water Rapid Response - Unit 1",
-  "Msunduzi Electricity & High Voltage - Unit 4",
-  "Msunduzi Roads & Stormwater - Unit 2",
-  "Edendale Service Center - Unit 3",
-  "Northdale Infrastructure Depot - Unit 5",
-];
-
 export default function CrewProfilePage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
 
-  // Auth Form States (Strictly Field Crew)
+  // Auth Form States (Strictly Crew)
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [secretCode, setSecretCode] = useState("");
-  const [assignedDepot, setAssignedDepot] = useState(DEPOT_UNITS[0]);
   const [authError, setAuthError] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   const [selectedProvince, setSelectedProvince] = useState<string>("KwaZulu-Natal");
   const [selectedCity, setSelectedCity] = useState<string>("Pietermaritzburg (Msunduzi)");
-  const [stagedAccent, setStagedAccent] = useState<string>("amber");
+  const [stagedAccent, setStagedAccent] = useState<string>("teal");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("Preferences saved successfully");
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -226,39 +217,16 @@ export default function CrewProfilePage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedWard, setSelectedWard] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [assignedUnit, setAssignedUnit] = useState("");
 
   // Check Supabase Auth Session and load crew profile on Mount
   useEffect(() => {
     async function checkSession() {
       try {
-        // JUDGE MODE BYPASS
-        const isJudge = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
-        if (isJudge) {
-          setIsAuthenticated(true);
-          setAuthLoading(false);
-
-          const localProfile = localStorage.getItem("resigrid_civic_profile");
-          if (localProfile) {
-            try {
-              const parsed = JSON.parse(localProfile);
-              setFullName(parsed.fullName || "Rapid Response Unit 04");
-              setEmail(parsed.email || "crew04.field@msunduzi.gov.za");
-              setPhone(parsed.phone || "+27 83 444 8812");
-              setSelectedProvince(parsed.selectedProvince || "KwaZulu-Natal");
-              setSelectedCity(parsed.selectedCity || "Pietermaritzburg (Msunduzi)");
-              setSelectedWard(parsed.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
-              setAssignedDepot("Msunduzi Electricity & High Voltage - Unit 4");
-            } catch (e) {
-              console.error("Error parsing judge profile:", e);
-            }
-          }
-          return;
-        }
-
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user) {
           const role = session.user.user_metadata?.role || "resident";
-          // Enforce restriction: only field crew users are allowed here
           if (role !== "crew") {
             router.replace("/");
             return;
@@ -277,9 +245,8 @@ export default function CrewProfilePage() {
           setSelectedProvince(meta.province || parsedLocal.selectedProvince || "KwaZulu-Natal");
           setSelectedCity(meta.city || parsedLocal.selectedCity || "Pietermaritzburg (Msunduzi)");
           setSelectedWard(meta.ward || parsedLocal.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
-          if (meta.assigned_depot || parsedLocal.assignedDepot) {
-            setAssignedDepot(meta.assigned_depot || parsedLocal.assignedDepot);
-          }
+          setStreetAddress(meta.street_address || parsedLocal.streetAddress || "");
+          setAssignedUnit(meta.assigned_unit || parsedLocal.assignedUnit || "Unit Alpha - Rapid Infrastructure Response");
         }
       } catch (err) {
         console.error("Auth check error:", err);
@@ -331,16 +298,16 @@ export default function CrewProfilePage() {
     setPhone(digits);
   };
 
-  // Handle Field Crew Authentication
+  // Handle Crew Authentication
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     setAuthMessage("");
     setIsAuthenticating(true);
 
-    const validCrewKey = "CREW-ARTISAN-2026";
+    const validCrewKey = "CREW-2026";
     if (secretCode !== validCrewKey) {
-      setAuthError("Invalid Field Crew Security Code. Access restricted to authorized depot units.");
+      setAuthError("Invalid Crew Authorization Key. Access restricted to field personnel.");
       setIsAuthenticating(false);
       return;
     }
@@ -355,7 +322,7 @@ export default function CrewProfilePage() {
               currentOrigin: window.location.origin,
               isNativePlatform: Capacitor.isNativePlatform(),
             }),
-            data: { role: "crew", assigned_depot: assignedDepot, full_name: fullName, phone }
+            data: { role: "crew", full_name: fullName, phone, assigned_unit: assignedUnit }
           }
         });
         if (error) {
@@ -390,7 +357,7 @@ export default function CrewProfilePage() {
         setEmail(data.session.user.email || authEmail);
         setFullName(meta.full_name || "");
         setPhone(meta.phone || "");
-        if (meta.assigned_depot) setAssignedDepot(meta.assigned_depot);
+        setAssignedUnit(meta.assigned_unit || "");
       }
 
       setEmail(authEmail);
@@ -445,30 +412,26 @@ export default function CrewProfilePage() {
       selectedProvince,
       selectedCity,
       selectedWard,
-      assignedDepot,
+      streetAddress,
+      assignedUnit,
     };
 
     try {
-      const isJudge = typeof window !== "undefined" && localStorage.getItem("resigrid_judge_mode") === "true";
-      if (isJudge) {
-        localStorage.setItem("resigrid_civic_profile", JSON.stringify(profileData));
-        localStorage.setItem("resigrid_profile_JUDGE_MASTER", JSON.stringify(profileData));
-      } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
-          await supabase.auth.updateUser({
-            data: {
-              full_name: fullName,
-              phone,
-              province: selectedProvince,
-              city: selectedCity,
-              ward: selectedWard,
-              assigned_depot: assignedDepot,
-              role: "crew",
-            }
-          });
-        }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        localStorage.setItem(`resigrid_profile_${user.id}`, JSON.stringify(profileData));
+        await supabase.auth.updateUser({
+          data: {
+            full_name: fullName,
+            phone,
+            province: selectedProvince,
+            city: selectedCity,
+            ward: selectedWard,
+            street_address: streetAddress,
+            assigned_unit: assignedUnit,
+            role: "crew",
+          }
+        });
       }
     } catch (err) {
       console.error("Error saving user profile metadata to Supabase:", err);
@@ -502,12 +465,12 @@ export default function CrewProfilePage() {
   if (authLoading) {
     return (
       <main className="resigrid-shell min-h-screen flex items-center justify-center text-white">
-        <div className="animate-pulse text-xs tracking-[0.2em] text-muted">LOADING FIELD CREW SESSION...</div>
+        <div className="animate-pulse text-xs tracking-[0.2em] text-muted">LOADING CREW SESSION...</div>
       </main>
     );
   }
 
-  // UNAUTHENTICATED FIELD CREW GATEWAY
+  // UNAUTHENTICATED CREW GATEWAY
   if (!isAuthenticated) {
     return (
       <main className="resigrid-shell min-h-screen flex items-center justify-center p-3 sm:p-6 text-[var(--text)] selection:bg-[var(--accent)]/30 selection:text-[var(--accent)]">
@@ -522,13 +485,22 @@ export default function CrewProfilePage() {
           <div className="panel-reflection pointer-events-none" />
 
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center mx-auto text-accent-dynamic">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto text-amber-400">
               <Wrench className="w-6 h-6" />
             </div>
-            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">FIELD CREW GATEWAY</h1>
+            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">FIELD CREW LOGIN</h1>
             <p className="text-xs text-muted">
-              Authorized artisan login. Access restricted to Field Crew Portal and Profile modules only.
+              Authorized field maintenance personnel login. Access restricted to Crew Dispatch and Profile modules only.
             </p>
+          </div>
+
+          <div className="flex justify-between items-center text-[11px] border-y border-white/10 py-2.5 my-2">
+            <Link href="/" className="text-teal-300 hover:underline">
+              Resident login
+            </Link>
+            <Link href="/profile2" className="text-blue-300 hover:underline">
+              Municipal login
+            </Link>
           </div>
 
           {authError && (
@@ -544,7 +516,7 @@ export default function CrewProfilePage() {
 
           <form onSubmit={handleAuthSubmit} className="space-y-4">
             <div>
-              <label className="text-[11px] font-medium text-muted block mb-1">Artisan Email Address</label>
+              <label className="text-[11px] font-medium text-muted block mb-1">Field Crew Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-2.5 w-4 h-4 text-muted" />
                 <input
@@ -552,7 +524,7 @@ export default function CrewProfilePage() {
                   required
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  placeholder="artisan@msunduzi.gov.za"
+                  placeholder="crew.lead@resigrid.co.za"
                   className="w-full bg-black/50 border border-white/10 rounded-xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
                 />
               </div>
@@ -574,39 +546,24 @@ export default function CrewProfilePage() {
             </div>
 
             <div>
-              <label className="text-[11px] font-medium text-accent-dynamic block mb-1 flex items-center gap-1">
-                <Shield className="w-3.5 h-3.5" /> Field Crew Security Code
+              <label className="text-[11px] font-medium text-amber-400 block mb-1 flex items-center gap-1">
+                <Shield className="w-3.5 h-3.5" /> Field Crew Authorization Key
               </label>
               <input
                 type="password"
                 required
                 value={secretCode}
                 onChange={(e) => setSecretCode(e.target.value)}
-                placeholder="Enter crew authorization code"
+                placeholder="Enter crew security code"
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
-              <p className="text-[9px] text-muted mt-1">Required for artisan unit authentication.</p>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-medium text-muted block mb-1">Assigned Depot Unit</label>
-              <select
-                value={assignedDepot}
-                onChange={(e) => setAssignedDepot(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--accent)] transition-colors cursor-pointer"
-              >
-                {DEPOT_UNITS.map((depot) => (
-                  <option key={depot} value={depot} className="bg-neutral-900 text-white">
-                    {depot}
-                  </option>
-                ))}
-              </select>
+              <p className="text-[9px] text-muted mt-1">Required for field crew authentication.</p>
             </div>
 
             <button
               type="submit"
               disabled={isAuthenticating}
-              className="w-full py-3 rounded-xl border bg-teal-500/20 border-teal-500/40 hover:bg-teal-500/30 text-teal-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
+              className="w-full py-3 rounded-xl border bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30 text-amber-300 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
             >
               {isAuthenticating ? (
                 <>
@@ -615,25 +572,21 @@ export default function CrewProfilePage() {
                 </>
               ) : (
                 <>
-                  <span>{authMode === "login" ? "Access Field Crew Portal" : "Register Field Crew Artisan"}</span>
+                  <span>{authMode === "login" ? "Access Field Crew Portal" : "Register Field Crew"}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
 
             <div className="flex items-center justify-between pt-2 text-xs">
-              <span className="text-muted">{authMode === "login" ? "Need artisan account?" : "Already registered?"}</span>
+              <span className="text-muted">{authMode === "login" ? "Need crew account?" : "Already registered?"}</span>
               <button
                 type="button"
                 onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")}
-                className="text-accent-dynamic hover:underline font-semibold cursor-pointer"
+                className="text-amber-400 hover:underline font-semibold cursor-pointer"
               >
                 {authMode === "login" ? "Sign Up" : "Sign In"}
               </button>
-            </div>
-            <div className="flex justify-center gap-4 text-[11px]">
-              <Link href="/" className="text-accent-dynamic hover:underline">Resident login</Link>
-              <Link href="/profile2" className="text-accent-dynamic hover:underline">Municipal login</Link>
             </div>
           </form>
         </div>
@@ -641,7 +594,7 @@ export default function CrewProfilePage() {
     );
   }
 
-  // AUTHENTICATED FIELD CREW PROFILE VIEW
+  // AUTHENTICATED CREW PROFILE VIEW
   return (
     <main className="resigrid-shell min-h-screen overflow-x-hidden text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
       <div className="ambient-background pointer-events-none" aria-hidden="true">
@@ -675,7 +628,7 @@ export default function CrewProfilePage() {
                 </span>
               </div>
               <p className="mt-0.5 truncate text-[9px] tracking-[0.12em] text-muted sm:text-[10px]">
-                FIELD PERSONNEL ACCOUNT
+                MAINTENANCE &amp; REPAIR CREW ACCOUNT
               </p>
             </div>
           </div>
@@ -695,16 +648,14 @@ export default function CrewProfilePage() {
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h2 className="text-base sm:text-lg font-bold text-white truncate">{fullName || "Field Artisan"}</h2>
+                <h2 className="text-base sm:text-lg font-bold text-white truncate">{fullName || "Field Crew Member"}</h2>
                 <CheckCircle2 className="w-4 h-4 text-accent-dynamic shrink-0" />
               </div>
-              <p className="text-xs text-muted truncate mt-0.5">{email}</p>
+              <p className="text-xs text-muted truncate mt-0.5">{email} • <span className="text-amber-300">{assignedUnit}</span></p>
               <div className="flex items-center gap-2 mt-1.5 text-[10px] sm:text-[11px] text-muted flex-wrap">
                 <span className="flex items-center gap-1 text-accent-dynamic">
                   <MapPin className="w-3 h-3 text-accent-dynamic shrink-0" /> {selectedCity} • {wardNumberOnly}
                 </span>
-                <span className="text-white/40">•</span>
-                <span className="text-accent-dynamic/80 font-medium">{assignedDepot}</span>
               </div>
             </div>
           </div>
@@ -732,7 +683,7 @@ export default function CrewProfilePage() {
                 <Palette className="w-4 h-4 text-accent-dynamic shrink-0" /> System Theme
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Customize your field crew console accent theme.
+                Customize your field crew mobile console accent theme.
               </p>
             </div>
 
@@ -782,22 +733,22 @@ export default function CrewProfilePage() {
             </div>
           </div>
 
-          {/* FIELD CREW ARTISAN DETAILS */}
+          {/* FIELD CREW OFFICER DETAILS */}
           <div className="glass-panel p-4 sm:p-6 space-y-4 relative pointer-events-auto w-full">
             <div className="panel-reflection pointer-events-none" />
 
             <div className="border-b border-white/10 pb-3">
               <h2 className="text-xs sm:text-sm font-semibold text-white flex items-center gap-2">
-                <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Artisan Credentials &amp; Assigned Unit
+                <User className="w-4 h-4 text-accent-dynamic shrink-0" /> Field Crew Credentials &amp; Unit Assignment
               </h2>
               <p className="text-[11px] sm:text-xs text-muted mt-0.5 leading-relaxed">
-                Manage your operational unit assignment and emergency contact details.
+                Manage your crew member profile, operational unit, and deployment area.
               </p>
             </div>
 
             <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1 relative z-20">
               <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Artisan Full Name</label>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Crew Member Full Name</label>
                 <input
                   type="text"
                   required
@@ -809,13 +760,13 @@ export default function CrewProfilePage() {
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Artisan Email Address</label>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Field Crew Email Address</label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="artisan@msunduzi.gov.za"
+                  placeholder="crew@resigrid.co.za"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
@@ -828,23 +779,23 @@ export default function CrewProfilePage() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   onBlur={handlePhoneBlur}
-                  placeholder="+27 83 456 7890"
+                  placeholder="+27 83 555 0199"
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Assigned Depot Unit</label>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Assigned Operational Unit (View &amp; Change Any Unit)</label>
                 <select
-                  value={assignedDepot}
-                  onChange={(e) => setAssignedDepot(e.target.value)}
+                  value={assignedUnit}
+                  onChange={(e) => setAssignedUnit(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
                 >
-                  {DEPOT_UNITS.map((depot) => (
-                    <option key={depot} value={depot} className="bg-neutral-900 text-white">
-                      {depot}
-                    </option>
-                  ))}
+                  <option value="Unit Alpha - Rapid Infrastructure Response" className="bg-neutral-900 text-white">Unit Alpha - Rapid Infrastructure Response</option>
+                  <option value="Unit Beta - Electrical Grid &amp; Substation Repair" className="bg-neutral-900 text-white">Unit Beta - Electrical Grid &amp; Substation Repair</option>
+                  <option value="Unit Gamma - Water Pipelines &amp; Valve Maintenance" className="bg-neutral-900 text-white">Unit Gamma - Water Pipelines &amp; Valve Maintenance</option>
+                  <option value="Unit Delta - Roadways, Potholes &amp; Stormwater" className="bg-neutral-900 text-white">Unit Delta - Roadways, Potholes &amp; Stormwater</option>
+                  <option value="Unit Omega - Emergency HAZMAT &amp; Special Operations" className="bg-neutral-900 text-white">Unit Omega - Emergency HAZMAT &amp; Special Operations</option>
                 </select>
               </div>
 
@@ -878,12 +829,12 @@ export default function CrewProfilePage() {
                 </select>
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Operational Response Ward</label>
+              <div>
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Assigned Deployment Ward</label>
                 <select
                   value={selectedWard}
                   onChange={(e) => setSelectedWard(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto cursor-pointer truncate"
                 >
                   {currentWards.map((ward) => (
                     <option key={ward} value={ward} className="bg-neutral-900 text-white">
@@ -891,6 +842,17 @@ export default function CrewProfilePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-[11px] sm:text-xs font-medium text-muted block mb-1">Base Depot / Dispatch Station</label>
+                <input
+                  type="text"
+                  value={streetAddress}
+                  onChange={(e) => setStreetAddress(e.target.value)}
+                  placeholder="e.g. Mountain Rise Municipal Works Depot"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-white/30 transition-colors relative z-30 pointer-events-auto"
+                />
               </div>
             </form>
           </div>
@@ -916,7 +878,7 @@ export default function CrewProfilePage() {
               ) : (
                 <>
                   <Save className="w-4 h-4 pointer-events-none" />
-                  <span className="pointer-events-none">Save Field Crew Preferences</span>
+                  <span className="pointer-events-none">Save Crew Preferences</span>
                 </>
               )}
             </button>
@@ -937,7 +899,7 @@ export default function CrewProfilePage() {
                 <Smartphone className="w-4 h-4 text-accent-dynamic shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-white truncate">Active Field Crew Dispatch Session</p>
-                  <p className="text-[10px] text-muted truncate">Secure Auth • Verified Artisan</p>
+                  <p className="text-[10px] text-muted truncate">Mobile Fleet Sync • Verified Personnel</p>
                 </div>
               </div>
 
@@ -957,7 +919,7 @@ export default function CrewProfilePage() {
                   ) : (
                     <>
                       <LogOut className="w-3.5 h-3.5 pointer-events-none" />
-                      <span className="pointer-events-none">Sign Out Session</span>
+                      <span className="pointer-events-none">Sign Out</span>
                     </>
                   )}
                 </button>

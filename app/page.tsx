@@ -257,7 +257,7 @@ export default function HomePage() {
 
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
 
-    // Greeting & User Name Handler
+    // Greeting & User Name Handler with Direct Supabase Session & Local Storage Profile Precedence
     const hour = new Date().getHours();
     let timeOfDayGreeting = "Good morning";
 
@@ -267,29 +267,64 @@ export default function HomePage() {
       timeOfDayGreeting = "Good evening";
     }
 
-    let savedName = "User";
-    try {
-      const loadProfileName = (rawProfile: string | null) => {
-        if (!rawProfile) return null;
-        const parsed = JSON.parse(rawProfile);
-        const fullName = parsed.fullName || parsed.full_name;
-        if (fullName) {
-          return fullName.trim().split(/\s+/)[0];
-        }
-        return null;
-      };
-
-      savedName = 
-        loadProfileName(localStorage.getItem("resigrid_civic_profile")) ||
-        loadProfileName(localStorage.getItem("resigrid_user_profile")) ||
-        localStorage.getItem("resigrid-user-name")?.trim().split(/\s+/)[0] ||
-        "User";
-    } catch {
-      savedName = "User";
-    }
-
     setGreetingPrefix(timeOfDayGreeting);
-    setUserName(savedName);
+
+    const resolveInitialUserName = async () => {
+      let resolvedName = "";
+      try {
+        const loadProfileName = (rawProfile: string | null) => {
+          if (!rawProfile) return null;
+          const parsed = JSON.parse(rawProfile);
+          const fullName = parsed.fullName || parsed.full_name;
+          if (fullName) {
+            return fullName.trim().split(/\s+/)[0];
+          }
+          return null;
+        };
+
+        resolvedName = 
+          loadProfileName(localStorage.getItem("resigrid_civic_profile")) ||
+          loadProfileName(localStorage.getItem("resigrid_user_profile")) ||
+          localStorage.getItem("resigrid-user-name")?.trim().split(/\s+/)[0] ||
+          "";
+      } catch {
+        resolvedName = "";
+      }
+
+      if (!resolvedName) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const user = sessionData?.session?.user;
+          if (user) {
+            const userProfile = localStorage.getItem(`resigrid_profile_${user.id}`);
+            if (userProfile) {
+              const parsed = JSON.parse(userProfile);
+              if (parsed.fullName) {
+                resolvedName = parsed.fullName.trim().split(/\s+/)[0];
+              }
+            }
+
+            if (!resolvedName) {
+              const metaName = user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.username;
+              if (metaName) {
+                resolvedName = metaName.trim().split(/\s+/)[0];
+              } else if (user.email) {
+                const emailPart = user.email.split("@")[0];
+                if (emailPart) {
+                  resolvedName = emailPart.charAt(0).toUpperCase() + emailPart.slice(1);
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Could not fetch user session for name resolution:", e);
+        }
+      }
+
+      setUserName(resolvedName || "User");
+    };
+
+    void resolveInitialUserName();
 
     // Real-time Status Sync directly from Supabase reports table
     const syncStatusFromSupabase = async () => {

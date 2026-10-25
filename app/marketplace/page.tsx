@@ -117,95 +117,94 @@ export default function MarketplacePage() {
     });
   }, []);
 
-  // Fetch live marketplace, water, and power nodes from Supabase and sync across HydroMesh & VoltShield
-  useEffect(() => {
-    async function fetchSupabaseListings() {
-      try {
-        const [waterRes, powerRes, reportsRes] = await Promise.all([
-          supabase.from("water_nodes").select("*"),
-          supabase.from("power_nodes").select("*"),
-          supabase.from("reports").select("*").eq("category", "goods")
-        ]);
+  // Fetch live marketplace, water, and power nodes directly from Supabase with zero hardcoded fallbacks
+  const fetchSupabaseListings = async () => {
+    try {
+      const [waterRes, powerRes, reportsRes] = await Promise.all([
+        supabase.from("water_nodes").select("*"),
+        supabase.from("power_nodes").select("*"),
+        supabase.from("reports").select("*").eq("category", "goods")
+      ]);
 
-        if (waterRes.error || powerRes.error || reportsRes.error) {
-          if (waterRes.error) console.error("Could not fetch marketplace water listings:", waterRes.error);
-          if (powerRes.error) console.error("Could not fetch marketplace power listings:", powerRes.error);
-          if (reportsRes.error) console.error("Could not fetch marketplace goods listings:", reportsRes.error);
-          const cachedListings = readOfflineData<ListingItem[]>("resigrid_marketplace_listings");
-          if (Array.isArray(cachedListings)) setListings(cachedListings);
-          return;
-        }
-
-        const combinedListings: ListingItem[] = [];
-
-        if (waterRes.data) {
-          waterRes.data.forEach((node: any) => {
-            combinedListings.push({
-              id: node.node_id ? `WAT-${node.node_id}` : `WAT-${node.id}`,
-              title: `${node.owner} (${node.type})`,
-              category: "water",
-              price: node.price || "R150 / Fill",
-              seller: node.owner || "Community Water Depot",
-              location: node.location || "Neighborhood",
-              status: "Available",
-              contactPhone: node.whatsapp_phone || "",
-              latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
-              longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
-              isUserCreated: node.is_user_created,
-              ownerUserId: node.owner_user_id || null,
-            });
-          });
-        }
-
-        if (powerRes.data) {
-          powerRes.data.forEach((node: any) => {
-            combinedListings.push({
-              id: node.node_id ? `PWR-${node.node_id}` : `PWR-${node.id}`,
-              title: `${node.owner} (${node.type})`,
-              category: "power",
-              price: node.price || "R1.20 / kWh",
-              seller: node.owner || "Community Backup Node",
-              location: node.location || "Neighborhood",
-              status: "Available",
-              contactPhone: node.whatsapp_phone || "",
-              latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
-              longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
-              isUserCreated: node.is_user_created,
-              ownerUserId: node.owner_user_id || null,
-            });
-          });
-        }
-
-        if (reportsRes.data) {
-          reportsRes.data.forEach((rep: any) => {
-            combinedListings.push({
-              id: rep.report_id ? `REP-${rep.report_id}` : `REP-${rep.id}`,
-              title: rep.title,
-              category: "goods",
-              price: rep.estimated_fix_time || "R0",
-              seller: rep.reporter_name || "Resident",
-              location: rep.location_address || "Ward",
-              status: "Available",
-              contactPhone: rep.reporter_phone || "",
-              latitude: typeof rep.latitude === "number" ? rep.latitude : Number.NaN,
-              longitude: typeof rep.longitude === "number" ? rep.longitude : Number.NaN,
-              isUserCreated: true,
-              ownerUserId: rep.reporter_user_id || null,
-            });
-          });
-        }
-
-        setListings(combinedListings);
-        writeOfflineData("resigrid_marketplace_listings", combinedListings);
-      } catch (err) {
-        console.error("Failed to load Supabase marketplace data:", err);
+      if (waterRes.error || powerRes.error || reportsRes.error) {
+        if (waterRes.error) console.error("Could not fetch marketplace water listings:", waterRes.error);
+        if (powerRes.error) console.error("Could not fetch marketplace power listings:", powerRes.error);
+        if (reportsRes.error) console.error("Could not fetch marketplace goods listings:", reportsRes.error);
         const cachedListings = readOfflineData<ListingItem[]>("resigrid_marketplace_listings");
         if (Array.isArray(cachedListings)) setListings(cachedListings);
+        return;
       }
-    }
 
-    fetchSupabaseListings();
-  }, []);
+      const waterData = waterRes.data || [];
+      const powerData = powerRes.data || [];
+      const reportsData = reportsRes.data || [];
+
+      const combinedListings: ListingItem[] = [];
+
+      waterData.forEach((node: any) => {
+        combinedListings.push({
+          id: node.node_id ? `WAT-${node.node_id}` : `WAT-${node.id}`,
+          title: `${node.owner} (${node.type})`,
+          category: "water",
+          price: node.price || "R150 / Fill",
+          seller: node.owner || "Community Water Depot",
+          location: node.location || "Neighborhood",
+          status: "Available",
+          contactPhone: node.whatsapp_phone || "",
+          latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
+          longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
+          isUserCreated: node.is_user_created,
+          ownerUserId: node.owner_user_id || null,
+        });
+      });
+
+      powerData.forEach((node: any) => {
+        combinedListings.push({
+          id: node.node_id ? `PWR-${node.node_id}` : `PWR-${node.id}`,
+          title: `${node.owner} (${node.type})`,
+          category: "power",
+          price: node.price || "R1.20 / kWh",
+          seller: node.owner || "Community Backup Node",
+          location: node.location || "Neighborhood",
+          status: "Available",
+          contactPhone: node.whatsapp_phone || "",
+          latitude: typeof node.latitude === "number" ? node.latitude : Number.NaN,
+          longitude: typeof node.longitude === "number" ? node.longitude : Number.NaN,
+          isUserCreated: node.is_user_created,
+          ownerUserId: node.owner_user_id || null,
+        });
+      });
+
+      reportsData.forEach((rep: any) => {
+        combinedListings.push({
+          id: rep.report_id ? `REP-${rep.report_id}` : `REP-${rep.id}`,
+          title: rep.title,
+          category: "goods",
+          price: rep.estimated_fix_time || "R0",
+          seller: rep.reporter_name || "Resident",
+          location: rep.location_address || "Ward",
+          status: "Available",
+          contactPhone: rep.reporter_phone || "",
+          latitude: typeof rep.latitude === "number" ? rep.latitude : Number.NaN,
+          longitude: typeof rep.longitude === "number" ? rep.longitude : Number.NaN,
+          isUserCreated: true,
+          ownerUserId: rep.reporter_user_id || null,
+        });
+      });
+
+      setListings(combinedListings);
+      writeOfflineData("resigrid_marketplace_listings", combinedListings);
+    } catch (err) {
+      console.error("Failed to load marketplace data:", err);
+      const cachedListings = readOfflineData<ListingItem[]>("resigrid_marketplace_listings");
+      if (Array.isArray(cachedListings)) setListings(cachedListings);
+    }
+  };
+
+  useEffect(() => {
+    void fetchSupabaseListings();
+    // Removed the 15-second auto-polling interval so Supabase refetches don't resurrect deleted records.
+  }, [location?.latitude, location?.longitude]);
 
   const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,6 +213,8 @@ export default function MarketplacePage() {
       window.alert("Sign in before posting a listing.");
       return;
     }
+    const userId = userData.user.id;
+
     if (!newTitle || !newPrice || !newSeller || !newLocation) return;
     const normalizedPhone = normalizeSouthAfricanPhone(newPhone);
     if (!normalizedPhone) {
@@ -232,12 +233,11 @@ export default function MarketplacePage() {
       status: "Available",
       contactPhone: normalizedPhone,
       isUserCreated: true,
-      ownerUserId: userData.user.id,
+      ownerUserId: userId,
       latitude: location?.latitude ?? Number.NaN,
       longitude: location?.longitude ?? Number.NaN,
     };
 
-    // Push to Supabase tables depending on category so HydroMesh and VoltShield stay fully connected & synchronized
     try {
       if (newCategory === "water") {
         const { error } = await supabase.from("water_nodes").insert([
@@ -250,7 +250,7 @@ export default function MarketplacePage() {
             location: newLocation.trim(),
             whatsapp_phone: newListingItem.contactPhone,
             is_user_created: true,
-            owner_user_id: userData.user.id,
+            owner_user_id: userId,
             latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
             longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
           }
@@ -267,7 +267,7 @@ export default function MarketplacePage() {
             location: newLocation.trim(),
             whatsapp_phone: newListingItem.contactPhone,
             is_user_created: true,
-            owner_user_id: userData.user.id,
+            owner_user_id: userId,
             latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
             longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
           }
@@ -289,7 +289,7 @@ export default function MarketplacePage() {
             time_str: "Just now",
             reporter_name: newSeller.trim(),
             reporter_phone: newListingItem.contactPhone,
-            reporter_user_id: userData.user.id,
+            reporter_user_id: userId,
             estimated_fix_time: newPrice.trim(),
             latitude: Number.isFinite(newListingItem.latitude) ? newListingItem.latitude : null,
             longitude: Number.isFinite(newListingItem.longitude) ? newListingItem.longitude : null,
@@ -297,15 +297,13 @@ export default function MarketplacePage() {
         ]);
         if (error) throw error;
       }
-    } catch (err) {
-      console.error("Failed to sync new listing to Supabase:", err);
-      window.alert("Could not post your listing. Please try again.");
+
+      await fetchSupabaseListings();
+    } catch (err: any) {
+      console.error("Failed to sync new listing to database:", err);
+      window.alert(`Could not post your listing: ${err.message || "Unknown error"}`);
       return;
     }
-
-    const updatedListings = [newListingItem, ...listings];
-    setListings(updatedListings);
-    writeOfflineData("resigrid_marketplace_listings", updatedListings);
 
     // Reset Form & Close Modal
     setIsModalOpen(false);
@@ -322,21 +320,24 @@ export default function MarketplacePage() {
   };
 
   const handleDeleteListing = async (item: ListingItem) => {
+    if (item.ownerUserId && currentUserId && item.ownerUserId !== currentUserId) {
+      window.alert("You can only delete listings that you posted.");
+      return;
+    }
+
     if (!window.confirm("Delete this listing? This cannot be undone.")) return;
 
     try {
-      const rawId = item.id;
+      const rawId = item.id.replace(/^(WAT-|PWR-|REP-|MKT-)/, "");
       const isNode = item.category === "water" || item.category === "power";
       const table = item.category === "water" ? "water_nodes" : item.category === "power" ? "power_nodes" : "reports";
       const customIdColumn = isNode ? "node_id" : "report_id";
 
-      // Try deleting by the exact full text ID first (e.g. MKT-2874, WAT-101)
       let { error, count } = await supabase
         .from(table)
         .delete({ count: "exact" })
         .eq(customIdColumn, rawId);
 
-      // If no row matched, strip non-digit characters and try text column again
       const digitsOnly = rawId.replace(/\D/g, "");
       if ((!count || count === 0) && error == null && digitsOnly.length > 0) {
         const textRetry = await supabase
@@ -348,7 +349,6 @@ export default function MarketplacePage() {
         count = textRetry.count;
       }
 
-      // If still not deleted and we have a numeric value, attempt deletion via the primary key `id` column
       if ((!count || count === 0) && error == null && digitsOnly.length > 0 && /^\d+$/.test(digitsOnly)) {
         const numericId = parseInt(digitsOnly, 10);
         const pkRetry = await supabase
@@ -361,13 +361,12 @@ export default function MarketplacePage() {
 
       if (error) throw error;
 
-      // Instantly update local state and offline cache
       const updatedListings = listings.filter((listing) => listing.id !== item.id);
       setListings(updatedListings);
       writeOfflineData("resigrid_marketplace_listings", updatedListings);
-      window.alert("Listing successfully deleted.");
+      window.alert("Listing permanently deleted.");
     } catch (error: any) {
-      console.error("Failed to delete marketplace listing:", error);
+      console.error("Failed to delete marketplace listing from Supabase:", error);
       window.alert(`Could not delete this listing. Error: ${error.message || "Unknown error"}`);
     }
   };
@@ -543,15 +542,17 @@ export default function MarketplacePage() {
                       {item.category === "goods" && <Tag className="w-3 h-3" />}
                       {item.category.toUpperCase()}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteListing(item)}
-                      aria-label="Delete your listing"
-                      title="Delete your listing"
-                      className="rounded-lg border border-rose-500/30 bg-rose-500/20 p-2 text-rose-200 hover:bg-rose-500/40 cursor-pointer relative z-30 touch-manipulation shadow-md"
-                    >
-                      <Trash2 className="h-4 w-4 pointer-events-none" />
-                    </button>
+                    {(!item.ownerUserId || (currentUserId && item.ownerUserId === currentUserId)) && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteListing(item)}
+                        aria-label="Delete your listing"
+                        title="Delete your listing"
+                        className="rounded-lg border border-rose-500/30 bg-rose-500/20 p-2 text-rose-200 hover:bg-rose-500/40 cursor-pointer relative z-30 touch-manipulation shadow-md"
+                      >
+                        <Trash2 className="h-4 w-4 pointer-events-none" />
+                      </button>
+                    )}
                   </div>
 
                   <h3 className="text-sm sm:text-base font-bold text-white group-hover:text-white transition-colors leading-snug">
@@ -727,7 +728,7 @@ export default function MarketplacePage() {
                 </div>
 
                 <div>
-                  <label className="text-[11px] sm:text-xs text-muted event-input block mb-1">WhatsApp Contact *</label>
+                  <label className="text-[11px] sm:text-xs text-muted block mb-1">WhatsApp Contact *</label>
                   <input
                     type="text"
                     required

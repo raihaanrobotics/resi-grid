@@ -28,8 +28,10 @@ export default function ReportImpactButton({
     setErrorMessage("");
 
     try {
+      const rawId = reportId.replace(/^(WAT-|PWR-|REP-|MKT-|RPT-)/, "");
+
       const { data, error } = await supabase.rpc("upvote_report", {
-        p_report_id: reportId,
+        p_report_id: rawId,
       });
       if (error) throw error;
 

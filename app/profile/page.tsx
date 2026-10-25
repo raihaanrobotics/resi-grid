@@ -17,7 +17,6 @@ import {
   ArrowRight,
   KeyRound,
   Loader2,
-  Scale,
 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/lib/supabase";
@@ -196,11 +195,6 @@ export default function ProfilePage() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const accountType = "resident";
 
-  // Judge Login Modal State
-  const [showJudgeModal, setShowJudgeModal] = useState<boolean>(false);
-  const [judgePasskey, setJudgePasskey] = useState<string>("");
-  const [judgeError, setJudgeError] = useState<string>("");
-
   // Auth Form States
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -219,37 +213,18 @@ export default function ProfilePage() {
   const [isSigningOut, setIsSigningOut] = useState<boolean>(false);
   const [isDeletingData, setIsDeletingData] = useState<boolean>(false);
 
-  // Profile & Contact States (Clean/Blank initial states)
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [selectedWard, setSelectedWard] = useState("");
-  const [streetAddress, setStreetAddress] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
+  // Profile & Contact States (Pre-filled with fully populated demo details)
+  const [fullName, setFullName] = useState("Judge");
+  const [email, setEmail] = useState("evaluator@resigrid.co.za");
+  const [phone, setPhone] = useState("+27 82 123 4567");
+  const [selectedWard, setSelectedWard] = useState("Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
+  const [streetAddress, setStreetAddress] = useState("142 Chief Albert Luthuli St");
+  const [accountNumber, setAccountNumber] = useState("800459201");
 
   // Check Supabase Auth Session and load persistent profile on Mount
   useEffect(() => {
     async function checkSession() {
       try {
-        const isJudge = localStorage.getItem("resigrid_judge_mode") === "true";
-        if (isJudge) {
-          setIsAuthenticated(true);
-          setAuthLoading(false);
-          const localProfile = localStorage.getItem("resigrid_civic_profile");
-          if (localProfile) {
-            const parsed = JSON.parse(localProfile);
-            setFullName(parsed.fullName || "Judge");
-            setEmail(parsed.email || "judge.evaluator@resigrid.co.za");
-            setPhone(parsed.phone || "+27 82 555 0192");
-            setSelectedProvince(parsed.selectedProvince || "KwaZulu-Natal");
-            setSelectedCity(parsed.selectedCity || "Pietermaritzburg (Msunduzi)");
-            setSelectedWard(parsed.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
-            setStreetAddress(parsed.streetAddress || "142 Chief Albert Luthuli St");
-            setAccountNumber(parsed.accountNumber || "800459201");
-          }
-          return;
-        }
-
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user) {
         const role = session.user.user_metadata?.role || "resident";
@@ -267,13 +242,13 @@ export default function ProfilePage() {
           const localProfile = localStorage.getItem(`resigrid_profile_${session.user.id}`);
           const parsedLocal = localProfile ? JSON.parse(localProfile) : {};
 
-          setFullName(meta.full_name || parsedLocal.fullName || "");
-          setPhone(meta.phone || parsedLocal.phone || "");
+          setFullName(meta.full_name || parsedLocal.fullName || "Sipho Dlamini (Demo)");
+          setPhone(meta.phone || parsedLocal.phone || "+27 82 123 4567");
           setSelectedProvince(meta.province || parsedLocal.selectedProvince || "KwaZulu-Natal");
           setSelectedCity(meta.city || parsedLocal.selectedCity || "Pietermaritzburg (Msunduzi)");
           setSelectedWard(meta.ward || parsedLocal.selectedWard || "Ward 26: Northern Park, Victoria Road areas, and parts of Woodlands");
-          setStreetAddress(meta.street_address || parsedLocal.streetAddress || "");
-          setAccountNumber(meta.account_number || parsedLocal.accountNumber || "");
+          setStreetAddress(meta.street_address || parsedLocal.streetAddress || "142 Chief Albert Luthuli St");
+          setAccountNumber(meta.account_number || parsedLocal.accountNumber || "800459201");
         }
       } catch (err) {
         console.error("Auth check error:", err);
@@ -324,18 +299,6 @@ export default function ProfilePage() {
       digits = "+27" + digits;
     }
     setPhone(digits);
-  };
-
-  // Handle Master Judge Login verification
-  const handleJudgeLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setJudgeError("");
-    if (judgePasskey.trim() === "RESIGRID-JUDGE-2026" || judgePasskey.trim() === "JUDGE2026") {
-      localStorage.setItem("resigrid_judge_mode", "true");
-      router.replace("/judge");
-    } else {
-      setJudgeError("Invalid Master Passkey. Please try again.");
-    }
   };
 
   // Handle Authentication (Login / Signup) via Supabase with Role-Based Routing
@@ -398,8 +361,8 @@ export default function ProfilePage() {
           return;
         }
         setEmail(data.session.user.email || authEmail);
-        setFullName(meta.full_name || "");
-        setPhone(meta.phone || "");
+        setFullName(meta.full_name || "Sipho Dlamini (Demo)");
+        setPhone(meta.phone || "+27 82 123 4567");
         activeSession = data.session;
         activeUser = data.user;
       }
@@ -423,7 +386,7 @@ export default function ProfilePage() {
       }
       localStorage.setItem("resigrid_civic_profile", JSON.stringify(profileData));
 
-      router.replace("/");
+      setIsAuthenticated(true);
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
@@ -549,7 +512,7 @@ export default function ProfilePage() {
     );
   }
 
-  // UNAUTHENTICATED: 3-ROLE SELECTOR AUTHENTICATION SCREEN
+  // UNAUTHENTICATED: LOGIN SCREEN WITHOUT JUDGE OPTION
   if (!isAuthenticated) {
     return (
       <main className="resigrid-shell min-h-screen flex items-center justify-center p-3 sm:p-6 text-[var(--text)] selection:bg-teal-500/30 selection:text-teal-200">
@@ -567,23 +530,16 @@ export default function ProfilePage() {
             <div className="w-12 h-12 rounded-2xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center mx-auto text-teal-400">
               <KeyRound className="w-6 h-6" />
             </div>
-            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">RESIGRID SECURE LOGIN</h1>
+            <h1 className="text-base sm:text-lg font-bold tracking-wider text-white">RESIDENT LOGIN</h1>
             <p className="text-xs text-muted">Sign in or create your resident account.</p>
           </div>
 
           <div className="flex justify-between items-center text-[11px] border-y border-white/10 py-2.5 my-2">
             <button type="button" onClick={() => router.push("/profile2")} className="text-blue-300 hover:underline">
-              Municipal portal
+              Municipal login
             </button>
             <button type="button" onClick={() => router.push("/profile3")} className="text-amber-300 hover:underline">
-              Field crew portal
-            </button>
-            <button 
-              type="button" 
-              onClick={() => setShowJudgeModal(true)} 
-              className="flex items-center gap-1 text-purple-300 hover:text-purple-200 font-semibold transition-colors"
-            >
-              <Scale className="w-3.5 h-3.5" /> Judge Login
+              Field crew login
             </button>
           </div>
 
@@ -659,58 +615,6 @@ export default function ProfilePage() {
             </div>
           </form>
         </div>
-
-        {/* JUDGE LOGIN MODAL */}
-        {showJudgeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-            <div className="glass-panel w-full max-w-md p-6 relative space-y-4 border border-purple-500/30">
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Scale className="w-4 h-4 text-purple-400" /> Master Judge Login
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowJudgeModal(false)}
-                  className="text-muted hover:text-white"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <p className="text-xs text-muted leading-relaxed">
-                Enter the master passkey to access the multi-role evaluator hub with instant switching between Citizen, Municipal, and Crew interfaces.
-              </p>
-
-              {judgeError && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
-                  {judgeError}
-                </div>
-              )}
-
-              <form onSubmit={handleJudgeLogin} className="space-y-3 pt-2">
-                <div>
-                  <label className="text-[11px] text-muted block mb-1">Master Passkey</label>
-                  <input
-                    type="password"
-                    required
-                    value={judgePasskey}
-                    onChange={(e) => setJudgePasskey(e.target.value)}
-                    placeholder="Enter passkey..."
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500 font-mono"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 rounded-xl border bg-purple-500/20 border-purple-500/40 hover:bg-purple-500/30 text-purple-200 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg"
-                >
-                  <span>Login</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
-            </div>
-          </div>
-        )}
       </main>
     );
   }
@@ -1040,7 +944,7 @@ export default function ProfilePage() {
                   ) : (
                     <>
                       <LogOut className="w-3.5 h-3.5 pointer-events-none" />
-                      <span className="pointer-events-none">Sign Out Session</span>
+                      <span className="pointer-events-none">Sign Out</span>
                     </>
                   )}
                 </button>

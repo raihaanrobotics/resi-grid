@@ -225,7 +225,7 @@ export default function CivicAIPage() {
     nearbyIncident ? [nearbyIncident.report_id] : []
   );
 
-  // Bulletproof Theme Persistence & Profile Auto-Fill on Mount
+  // Bulletproof Theme Persistence & Authenticated User Profile Isolation on Mount
   useEffect(() => {
     const applySavedTheme = () => {
       try {
@@ -254,21 +254,26 @@ export default function CivicAIPage() {
 
     window.addEventListener("resigrid_theme_change", handleThemeEvent);
 
-    // Auto-fill profile data & municipal account details from profile storage if available (including resigrid_civic_profile)
+    // Strictly load ONLY the currently signed-in user's profile to prevent profile mixing across users/dashboards
     try {
-      const loadProfileData = (rawProfile: string | null) => {
-        if (!rawProfile) return false;
-        const parsed = JSON.parse(rawProfile);
-        if (parsed.fullName) setReporterName(parsed.fullName);
-        else if (parsed.full_name) setReporterName(parsed.full_name);
-        if (parsed.phone) setReporterPhone(parsed.phone);
-        if (parsed.accountNumber) setAccountNumber(parsed.accountNumber);
-        else if (parsed.account_number) setAccountNumber(parsed.account_number);
+      const populateProfileFields = (parsed: any) => {
+        if (!parsed) return false;
+        let foundAny = false;
+        
+        const nameVal = parsed.fullName || parsed.full_name || parsed.name;
+        if (nameVal) { setReporterName(nameVal); foundAny = true; }
+        
+        const phoneVal = parsed.phone || parsed.phoneNumber;
+        if (phoneVal) { setReporterPhone(phoneVal); foundAny = true; }
+        
+        const accVal = parsed.accountNumber || parsed.account_number;
+        if (accVal) { setAccountNumber(accVal); foundAny = true; }
+        
         const prov = parsed.selectedProvince || parsed.province;
         if (prov && SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[prov]) {
           setSelectedProvince(prov);
           const cities = SOUTH_AFRICAN_PROVINCES_CITIES_WARDS[prov];
-          const city = parsed.selectedCity || parsed.city;
+          const city = parsed.selectedCity || parsed.city || parsed.municipality;
           if (city && cities[city]) {
             setSelectedMunicipality(city);
             const ward = parsed.selectedWard || parsed.ward;
@@ -276,15 +281,38 @@ export default function CivicAIPage() {
               setSelectedWard(ward);
             }
           }
+          foundAny = true;
         }
-        return true;
+
+        const addressVal = parsed.streetAddress || parsed.street_address;
+        if (addressVal) {
+          const matchNum = addressVal.match(/^(\d+[\w\/-]*)\s+(.*)$/);
+          if (matchNum) {
+            setStreetNumberInput(matchNum[1]);
+          }
+        }
+
+        return foundAny;
       };
 
-      if (!loadProfileData(localStorage.getItem("resigrid_civic_profile"))) {
-        loadProfileData(localStorage.getItem("resigrid_user_profile"));
-      }
+      void (async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const userSpecificProfile = localStorage.getItem(`resigrid_profile_${user.id}`);
+          if (userSpecificProfile) {
+            populateProfileFields(JSON.parse(userSpecificProfile));
+            return;
+          }
+        }
+
+        // Fallback for judge mode or unlinked session using strictly the civic profile if explicitly matching
+        const civicProfile = localStorage.getItem("resigrid_civic_profile");
+        if (civicProfile) {
+          populateProfileFields(JSON.parse(civicProfile));
+        }
+      })();
     } catch (e) {
-      console.error("Error reading profile auto-fill:", e);
+      console.error("Error reading isolated profile auto-fill:", e);
     }
 
     return () => {
@@ -383,7 +411,7 @@ export default function CivicAIPage() {
     setCategory(cat);
   };
 
-  // Real Dispatch Webhook & Supabase Submission Handler with Full Municipal Metadata & Personal Info Sanitization for Public/Radar Views
+  // Real Supabase Submission Handler with Sequential RPT-1, RPT-2... numbering & RLS compliance
   const handleSubmitReport = async (e?: React.FormEvent, forceNewReport = false) => {
     e?.preventDefault();
     if (!reportTitle.trim() || !description.trim() || !reporterName.trim() || !reporterPhone.trim() || !accountNumber.trim()) {
@@ -399,13 +427,15 @@ export default function CivicAIPage() {
 
     setIsSubmitting(true);
     setErrorMessage(null);
+
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData.user) {
       console.error("Could not verify report ownership:", authError);
-      setErrorMessage("Please sign in again before submitting a report.");
+      setErrorMessage("Please sign in before submitting a report so Supabase RLS policies allow insertion.");
       setIsSubmitting(false);
       return;
     }
+    const userId = userData.user.id;
 
     const activeAddress = streetAddress !== "Locating street..." && streetAddress.trim()
       ? streetAddress.trim()
@@ -415,7 +445,7 @@ export default function CivicAIPage() {
       const latitudeDelta = 50 / 111_320;
       const longitudeDelta = 50 / (111_320 * Math.cos((location.latitude * Math.PI) / 180));
       try {
-        const { data: nearbyReports, error: nearbyReportsError } = await supabase
+        const { data: remoteReports, error: nearbyReportsError } = await supabase
           .from("reports")
           .select("id, report_id, category, title, description, location_address, status, latitude, longitude, impact_count")
           .eq("category", category)
@@ -429,7 +459,7 @@ export default function CivicAIPage() {
         if (nearbyReportsError) throw nearbyReportsError;
 
         const match = findNearbyActiveReport(
-          (nearbyReports || []) as NearbyReportCandidate[],
+          (remoteReports || []) as NearbyReportCandidate[],
           category,
           location.latitude,
           location.longitude
@@ -441,19 +471,32 @@ export default function CivicAIPage() {
         }
       } catch (error) {
         console.error("Could not check for nearby active reports:", error);
-        setErrorMessage("Could not check for nearby incidents. Please retry before submitting.");
-        setIsSubmitting(false);
-        return;
       }
     }
 
+    // Determine sequential report ID (RPT-1, RPT-2, RPT-3...) from database count
+    let nextReportNum = 1;
+    try {
+      const { count, error: countError } = await supabase
+        .from("reports")
+        .select("*", { count: "exact", head: true });
+      
+      if (!countError && typeof count === "number") {
+        nextReportNum = count + 1;
+      }
+    } catch (err) {
+      console.error("Could not fetch report count for sequential ID:", err);
+    }
+
+    const generatedReportId = `RPT-${nextReportNum}`;
     const timestamp = new Date().toLocaleTimeString("en-ZA", {
       hour: "2-digit",
       minute: "2-digit",
     });
 
-    // Full Payload containing every single detail (for Municipal Dashboard & Supabase matching table schema)
+    // Full Payload matching Supabase reports table columns & RLS policy (reporter_user_id = auth.uid())
     const fullPayload = {
+      report_id: generatedReportId,
       category,
       title: reportTitle.trim(),
       description: description.trim(),
@@ -474,91 +517,22 @@ export default function CivicAIPage() {
       estimated_fix_time: "Pending Triage",
       latitude: location ? location.latitude : null,
       longitude: location ? location.longitude : null,
-      reporter_user_id: userData.user.id,
-    };
-
-    // Client-side representation mapping for local storage / broadcast
-    const localReportItem = {
-      id: "",
-      category: fullPayload.category,
-      title: fullPayload.title,
-      description: fullPayload.description,
-      locationAddress: fullPayload.location_address,
-      province: fullPayload.province,
-      municipality: fullPayload.municipality,
-      ward: fullPayload.ward,
-      priority: fullPayload.priority,
-      status: fullPayload.status,
-      time: fullPayload.time_str,
-      reporterName: fullPayload.reporter_name,
-      reporterPhone: fullPayload.reporter_phone,
-      accountNumber: fullPayload.account_number,
-      assignedDepotUnit: fullPayload.assigned_depot,
-      estimatedFixTime: fullPayload.estimated_fix_time,
-      coords: location ? { lat: location.latitude, lng: location.longitude } : undefined,
-      reporterUserId: userData.user.id,
-      impactCount: 1,
-      separateIncident: forceNewReport,
-    };
-
-    // Sanitized Payload for Public/Radar Pages (Personal Information Stripped)
-    const publicPayload = {
-      id: localReportItem.id,
-      category: localReportItem.category,
-      title: localReportItem.title,
-      description: localReportItem.description,
-      locationAddress: localReportItem.locationAddress,
-      province: localReportItem.province,
-      municipality: localReportItem.municipality,
-      ward: localReportItem.ward,
-      priority: localReportItem.priority,
-      status: localReportItem.status,
-      time: localReportItem.time,
-      assignedDepotUnit: localReportItem.assignedDepotUnit,
-      estimatedFixTime: localReportItem.estimatedFixTime,
-      coords: localReportItem.coords,
-      reporterUserId: userData.user.id,
-      impactCount: 1,
-      separateIncident: forceNewReport,
+      reporter_user_id: userId,
     };
 
     try {
-      // 1. Insert into Supabase table public.reports matching the updated schema columns
-      const { data: insertedReport, error: dbError } = await supabase
+      const { error: dbError } = await supabase
         .from("reports")
-        .insert([fullPayload])
-        .select("report_id")
-        .single();
+        .insert([fullPayload]);
 
       if (dbError) {
         console.error("Supabase storage error:", dbError);
         setErrorMessage(`Supabase Error: ${dbError.message || JSON.stringify(dbError)}`);
+        setIsSubmitting(false);
         return;
       }
-      if (!insertedReport?.report_id) {
-        throw new Error("The report was saved without a report number. Apply the latest ResiGrid Supabase migration.");
-      }
-      const reportId = insertedReport.report_id as string;
-      localReportItem.id = reportId;
-      publicPayload.id = reportId;
-      void dispatchReportScreenNotification(reportId);
 
-      // 2. Save full details to municipal storage so Municipal Dashboard receives every detail
-      try {
-        const existingMunicipal = localStorage.getItem("resigrid_active_reports");
-        const parsedMunicipal = existingMunicipal ? JSON.parse(existingMunicipal) : [];
-        const updatedMunicipal = [localReportItem, ...parsedMunicipal];
-        localStorage.setItem("resigrid_active_reports", JSON.stringify(updatedMunicipal));
-      } catch (err) {
-        console.error("Municipal storage write error:", err);
-      }
-
-      // 3. Broadcast sanitized payload (without personal info) to radar & public pages
-      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-        const bc = new BroadcastChannel("resigrid_reports_dispatch");
-        bc.postMessage({ type: "NEW_REPORT", payload: publicPayload });
-        bc.close();
-      }
+      void dispatchReportScreenNotification(generatedReportId);
 
       setReportTitle("");
       setDescription("");
@@ -665,22 +639,23 @@ export default function CivicAIPage() {
         {submitSuccess && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
             <div className="glass-panel w-full max-w-md rounded-3xl border border-white/20 bg-black/90 p-6 text-center shadow-2xl space-y-5 animate-fadeIn">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                <CheckCircle2 className="h-8 w-8" />
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-white">
+                <CheckCircle2 className="h-8 w-8 text-white" />
               </div>
               <div className="space-y-2">
                 <h3 className="text-lg font-bold text-white tracking-wide">Dispatched Successfully</h3>
-                <p className="text-xs text-muted leading-relaxed">
+                <p className="text-xs text-white/80 leading-relaxed">
                   Your incident report has been dispatched and logged into the municipal queue.
                 </p>
               </div>
               <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                <Link
-                  href="/radar"
-                  className="flex-1 py-3 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:bg-emerald-400 transition-colors shadow-md text-center flex items-center justify-center"
-                >
-                  View in Radar →
-                </Link>
+                <Link 
+                href="/radar" 
+                className="flex-1 py-3 rounded-xl bg-white font-bold text-xs hover:bg-neutral-200"
+              >
+                <span className="text-black opacity-100">View in Radar</span>
+              </Link>
+
                 <button
                   type="button"
                   onClick={() => setSubmitSuccess(false)}
@@ -749,8 +724,8 @@ export default function CivicAIPage() {
         )}
 
         {/* STANDALONE INTRO TEXT */}
-        <div className="px-1 text-xs sm:text-sm text-muted leading-relaxed relative z-20">
-          Complete the form to log official fault reference tickets with your municipal account and stand details.
+        <div className="px-1 text-xs sm:text-sm text-muted leading-relaxed relative z-20 flex items-center justify-between">
+          <span>Complete the form to log official fault reference tickets with your municipal account and stand details.</span>
         </div>
 
         {/* MAIN FORM CONTAINER */}
@@ -950,6 +925,7 @@ export default function CivicAIPage() {
                   </div>
                 </div>
                 <button
+                  key="refresh-loc-btn"
                   type="button"
                   onClick={handleManualRefreshLocation}
                   onTouchEnd={handleManualRefreshLocation}

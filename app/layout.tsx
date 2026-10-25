@@ -2,7 +2,6 @@
 import "./globals.css";
 import NavigationDock from "@/components/shared/NavigationDock";
 import AppRuntime from "@/components/shared/AppRuntime";
-import JudgeRoleDock from "@/components/shared/JudgeRoleDock";
 export default function RootLayout({
   children,
 }: {
@@ -15,8 +14,6 @@ export default function RootLayout({
           {children}
           <NavigationDock />
         </AppRuntime>
-        {/* Global Floating Judge Role Switcher Dock */}
-        <JudgeRoleDock />
       </body>
     </html>
   );
